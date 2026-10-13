@@ -142,10 +142,14 @@ let exportPrepare: { texte: string; alertes: Alerte[]; resume: string; details: 
   null;
 
 const app = document.getElementById('app')!;
-let etatGps = '';
+// Texte d'état du GPS : élément fixe, mis à jour seul à chaque position reçue. Redessiner toute la
+// page à chaque position refermerait la liste des parcelles si elle est ouverte.
+const texteGps = el('span', { class: 'doux' });
+/** État du GPS (allumé ou non) lors du dernier affichage des boutons. */
+let gpsAffiche = false;
 const carte = new Carte(toucher, (texte) => {
-  etatGps = texte;
-  afficher();
+  texteGps.textContent = texte;
+  if (carte.gpsActif() !== gpsAffiche) afficher();
 });
 
 // ---------- Chargement ----------
@@ -1068,6 +1072,7 @@ function remplir(
 }
 
 function afficher(): void {
+  gpsAffiche = carte.gpsActif();
   // Précaution : on garde la position de défilement telle quelle.
   const defilement = window.scrollY;
   const choixFichier = el(
@@ -1162,7 +1167,13 @@ function afficher(): void {
       { class: 'rangee' },
       el(
         'button',
-        { class: carte.gpsActif() ? 'actif' : '', onclick: () => carte.basculerGps() },
+        {
+          class: carte.gpsActif() ? 'actif' : '',
+          onclick: () => {
+            carte.basculerGps();
+            afficher();
+          },
+        },
         carte.gpsActif() ? 'GPS : arrêter' : 'Ma position GPS',
       ),
       carte.gpsActif() && el('button', { onclick: () => carte.centrerSurGps() }, 'Centrer'),
@@ -1176,7 +1187,7 @@ function afficher(): void {
         },
         couleursParEtat ? 'Couleurs : état' : 'Couleurs : voisins',
       ),
-      etatGps && el('span', { class: 'doux' }, etatGps),
+      texteGps,
     ),
   );
   remplir(
