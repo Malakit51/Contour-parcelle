@@ -49,13 +49,14 @@ import {
   type Suivi,
 } from './suivi/suivi';
 
-// Couleurs vives, lisibles sur la photo aérienne ; l'orange-rouge est réservé à la sélection.
-const COULEURS = ['#ffee58', '#00e5ff', '#ff80ab', '#b2ff59', '#ffffff', '#ea80fc'];
+// Couleurs lisibles sur le cadastre (fond clair) comme sur la photo ; le violet est réservé à la
+// sélection.
+const COULEURS = ['#00b8d4', '#ff4081', '#64dd17', '#ffab00', '#2962ff', '#ff6e40'];
 const SEL = '#d500f9';
 const COULEURS_ETAT: Record<EtatContour, string> = {
-  verifie: '#00e676',
-  'a-confirmer': '#ffc400',
-  'a-refaire': '#ff1744',
+  verifie: '#00c853',
+  'a-confirmer': '#ffab00',
+  'a-refaire': '#d50000',
 };
 /** Rayon de toucher, en pixels à l'écran. */
 const RAYON_TOUCHER_PX = 26;
@@ -290,7 +291,7 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
     placerAuDoigt = false;
     modifier(
       () => placerSommet(s.etat, ref, position),
-      `Point de ${nomParcelle(s, ref.anneau)} placé au doigt : ajustez-le avec les flèches`,
+      `Point de ${nomParcelle(s, ref.anneau)} placé au doigt : ajuste-le avec les flèches`,
       true,
     );
     return;
@@ -339,9 +340,27 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
     parcelleCourante = s.etat.anneaux[choix.anneau]!.parcelle;
     if (mode === 'limite') selLimite = { anneau: choix.anneau, debut: choix.indice };
     else selSommet = { anneau: choix.anneau, sommet: choix.indice };
+  } else {
+    // Toucher à l'intérieur d'une parcelle (loin de ses limites) : on la sélectionne.
+    const dedans = anneaux.findIndex(
+      (pts, i) => s.etat.anneaux[i]!.type === 1 && pointDansPolygone(p, pts),
+    );
+    if (dedans >= 0) parcelleCourante = s.etat.anneaux[dedans]!.parcelle;
   }
   message = null;
   afficher();
+}
+
+function pointDansPolygone(p: XY, pts: XY[]): boolean {
+  let dedans = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i]!;
+    const [xj, yj] = pts[j]!;
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) {
+      dedans = !dedans;
+    }
+  }
+  return dedans;
 }
 
 function effacerSelection(): void {
@@ -390,7 +409,7 @@ function fleche(sens: 'Nord' | 'Sud' | 'Est' | 'Ouest'): void {
   const ref = selSommet;
   const d = Math.abs(metres());
   if (d === 0) {
-    message = { texte: 'Tapez d’abord une distance.', erreur: true };
+    message = { texte: 'Tape d’abord une distance.', erreur: true };
     afficher();
     return;
   }
@@ -518,7 +537,7 @@ async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
   if (quoi === 'dossier') {
     try {
       const chemin = await ecrireDossierTaskdata(xml, (c) =>
-        confirm(`${c} existe déjà. Le remplacer ?\n\nConseil : travaillez sur une copie.`),
+        confirm(`${c} existe déjà. Le remplacer ?\n\nConseil : travaille sur une copie.`),
       );
       if (!chemin) return;
       destination = chemin;
@@ -644,22 +663,40 @@ function panneauSuiviGeneral(s: Session): HTMLElement {
     el(
       'table',
       {},
-      el('tr', {}, el('th', {}, 'Parcelle'), el('th', {}, 'État'), el('th', {}, 'Date')),
+      el('tr', {}, el('th', {}, 'Parcelle'), el('th', {}, 'État ✓ ? ✗'), el('th', {}, 'Date')),
       ...parcelles.map(({ p, i, f }) => {
-        const ligne = el(
-          'tr',
-          { class: 'cliquable' },
-          el('td', {}, p.nom),
-          el('td', { class: `texte-${f.etat}` }, LIBELLES[f.etat]),
-          el('td', {}, dateFr(f.date)),
-        );
-        ligne.addEventListener('click', () => {
+        const nom = el('td', { class: 'cliquable' }, p.nom);
+        nom.addEventListener('click', () => {
           parcelleCourante = i;
           effacerSelection();
           afficher();
           cadrerParcelle(i);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         });
+        const ligne = el(
+          'tr',
+          {},
+          nom,
+          el(
+            'td',
+            { class: 'etats' },
+            ...(Object.keys(LIBELLES) as EtatContour[]).map((e) =>
+              el(
+                'button',
+                {
+                  class: `petit etat-${e}${f.etat === e ? ' choisi' : ''}`,
+                  title: LIBELLES[e],
+                  onclick: () => {
+                    majSuivi(changerFiche(suivi, p, { etat: e }));
+                    afficher();
+                  },
+                },
+                { verifie: '✓', 'a-confirmer': '?', 'a-refaire': '✗' }[e],
+              ),
+            ),
+          ),
+          el('td', {}, dateFr(f.date)),
+        );
         return ligne;
       }),
     ),
@@ -729,7 +766,7 @@ function dessin(s: Session): Dessin {
 
 function panneauSelection(s: Session): HTMLElement {
   if (mode === 'limite') {
-    if (!selLimite) return el('div', { class: 'info doux' }, 'Touchez une limite sur la carte.');
+    if (!selLimite) return el('div', { class: 'info doux' }, 'Touche une limite sur la carte.');
     const ref = selLimite;
     const x = nomParcelle(s, ref.anneau);
     const jum = limitesJumelles(s.etat, ref);
@@ -755,7 +792,7 @@ function panneauSelection(s: Session): HTMLElement {
       el('div', { class: 'sens' }, sens),
     );
   }
-  if (!selSommet) return el('div', { class: 'info doux' }, 'Touchez un sommet sur la carte.');
+  if (!selSommet) return el('div', { class: 'info doux' }, 'Touche un sommet sur la carte.');
   const ref = selSommet;
   const autres = new Set(
     sommetsEn(s.etat, latLon(s.etat.anneaux[ref.anneau]!.sommets[ref.sommet]!))
@@ -818,7 +855,7 @@ function panneauSelection(s: Session): HTMLElement {
           onclick: () => {
             placerAuDoigt = !placerAuDoigt;
             message = placerAuDoigt
-              ? { texte: 'Touchez la carte à l’endroit où placer le point.', erreur: false }
+              ? { texte: 'Touche la carte à l’endroit où placer le point.', erreur: false }
               : null;
             afficher();
           },
@@ -994,8 +1031,8 @@ function panneauExport(): HTMLElement {
           'div',
           { class: 'doux' },
           ecritureDossierPossible()
-            ? `« Enregistrer dans un dossier ${NOM_DOSSIER} » : choisissez la clé USB (ou un dossier ${NOM_DOSSIER}), le fichier ${NOM_FICHIER} est écrit dans le dossier ${NOM_DOSSIER}.`
-            : `Ce navigateur ne permet pas d’écrire un dossier : ${NOM_FICHIER} arrive dans « Téléchargements ». Avec le gestionnaire de fichiers, créez un dossier ${NOM_DOSSIER} sur la clé et déplacez-y le fichier.`,
+            ? `« Enregistrer dans un dossier ${NOM_DOSSIER} » : choisis la clé USB (ou un dossier ${NOM_DOSSIER}), le fichier ${NOM_FICHIER} est écrit dans le dossier ${NOM_DOSSIER}.`
+            : `Ce navigateur ne permet pas d’écrire un dossier : ${NOM_FICHIER} arrive dans « Téléchargements ». Avec le gestionnaire de fichiers, crée un dossier ${NOM_DOSSIER} sur la clé et déplace-y le fichier.`,
         ),
       ),
     );
@@ -1066,7 +1103,7 @@ function afficher(): void {
       el(
         'div',
         { class: 'info' },
-        'Ouvrez le fichier TASKDATA.XML exporté par la console (sur la clé USB, dans le dossier TASKDATA). ',
+        'Ouvre le fichier TASKDATA.XML exporté par la console (sur la clé USB, dans le dossier TASKDATA). ',
         'Tout reste sur le téléphone : rien n’est envoyé sur Internet.',
       ),
     );

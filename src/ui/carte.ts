@@ -1,4 +1,4 @@
-// Carte Leaflet : photo aérienne IGN, parcelles, sélection, position GPS.
+// Carte Leaflet : cadastre et photo aérienne IGN, parcelles, sélection, position GPS.
 //
 // Les touchers sont renvoyés avec une fonction qui donne la position à l'écran (en pixels) de
 // n'importe quel point : c'est la page qui cherche la limite ou le sommet le plus proche.
@@ -28,7 +28,7 @@ export type VersEcran = (p: LatLon) => { x: number; y: number };
 // Géoplateforme IGN, service WMTS en projection Web Mercator (« PM »), sans clé.
 const wmts = (couche: string, format: string, style = 'normal') =>
   'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0' +
-  `&LAYER=${couche}&STYLE=${style}&TILEMATRIXSET=PM&FORMAT=${format}` +
+  `&LAYER=${couche}&STYLE=${encodeURIComponent(style)}&TILEMATRIXSET=PM&FORMAT=${format}` +
   '&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}';
 const ATTRIBUTION = '© IGN – Géoplateforme';
 
@@ -60,16 +60,22 @@ export class Carte {
       zoomSnap: 0.25,
     });
     const options = { maxNativeZoom: 19, maxZoom: 22, attribution: ATTRIBUTION };
-    const photo = L.tileLayer(wmts('ORTHOIMAGERY.ORTHOPHOTOS', 'image/jpeg'), options);
+    const photo = () => L.tileLayer(wmts('ORTHOIMAGERY.ORTHOPHOTOS', 'image/jpeg'), options);
     const plan = L.tileLayer(wmts('GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2', 'image/png'), options);
-    photo.addTo(this.carte);
-    L.control
-      .layers(
-        { 'Photo IGN': photo, 'Plan IGN': plan, 'Sans fond': L.layerGroup() },
-        {},
-        { position: 'topright' },
-      )
-      .addTo(this.carte);
+    // Cadastre (Parcellaire Express) : traits et numéros sur fond transparent.
+    const cadastre = () =>
+      L.tileLayer(
+        wmts('CADASTRALPARCELS.PARCELLAIRE_EXPRESS', 'image/png', 'PCI vecteur'),
+        options,
+      );
+    const fonds = {
+      Cadastre: cadastre(),
+      'Photo + cadastre': L.layerGroup([photo(), cadastre()]),
+      Photo: photo(),
+      Plan: plan,
+    };
+    fonds.Cadastre.addTo(this.carte);
+    L.control.layers(fonds, {}, { position: 'topright' }).addTo(this.carte);
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(this.carte);
     this.calque.addTo(this.carte);
     this.noms.addTo(this.carte);
@@ -205,7 +211,7 @@ export class Carte {
       (err) =>
         this.surGps(
           err.code === err.PERMISSION_DENIED
-            ? 'Position refusée : autorisez la localisation pour ce site dans Chrome.'
+            ? 'Position refusée : autorise la localisation pour ce site dans Chrome.'
             : `Position indisponible (${err.message}).`,
         ),
       { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 },

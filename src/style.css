@@ -80,7 +80,7 @@ select {
   height: 60vh;
   border: 1px solid var(--bord);
   border-radius: 8px;
-  background: #333;
+  background: #f4f4f0;
 }
 .leaflet-control-layers label {
   font-size: 1rem;
@@ -201,12 +201,20 @@ pre {
   color: #d50000;
   font-weight: bold;
 }
-tr.cliquable {
+td.cliquable {
   cursor: pointer;
+  text-decoration: underline;
 }
-tr.cliquable td {
-  padding-top: 10px;
-  padding-bottom: 10px;
+td.etats {
+  white-space: nowrap;
+  text-align: center;
+}
+button.petit {
+  min-height: 40px;
+  min-width: 44px;
+  padding: 4px 8px;
+  margin: 2px;
+  font-size: 1.1rem;
 }
 summary {
   font-weight: bold;
