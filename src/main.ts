@@ -58,6 +58,7 @@ import {
   csvJournal,
   csvSuivi,
   enregistrer as enregistrerSuivi,
+  aujourdhui,
   fiche,
   fusionner,
   LIBELLES,
@@ -329,6 +330,26 @@ async function connecterDrive(): Promise<void> {
 }
 
 /** Remplace le travail de cet appareil par celui enregistré dans Drive ; le suivi est fusionné. */
+/**
+ * Reprend une sauvegarde (Drive ou fichier) : remplace le travail de cet appareil, après
+ * confirmation s'il était modifié, et fusionne le suivi. Renvoie la date et l'appareil, ou null
+ * si l'utilisateur a renoncé.
+ */
+function reprendreSauvegarde(contenu: unknown, provenance: string): string | null {
+  const r = relireSession(contenu);
+  const quand = `${quandFr(r.session.enregistreLe)} (${r.session.appareil})`;
+  if (
+    session &&
+    parcellesModifiees(session.etat).length > 0 &&
+    !confirm(`Remplacer le travail de cet appareil par la sauvegarde ${provenance} du ${quand} ?`)
+  ) {
+    return null;
+  }
+  if (r.session.suivi) majSuivi(fusionner(suivi, r.session.suivi));
+  ouvrir(r.td, r.nom, r.etat, `Travail repris : sauvegarde ${provenance} du ${quand}.`);
+  return quand;
+}
+
 async function reprendreDepuisDrive(): Promise<void> {
   try {
     texteDrive.textContent = 'Lecture de la sauvegarde en ligne…';
@@ -337,23 +358,74 @@ async function reprendreDepuisDrive(): Promise<void> {
       texteDrive.textContent = 'Aucune sauvegarde en ligne pour l’instant.';
       return;
     }
-    const r = relireSession(lu.contenu);
-    const quand = `${quandFr(r.session.enregistreLe)} (${r.session.appareil})`;
-    if (
-      session &&
-      parcellesModifiees(session.etat).length > 0 &&
-      !confirm(`Remplacer le travail de cet appareil par la sauvegarde en ligne du ${quand} ?`)
-    ) {
-      texteDrive.textContent = 'Reprise annulée.';
-      return;
-    }
-    if (r.session.suivi) majSuivi(fusionner(suivi, r.session.suivi));
-    ouvrir(r.td, r.nom, r.etat, `Travail repris depuis Google Drive : sauvegarde du ${quand}.`);
-    texteDrive.textContent = `Repris depuis la sauvegarde en ligne du ${quand}.`;
+    const quand = reprendreSauvegarde(lu.contenu, 'en ligne');
+    texteDrive.textContent = quand
+      ? `Repris depuis la sauvegarde en ligne du ${quand}.`
+      : 'Reprise annulée.';
   } catch (e) {
     texteDrive.textContent = `Reprise impossible : ${(e as Error).message}`;
   }
   afficher();
+}
+
+// ---------- Sauvegarde dans un fichier (clé USB…) ----------
+
+function enregistrerFichierSauvegarde(): void {
+  if (!session) return;
+  if (nomAppareil() === 'appareil') changerNomAppareil();
+  const contenu = enregistrerSession(
+    session.td,
+    session.nomFichier,
+    session.etat,
+    nomAppareil(),
+    suivi,
+  );
+  const nom = `contour-parcelle-sauvegarde-${aujourdhui()}.json`;
+  enregistrer(encoder(JSON.stringify(contenu)), nom, 'application/json');
+  message = {
+    texte: `${nom} arrive dans « Téléchargements » : range-le sur la clé USB (ou envoie-le).`,
+    erreur: false,
+  };
+  afficher();
+}
+
+function boutonChargerSauvegarde(): HTMLElement {
+  const choix = el('label', { class: 'bouton-fichier secondaire' }, 'Charger une sauvegarde');
+  const input = el('input', { type: 'file', accept: '.json,application/json' });
+  input.addEventListener('change', async () => {
+    const f = input.files?.[0];
+    if (!f) return;
+    try {
+      const contenu: unknown = JSON.parse(await f.text());
+      if (!reprendreSauvegarde(contenu, `« ${f.name} »`)) return;
+    } catch (e) {
+      message = { texte: `Sauvegarde illisible : ${(e as Error).message}`, erreur: true };
+      afficher();
+    }
+  });
+  choix.append(input);
+  return choix;
+}
+
+function panneauSauvegardeFichier(): HTMLElement {
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, 'Sauvegarde dans un fichier (clé USB)'),
+    el(
+      'div',
+      { class: 'doux' },
+      'Le fichier ouvert, les contours modifiés, le suivi et le journal, dans un seul fichier à garder sur la clé ou à reprendre sur un autre appareil.',
+    ),
+    el(
+      'div',
+      { class: 'rangee' },
+      session
+        ? el('button', { onclick: enregistrerFichierSauvegarde }, 'Enregistrer une sauvegarde')
+        : null,
+      boutonChargerSauvegarde(),
+    ),
+  );
 }
 
 function panneauDrive(): HTMLElement {
@@ -1605,6 +1677,7 @@ function contenuFichier(s: Session | null): Node[] {
       'Ouvre le fichier TASKDATA.XML exporté par la console (sur la clé USB, dans le dossier TASKDATA). ',
       'Rien n’est envoyé sur Internet, sauf dans ton Google Drive si tu actives la sauvegarde en ligne.',
     ),
+    panneauSauvegardeFichier(),
     panneauDrive(),
   ];
   if (s) {

@@ -175,6 +175,11 @@ select {
   flex: 1;
   min-width: 0;
 }
+.bouton-fichier.secondaire {
+  background: var(--carte);
+  border-color: var(--bord);
+  color: var(--fg);
+}
 .bouton-fichier input {
   display: none;
 }
