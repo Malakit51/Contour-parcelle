@@ -21,6 +21,8 @@ export interface Dessin {
   traits: { a: LatLon; b: LatLon; couleur: string; epaisseur: number }[];
   /** Points surlignés (sommet sélectionné). */
   points: { p: LatLon; couleur: string; rayon: number }[];
+  /** Flèches à toucher, posées en `depuis` et pointant vers `vers` (choix du sens d'un décalage). */
+  fleches?: { depuis: LatLon; vers: LatLon; choisie: boolean; action: () => void }[];
 }
 
 export type VersEcran = (p: LatLon) => { x: number; y: number };
@@ -41,6 +43,8 @@ export class Carte {
   private readonly noms = L.layerGroup();
   private readonly gps = L.layerGroup();
   private suiviGps: number | null = null;
+  /** Boutons posés sur la carte, en haut à gauche (flèches de déplacement d'un point). */
+  private readonly commandes = L.DomUtil.create('div', 'commandes-carte');
   private dernierePosition: GeolocationPosition | null = null;
 
   constructor(
@@ -77,6 +81,11 @@ export class Carte {
     fonds.Cadastre.addTo(this.carte);
     L.control.layers(fonds, {}, { position: 'topright' }).addTo(this.carte);
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(this.carte);
+    L.DomEvent.disableClickPropagation(this.commandes);
+    L.DomEvent.disableScrollPropagation(this.commandes);
+    new (L.Control.extend({ onAdd: () => this.commandes }))({ position: 'topleft' }).addTo(
+      this.carte,
+    );
     this.calque.addTo(this.carte);
     this.noms.addTo(this.carte);
     this.gps.addTo(this.carte);
@@ -157,7 +166,39 @@ export class Carte {
         interactive: false,
       }).addTo(this.calque);
     }
+    for (const f of dessin.fleches ?? []) {
+      // Direction de la flèche à l'écran (le plan Web Mercator conserve les angles).
+      // Projection sans arrondi au pixel : `vers` n'est qu'à 1 m de `depuis`.
+      const p0 = this.carte.project(ll(f.depuis), 22);
+      const p1 = this.carte.project(ll(f.vers), 22);
+      const angle = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+      const dx = Math.cos(angle) * 38;
+      const dy = Math.sin(angle) * 38;
+      L.marker(ll(f.depuis), {
+        bubblingMouseEvents: false,
+        icon: L.divIcon({
+          className: '',
+          iconSize: [0, 0],
+          html: `<div class="fleche-limite${f.choisie ? ' choisie' : ''}" style="transform: translate(-50%, -50%) translate(${dx}px, ${dy}px) rotate(${angle}rad)">➜</div>`,
+        }),
+      })
+        .on('click', f.action)
+        .addTo(this.calque);
+    }
     this.majNoms();
+  }
+
+  /** Remplace les boutons posés sur la carte (rien : on les retire). */
+  definirCommandes(contenu: HTMLElement | null): void {
+    // Le contenu est remplacé pendant l'appui sur un de ses boutons : Leaflet remonte alors depuis
+    // le bouton (détaché de la page) sans retrouver le conteneur. On protège donc aussi le contenu,
+    // sinon l'appui serait pris pour un toucher sur la carte.
+    if (contenu) {
+      L.DomEvent.disableClickPropagation(contenu);
+      L.DomEvent.disableScrollPropagation(contenu);
+    }
+    this.commandes.replaceChildren(...(contenu ? [contenu] : []));
+    this.commandes.style.display = contenu ? '' : 'none';
   }
 
   private majNoms(): void {

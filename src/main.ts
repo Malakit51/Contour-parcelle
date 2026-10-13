@@ -20,6 +20,7 @@ import {
   ErreurEdition,
   glisserSommet,
   placerSommet,
+  cotesLimite,
   sensPositif,
   supprimerSommet,
 } from './edition/operations';
@@ -134,6 +135,8 @@ let selSommet: RefSommet | null = null;
 let limiteGlisse: RefLimite | null = null;
 /** Le prochain toucher sur la carte place le sommet sélectionné à cet endroit. */
 let placerAuDoigt = false;
+/** Sens choisi pour décaler la limite sélectionnée, avec les flèches posées sur la carte. */
+let sensLimite: 'exterieur' | 'interieur' | null = null;
 let parcelleCourante: number | null = null;
 /** Distance en mètres telle que tapée, avec une virgule décimale (« -0,35 »). */
 let saisie = '0,5';
@@ -371,6 +374,7 @@ function pointDansPolygone(p: XY, pts: XY[]): boolean {
 
 function effacerSelection(): void {
   placerAuDoigt = false;
+  sensLimite = null;
   selLimite = null;
   selSommet = null;
   limiteGlisse = null;
@@ -409,7 +413,19 @@ function modifier(operation: () => Etat, quoi: string, garderSelection: boolean)
   afficher();
 }
 
-function fleche(sens: 'Nord' | 'Sud' | 'Est' | 'Ouest'): void {
+const DIRECTIONS = {
+  NO: { est: -1, nord: 1, nom: 'le Nord-Ouest', fleche: '↖' },
+  N: { est: 0, nord: 1, nom: 'le Nord', fleche: '↑' },
+  NE: { est: 1, nord: 1, nom: 'le Nord-Est', fleche: '↗' },
+  O: { est: -1, nord: 0, nom: 'l’Ouest', fleche: '←' },
+  E: { est: 1, nord: 0, nom: 'l’Est', fleche: '→' },
+  SO: { est: -1, nord: -1, nom: 'le Sud-Ouest', fleche: '↙' },
+  S: { est: 0, nord: -1, nom: 'le Sud', fleche: '↓' },
+  SE: { est: 1, nord: -1, nom: 'le Sud-Est', fleche: '↘' },
+} as const;
+
+/** Déplace le sommet sélectionné de la distance réglée (le long de la diagonale pour NO, NE…). */
+function fleche(direction: keyof typeof DIRECTIONS): void {
   if (!session || !selSommet) return;
   const s = session;
   const ref = selSommet;
@@ -419,14 +435,49 @@ function fleche(sens: 'Nord' | 'Sud' | 'Est' | 'Ouest'): void {
     afficher();
     return;
   }
-  const [est, nord] = { Nord: [0, d], Sud: [0, -d], Est: [d, 0], Ouest: [-d, 0] }[sens] as [
-    number,
-    number,
-  ];
+  const { est, nord, nom } = DIRECTIONS[direction];
+  const k = d / Math.hypot(est, nord);
   modifier(
-    () => decalerSommet(s.etat, ref, est, nord),
-    `Point de ${nomParcelle(s, ref.anneau)} déplacé de ${enMetres(d)} m vers ${sens === 'Est' || sens === 'Ouest' ? 'l’' : 'le '}${sens}`,
+    () => decalerSommet(s.etat, ref, est * k, nord * k),
+    `Point de ${nomParcelle(s, ref.anneau)} déplacé de ${enMetres(d)} m vers ${nom}`,
     true,
+  );
+}
+
+/** Croix de 8 flèches posée sur la carte, avec « au doigt » au centre. */
+function commandesSommet(): HTMLElement {
+  const bouton = (direction: keyof typeof DIRECTIONS) =>
+    el(
+      'button',
+      { title: DIRECTIONS[direction].nom, onclick: () => fleche(direction) },
+      DIRECTIONS[direction].fleche,
+    );
+  return el(
+    'div',
+    { class: 'croix' },
+    bouton('NO'),
+    bouton('N'),
+    bouton('NE'),
+    bouton('O'),
+    el(
+      'button',
+      {
+        class: placerAuDoigt ? 'actif' : '',
+        title: 'Placer au doigt',
+        onclick: () => {
+          placerAuDoigt = !placerAuDoigt;
+          message = placerAuDoigt
+            ? { texte: 'Touche la carte à l’endroit où placer le point.', erreur: false }
+            : null;
+          afficher();
+        },
+      },
+      '☝',
+    ),
+    bouton('E'),
+    bouton('SO'),
+    bouton('S'),
+    bouton('SE'),
   );
 }
 
@@ -449,9 +500,10 @@ function appliquer(): void {
   try {
     let nouveau: Etat;
     let quoi: string;
-    if (mode === 'limite' && selLimite) {
-      quoi = `Limite ${coteLimite(s, selLimite)} de ${nomParcelle(s, selLimite.anneau)} décalée de ${signeM(d)} m`;
-      nouveau = decalerLimite(s.etat, selLimite, d);
+    if (mode === 'limite' && selLimite && sensLimite) {
+      const ecart = Math.abs(d);
+      quoi = `Limite ${coteLimite(s, selLimite)} de ${nomParcelle(s, selLimite.anneau)} décalée de ${enMetres(ecart)} m ${effetsLimite(s, selLimite)[sensLimite]}`;
+      nouveau = decalerLimite(s.etat, selLimite, sensLimite === 'exterieur' ? ecart : -ecart);
     } else if (mode === 'sommet' && selSommet && limiteGlisse) {
       quoi = `Sommet de ${nomParcelle(s, selSommet.anneau)} déplacé de ${signeM(d)} m`;
       nouveau = glisserSommet(s.etat, selSommet, limiteGlisse, d);
@@ -761,12 +813,49 @@ function dessin(s: Session): Dessin {
       epaisseur,
     });
   };
-  if (selLimite) trait(selLimite, 7);
+  if (selLimite) {
+    trait(selLimite, 7);
+    const ref = selLimite;
+    const c = cotesLimite(s.etat, ref);
+    d.fleches = (['exterieur', 'interieur'] as const).map((sens) => ({
+      depuis: c.milieu,
+      vers: c[sens],
+      choisie: sensLimite === sens,
+      action: () => {
+        sensLimite = sens;
+        onglet = 'modifier';
+        afficher();
+      },
+    }));
+  }
   if (selSommet) {
     if (limiteGlisse) trait(limiteGlisse, 5);
     d.points.push({ p: anneaux[selSommet.anneau]![selSommet.sommet]!, couleur: SEL, rayon: 9 });
   }
   return d;
+}
+
+/** Ce qu'on obtient en décalant la limite vers l'extérieur ou l'intérieur de sa parcelle. */
+function effetsLimite(s: Session, ref: RefLimite): { exterieur: string; interieur: string } {
+  const x = nomParcelle(s, ref.anneau);
+  const jum = limitesJumelles(s.etat, ref);
+  if (jum.length > 0) {
+    const y = jum.map((j) => nomParcelle(s, j.anneau)).join(', ');
+    return {
+      exterieur: `vers ${y} (${x} s'agrandit)`,
+      interieur: `vers ${x} (${y} s'agrandit)`,
+    };
+  }
+  if (s.etat.anneaux[ref.anneau]!.type === 2) {
+    return {
+      exterieur: `dans la zone exclue (${x} s'agrandit)`,
+      interieur: `vers ${x} (la zone exclue s'agrandit)`,
+    };
+  }
+  return {
+    exterieur: `vers l'extérieur (${x} s'agrandit)`,
+    interieur: `vers l'intérieur (${x} rétrécit)`,
+  };
 }
 
 function panneauSelection(s: Session): HTMLElement {
@@ -776,25 +865,24 @@ function panneauSelection(s: Session): HTMLElement {
     const x = nomParcelle(s, ref.anneau);
     const jum = limitesJumelles(s.etat, ref);
     const type = s.etat.anneaux[ref.anneau]!.type;
-    let titre: string;
-    let sens: string;
-    if (jum.length > 0) {
-      const y = jum.map((j) => nomParcelle(s, j.anneau)).join(', ');
-      titre = `Limite commune ${x} / ${y}`;
-      sens = `+ = vers ${y} (${x} s'agrandit) · − = vers ${x} (${y} s'agrandit)`;
-    } else if (type === 1) {
-      titre = `Limite ${coteLimite(s, ref)} de ${x}`;
-      sens = `+ = vers l'extérieur (${x} s'agrandit) · − = vers l'intérieur`;
-    } else {
-      titre = `Bord de la zone exclue de ${x}`;
-      sens = `+ = la zone exclue rétrécit (${x} s'agrandit) · − = elle s'agrandit`;
-    }
+    const titre =
+      jum.length > 0
+        ? `Limite commune ${x} / ${jum.map((j) => nomParcelle(s, j.anneau)).join(', ')}`
+        : type === 1
+          ? `Limite ${coteLimite(s, ref)} de ${x}`
+          : `Bord de la zone exclue de ${x}`;
     return el(
       'div',
       { class: 'info' },
       el('div', {}, el('strong', {}, titre)),
       el('div', { class: 'doux' }, `Longueur : ${longueur(s, ref).toFixed(1).replace('.', ',')} m`),
-      el('div', { class: 'sens' }, sens),
+      sensLimite
+        ? el('div', { class: 'sens' }, `Sens : ${effetsLimite(s, ref)[sensLimite]}`)
+        : el(
+            'div',
+            { class: 'sens' },
+            'Touche une des deux flèches sur la carte pour choisir le sens.',
+          ),
     );
   }
   if (!selSommet) return el('div', { class: 'info doux' }, 'Touche un sommet sur la carte.');
@@ -844,33 +932,7 @@ function panneauSelection(s: Session): HTMLElement {
     el(
       'div',
       { class: 'doux' },
-      `Flèches : déplacer de ${enMetres(Math.abs(metres()))} m à chaque appui`,
-    ),
-    el(
-      'div',
-      { class: 'fleches' },
-      el('span'),
-      el('button', { onclick: () => fleche('Nord') }, '↑ N'),
-      el('span'),
-      el('button', { onclick: () => fleche('Ouest') }, '← O'),
-      el(
-        'button',
-        {
-          class: placerAuDoigt ? 'actif' : '',
-          onclick: () => {
-            placerAuDoigt = !placerAuDoigt;
-            message = placerAuDoigt
-              ? { texte: 'Touche la carte à l’endroit où placer le point.', erreur: false }
-              : null;
-            afficher();
-          },
-        },
-        'Au doigt',
-      ),
-      el('button', { onclick: () => fleche('Est') }, 'E →'),
-      el('span'),
-      el('button', { onclick: () => fleche('Sud') }, '↓ S'),
-      el('span'),
+      `Flèches en haut à gauche de la carte : ${enMetres(Math.abs(metres()))} m à chaque appui ; ☝ au centre : placer au doigt.`,
     ),
     el('div', { class: 'rangee' }, el('button', { onclick: supprimer }, 'Supprimer ce point')),
     el('div', { class: 'doux' }, 'Ou le faire glisser le long d’une limite (puis « Appliquer ») :'),
@@ -1130,6 +1192,7 @@ function afficher(): void {
     remplir(zones.onglets);
     remplir(zones.bas);
     remplir(zones.panneau, msg, ...contenuFichier(null));
+    carte.definirCommandes(null);
     return;
   }
   const s = session;
@@ -1253,7 +1316,7 @@ function afficher(): void {
   remplir(zones.panneau, msg, ...contenu);
 
   const peutAppliquer =
-    (mode === 'limite' && selLimite !== null) ||
+    (mode === 'limite' && selLimite !== null && sensLimite !== null) ||
     (mode === 'sommet' && selSommet !== null && limiteGlisse !== null);
   remplir(
     zones.bas,
@@ -1279,6 +1342,7 @@ function afficher(): void {
       'Annuler',
     ),
   );
+  carte.definirCommandes(mode === 'sommet' && selSommet ? commandesSommet() : null);
   carte.afficher(dessin(s));
   zones.panneau.scrollTop = defilement;
 }

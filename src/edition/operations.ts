@@ -74,6 +74,45 @@ function xy(etat: Etat, plan: Plan, anneau: number, i: number): XY {
   return plan.versXY(latLon(sommet(etat, { anneau, sommet: i })));
 }
 
+/** Limite dans un plan centré sur son milieu, avec la normale vers l'extérieur de sa parcelle. */
+function geometrieLimite(etat: Etat, ref: RefLimite) {
+  const A = latLon(sommet(etat, { anneau: ref.anneau, sommet: ref.debut }));
+  const B = latLon(
+    sommet(etat, { anneau: ref.anneau, sommet: suivant(etat, ref.anneau, ref.debut) }),
+  );
+  const plan = planLocal([(A[0] + B[0]) / 2, (A[1] + B[1]) / 2]);
+  const pa = plan.versXY(A);
+  const pb = plan.versXY(B);
+  const dir: XY = [pb[0] - pa[0], pb[1] - pa[1]];
+  const longueur = Math.hypot(...dir);
+  // Normale vers l'extérieur de la parcelle : à droite du sens de parcours pour un anneau tourné
+  // dans le sens inverse des aiguilles d'une montre. Pour une zone exclue, l'extérieur de la
+  // parcelle est l'intérieur de l'anneau.
+  const anneau = etat.anneaux[ref.anneau]!;
+  const sens = aireSignee(anneau.sommets.map((s) => plan.versXY(latLon(s)))) > 0 ? 1 : -1;
+  const cote = sens * (anneau.type === 2 ? -1 : 1);
+  const normale: XY = [(dir[1] / longueur) * cote, (-dir[0] / longueur) * cote];
+  return { plan, pa, pb, dir, longueur, normale };
+}
+
+/**
+ * Milieu d'une limite et deux points à 1 m de part et d'autre : `exterieur` du côté où un
+ * décalage positif l'emmène (vers l'extérieur de la parcelle, donc vers la voisine), `interieur`
+ * de l'autre côté.
+ */
+export function cotesLimite(
+  etat: Etat,
+  ref: RefLimite,
+): { milieu: LatLon; exterieur: LatLon; interieur: LatLon } {
+  const { plan, pa, pb, normale } = geometrieLimite(etat, ref);
+  const m: XY = [(pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2];
+  return {
+    milieu: plan.versLatLon(m),
+    exterieur: plan.versLatLon([m[0] + normale[0], m[1] + normale[1]]),
+    interieur: plan.versLatLon([m[0] - normale[0], m[1] - normale[1]]),
+  };
+}
+
 /**
  * Décale la limite `ref` parallèlement à elle-même.
  *
@@ -93,21 +132,7 @@ export function decalerLimite(etat: Etat, ref: RefLimite, distance: number): Eta
     throw new ErreurEdition('Cette limite est commune à plus de deux parcelles.');
   const Y = jumelles[0];
 
-  const A = latLon(sommet(etat, { anneau: X, sommet: a }));
-  const B = latLon(sommet(etat, { anneau: X, sommet: b }));
-  const plan = planLocal([(A[0] + B[0]) / 2, (A[1] + B[1]) / 2]);
-  const pa = plan.versXY(A);
-  const pb = plan.versXY(B);
-  const dir: XY = [pb[0] - pa[0], pb[1] - pa[1]];
-  const longueur = Math.hypot(...dir);
-
-  // Normale vers l'extérieur de la parcelle : à droite du sens de parcours pour un anneau tourné
-  // dans le sens inverse des aiguilles d'une montre. Pour une zone exclue, l'extérieur de la
-  // parcelle est l'intérieur de l'anneau.
-  const anneauX = etat.anneaux[X]!;
-  const sensX = aireSignee(anneauX.sommets.map((s) => plan.versXY(latLon(s)))) > 0 ? 1 : -1;
-  const cote = sensX * (anneauX.type === 2 ? -1 : 1);
-  const normale: XY = [(dir[1] / longueur) * cote, (-dir[0] / longueur) * cote];
+  const { plan, pa, pb, dir, normale } = geometrieLimite(etat, ref);
   const origineDroite: XY = [pa[0] + normale[0] * distance, pa[1] + normale[1] * distance];
 
   // Parcelle qui perd du terrain (null : la limite part vers l'extérieur, personne ne perd).

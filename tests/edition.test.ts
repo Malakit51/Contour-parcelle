@@ -11,6 +11,7 @@ import {
 } from '../src/edition/etat';
 import { exporterEtat } from '../src/edition/export';
 import {
+  cotesLimite,
   decalerLimite,
   ErreurEdition,
   glisserSommet,
@@ -306,4 +307,25 @@ describe.runIf(existsSync(REEL))('export réel : limite 130usag / 131usag', () =
       );
     });
   }
+});
+
+describe('côtés d’une limite (flèches sur la carte)', () => {
+  it('« extérieur » est du côté où un décalage positif emmène la limite', () => {
+    const { etat } = preparer({
+      R: [
+        [0, 0],
+        [100, 0],
+        [100, 50],
+        [0, 50],
+      ],
+    });
+    const ref: RefLimite = { anneau: 0, debut: 2 }; // bord Nord
+    const c = cotesLimite(etat, ref);
+    const [mx, my] = plan.versXY(c.milieu);
+    expect([Math.round(mx), Math.round(my)]).toEqual([50, 50]);
+    expect(plan.versXY(c.exterieur)[1]).toBeGreaterThan(my);
+    expect(plan.versXY(c.interieur)[1]).toBeLessThan(my);
+    const apres = decalerLimite(etat, ref, 1);
+    expect(enMetres(apres, 0)[2]![1]).toBe(51);
+  });
 });
