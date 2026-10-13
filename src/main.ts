@@ -165,6 +165,8 @@ let selSommet: RefSommet | null = null;
 let limiteGlisse: RefLimite | null = null;
 /** Le prochain toucher sur la carte place le sommet sélectionné à cet endroit. */
 let placerAuDoigt = false;
+/** Ancien fichier affiché en référence (gris) : ses points servent d'aimant pour « au doigt ». */
+let reference: { nom: string; anneaux: LatLon[][] } | null = null;
 /** Sens choisi pour décaler la limite sélectionnée, avec les flèches posées sur la carte. */
 let sensLimite: 'exterieur' | 'interieur' | null = null;
 /** Sens choisi pour faire glisser le point le long du bord : vers l'autre extrémité ou à l'opposé. */
@@ -455,6 +457,63 @@ function boutonChargerSauvegarde(): HTMLElement {
   return choix;
 }
 
+async function chargerReference(f: File): Promise<void> {
+  try {
+    const td = lireTaskData(decoder(new Uint8Array(await f.arrayBuffer())));
+    const e = etatInitial(td);
+    reference = { nom: f.name, anneaux: e.anneaux.map((a) => a.sommets.map(latLon)) };
+    message = {
+      texte: `${f.name} affiché en référence (gris) : ${td.parcelles.length} parcelle(s). Rien n’est modifié dans ton travail.`,
+      erreur: false,
+    };
+  } catch (e) {
+    message = { texte: `Lecture impossible : ${(e as Error).message}`, erreur: true };
+  }
+  afficher();
+}
+
+function panneauReference(): HTMLElement {
+  const choix = el(
+    'label',
+    { class: 'bouton-fichier secondaire' },
+    reference ? 'Autre fichier de référence' : 'Afficher un ancien TASKDATA',
+  );
+  const input = el('input', { type: 'file' });
+  input.addEventListener('change', () => {
+    const f = input.files?.[0];
+    if (f) void chargerReference(f);
+  });
+  choix.append(input);
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, 'Ancien fichier en référence'),
+    el(
+      'div',
+      { class: 'doux' },
+      reference
+        ? `« ${reference.nom} » est affiché en gris pointillé. Pour reprendre un de ses points : onglet Modifier, « Point », touche ton point, ☝, puis le point gris.`
+        : 'Affiche les contours d’un ancien TASKDATA en gris par-dessus ton travail, sans rien remplacer, pour y recoller des points.',
+    ),
+    el(
+      'div',
+      { class: 'rangee' },
+      choix,
+      reference &&
+        el(
+          'button',
+          {
+            onclick: () => {
+              reference = null;
+              afficher();
+            },
+          },
+          'Retirer la référence',
+        ),
+    ),
+  );
+}
+
 function panneauSauvegardeFichier(): HTMLElement {
   return el(
     'div',
@@ -664,9 +723,22 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
   if (mode === 'sommet' && selSommet && placerAuDoigt) {
     const ref = selSommet;
     placerAuDoigt = false;
+    // Toucher près d'un point de l'ancien fichier : le point s'y colle exactement.
+    let aimant: LatLon | null = null;
+    let dMin = RAYON_TOUCHER_PX;
+    for (const pt of reference?.anneaux.flat() ?? []) {
+      const e = versEcran(pt);
+      const d = Math.hypot(e.x - ecran.x, e.y - ecran.y);
+      if (d <= dMin) {
+        dMin = d;
+        aimant = pt;
+      }
+    }
     modifier(
-      () => placerSommet(s.etat, ref, position),
-      `Point de ${nomParcelle(s, ref.anneau)} placé au doigt : ajuste-le avec les flèches`,
+      () => placerSommet(s.etat, ref, aimant ?? position),
+      aimant
+        ? `Point de ${nomParcelle(s, ref.anneau)} placé exactement sur le point de ${reference!.nom}`
+        : `Point de ${nomParcelle(s, ref.anneau)} placé au doigt : ajuste-le avec les flèches`,
       true,
     );
     return;
@@ -1268,6 +1340,7 @@ function dessin(s: Session): Dessin {
   const apercu = apercuSimplification(s);
   const affiches = apercu ? apercu.etat.anneaux.map((a) => a.sommets.map(latLon)) : anneaux;
   const d: Dessin = {
+    reference: reference?.anneaux ?? [],
     fantomes: apercu
       ? anneaux.filter((_, i) => s.etat.anneaux[i]!.parcelle === parcelleCourante)
       : [],
@@ -1542,6 +1615,20 @@ function panneauSelection(s: Session): HTMLElement {
     el(
       'div',
       { class: 'doux' },
+      (() => {
+        const v = s.etat.anneaux[ref.anneau]!.sommets[ref.sommet]!;
+        return `Coordonnées : ${v.lat.toFixed(7)}, ${v.lon.toFixed(7)}`;
+      })(),
+    ),
+    reference &&
+      el(
+        'div',
+        { class: 'sens' },
+        `☝ puis touche un point gris de « ${reference.nom} » : le point s’y colle exactement.`,
+      ),
+    el(
+      'div',
+      { class: 'doux' },
       'Flèches en haut à gauche de la carte : la distance réglée à chaque appui ; ☝ au centre : placer au doigt.',
     ),
     el('div', { class: 'rangee' }, el('button', { onclick: supprimer }, 'Supprimer ce point')),
@@ -1805,6 +1892,7 @@ function contenuFichier(s: Session | null): Node[] {
       'Ouvre le fichier TASKDATA.XML exporté par la console (sur la clé USB, dans le dossier TASKDATA). ',
       'Rien n’est envoyé sur Internet, sauf dans ton Google Drive si tu actives la sauvegarde en ligne.',
     ),
+    ...(s ? [panneauReference()] : []),
     panneauSauvegardeFichier(),
     panneauDrive(),
   ];

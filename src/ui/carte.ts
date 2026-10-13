@@ -23,6 +23,8 @@ export interface Dessin {
   points: { p: LatLon; couleur: string; rayon: number }[];
   /** Contours affichés en pointillés (état actuel pendant un aperçu). */
   fantomes?: LatLon[][];
+  /** Contours d'un ancien fichier affichés en référence (gris pointillé, avec leurs points). */
+  reference?: LatLon[][];
   /** Flèches à toucher, posées en `depuis` et pointant vers `vers` (choix du sens d'un décalage). */
   fleches?: { depuis: LatLon; vers: LatLon; choisie: boolean; action: () => void }[];
 }
@@ -149,6 +151,25 @@ export class Carte {
           interactive: false,
           icon: L.divIcon({ className: 'nom-parcelle', html: echapper(a.nom), iconSize: [0, 0] }),
         }).addTo(this.noms);
+      }
+    }
+    for (const r of dessin.reference ?? []) {
+      L.polygon(r.map(ll), {
+        color: '#555',
+        weight: 2,
+        dashArray: '4 6',
+        fill: false,
+        interactive: false,
+      }).addTo(this.calque);
+      for (const p of r) {
+        L.circleMarker(ll(p), {
+          radius: 4,
+          color: '#333',
+          weight: 2,
+          fillColor: '#fff',
+          fillOpacity: 1,
+          interactive: false,
+        }).addTo(this.calque);
       }
     }
     for (const f of dessin.fantomes ?? []) {
