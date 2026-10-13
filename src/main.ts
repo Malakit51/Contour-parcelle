@@ -200,8 +200,18 @@ const carte = new Carte(toucher, (texte) => {
 
 // ---------- Chargement ----------
 
-/** Ouvre un fichier lu (ou une session reprise) : `etat` est l'état modifié, s'il y en a un. */
-function ouvrir(td: TaskData, nomFichier: string, etat: Etat | null, texteMessage: string): void {
+/**
+ * Ouvre un fichier lu (ou une session reprise) : `etat` est l'état modifié, s'il y en a un.
+ * `nouveau` : travail qui n'est pas encore sur Drive (faux pour une reprise depuis l'appareil ou
+ * depuis Drive), à envoyer.
+ */
+function ouvrir(
+  td: TaskData,
+  nomFichier: string,
+  etat: Etat | null,
+  texteMessage: string,
+  nouveau = true,
+): void {
   if (td.parcelles.length === 0) throw new Error('Aucune parcelle (PFD) dans ce fichier.');
   const initial = etatInitial(td);
   const tous = initial.anneaux.flatMap((a) => a.sommets.map(latLon));
@@ -238,7 +248,7 @@ function ouvrir(td: TaskData, nomFichier: string, etat: Etat | null, texteMessag
   onglet = 'modifier';
   effacerSelection();
   message = { texte: texteMessage, erreur: false };
-  garderSession();
+  garderSession(nouveau);
   afficher();
   cadrerTout();
 }
@@ -274,13 +284,13 @@ function nomAppareil(): string {
 }
 
 /** Enregistre le fichier ouvert et les contours modifiés sur l'appareil (après chaque changement). */
-function garderSession(): void {
+function garderSession(envoyer = true): void {
   if (!session) return;
   sessionNonGardee = !garderSurAppareil(
     stockage,
     enregistrerSession(session.td, session.nomFichier, session.etat, nomAppareil()),
   );
-  programmerSauvegardeDrive();
+  if (envoyer) programmerSauvegardeDrive();
 }
 
 function changerNomAppareil(): boolean {
@@ -304,9 +314,40 @@ const drive = new Drive(GOOGLE_CLIENT_ID);
 const texteDrive = el('div', { class: 'doux' });
 let minuterieDrive: ReturnType<typeof setTimeout> | undefined;
 
+// La connexion à Google dure environ une heure. Le compte utilisé est retenu sur l'appareil : quand
+// la connexion a expiré et qu'il reste des modifications à envoyer, un bouton ☁ dans la barre du
+// haut reconnecte d'un appui (sans redemander le compte ni l'autorisation) et envoie.
+const CLE_COMPTE = 'contour-parcelle/compte-google';
+const CLE_ATTENTE = 'contour-parcelle/drive-en-attente';
+
+function lireStockage(cle: string): string | null {
+  try {
+    return stockage?.getItem(cle) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function ecrireStockage(cle: string, valeur: string | null): void {
+  try {
+    if (valeur === null) stockage?.removeItem(cle);
+    else stockage?.setItem(cle, valeur);
+  } catch {
+    // pas de stockage : tant pis
+  }
+}
+
+/** Des modifications n'ont pas encore été envoyées sur Drive (connexion expirée). */
+const driveEnAttente = () => lireStockage(CLE_ATTENTE) === '1';
+
 /** Après chaque modification, si on est connecté : sauvegarde en ligne quelques secondes après. */
 function programmerSauvegardeDrive(): void {
-  if (!drive.connecte() || !session) return;
+  if (!session || !drive.configure()) return;
+  if (!drive.connecte()) {
+    // Drive déjà utilisé sur cet appareil : on retient qu'il y a quelque chose à envoyer.
+    if (lireStockage(CLE_COMPTE)) ecrireStockage(CLE_ATTENTE, '1');
+    return;
+  }
   clearTimeout(minuterieDrive);
   texteDrive.textContent = 'Modifications à envoyer sur Google Drive…';
   minuterieDrive = setTimeout(() => void sauverSurDrive(), 4000);
@@ -321,8 +362,13 @@ async function sauverSurDrive(): Promise<void> {
       enregistrerSession(session.td, session.nomFichier, session.etat, nomAppareil(), suivi),
     );
     texteDrive.textContent = `Enregistré sur Google Drive le ${quandFr(f.modifie)}.`;
+    if (driveEnAttente()) {
+      ecrireStockage(CLE_ATTENTE, null);
+      afficher();
+    }
   } catch (e) {
     texteDrive.textContent = `Pas enregistré sur Google Drive : ${(e as Error).message}`;
+    if (lireStockage(CLE_COMPTE)) ecrireStockage(CLE_ATTENTE, '1');
     afficher();
   }
 }
@@ -330,9 +376,14 @@ async function sauverSurDrive(): Promise<void> {
 async function connecterDrive(): Promise<void> {
   try {
     if (nomAppareil() === 'appareil' && !changerNomAppareil()) return;
-    await drive.connecter();
+    await drive.connecter(lireStockage(CLE_COMPTE) ?? undefined);
     texteDrive.textContent = 'Connecté. Recherche d’une sauvegarde en ligne…';
     afficher();
+    try {
+      ecrireStockage(CLE_COMPTE, await drive.compte());
+    } catch {
+      // sans l'adresse, la reconnexion redemandera simplement le compte
+    }
     const lu = await drive.lire();
     const enLigne = lu?.contenu as { enregistreLe?: string; appareil?: string } | undefined;
     texteDrive.textContent = lu
@@ -340,6 +391,20 @@ async function connecterDrive(): Promise<void> {
       : 'Aucune sauvegarde en ligne pour l’instant.';
   } catch (e) {
     texteDrive.textContent = (e as Error).message;
+  }
+  afficher();
+}
+
+/** Bouton ☁ : reconnecte au compte retenu et envoie les modifications en attente. */
+async function reconnecterDrive(): Promise<void> {
+  try {
+    await drive.connecter(lireStockage(CLE_COMPTE) ?? undefined);
+    await sauverSurDrive();
+    message = driveEnAttente()
+      ? { texte: texteDrive.textContent ?? 'Pas envoyé sur Google Drive.', erreur: true }
+      : { texte: 'Envoyé sur Google Drive.', erreur: false };
+  } catch (e) {
+    message = { texte: (e as Error).message, erreur: true };
   }
   afficher();
 }
@@ -361,7 +426,13 @@ function reprendreSauvegarde(contenu: unknown, provenance: string): string | nul
     return null;
   }
   if (r.session.suivi) majSuivi(fusionner(suivi, r.session.suivi));
-  ouvrir(r.td, r.nom, r.etat, `Travail repris : sauvegarde ${provenance} du ${quand}.`);
+  ouvrir(
+    r.td,
+    r.nom,
+    r.etat,
+    `Travail repris : sauvegarde ${provenance} du ${quand}.`,
+    provenance !== 'en ligne',
+  );
   return quand;
 }
 
@@ -668,6 +739,7 @@ function reprendreSession(): void {
       r.etat,
       `Travail repris : ${r.nom}, enregistré le ${quandFr(r.session.enregistreLe)}` +
         (n > 0 ? `, ${n} parcelle(s) modifiée(s).` : ', sans modification.'),
+      false,
     );
   } catch {
     oublierSurAppareil(stockage);
@@ -2086,6 +2158,17 @@ function afficher(): void {
       'GPS',
     ),
     carte.gpsActif() && el('button', { onclick: () => carte.centrerSurGps() }, '⌖'),
+    driveEnAttente() &&
+      !drive.connecte() &&
+      el(
+        'button',
+        {
+          class: 'actif nuage',
+          title: 'Reconnecter Google Drive',
+          onclick: () => void reconnecterDrive(),
+        },
+        '☁',
+      ),
   );
 
   remplir(

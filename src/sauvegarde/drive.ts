@@ -29,6 +29,7 @@ interface Gis {
       initTokenClient(config: {
         client_id: string;
         scope: string;
+        login_hint?: string;
         callback: (r: ReponseJeton) => void;
         error_callback?: (e: { type: string }) => void;
       }): ClientJeton;
@@ -73,14 +74,19 @@ export class Drive {
     return this.jeton !== null && Date.now() < this.expire - 60_000;
   }
 
-  /** Ouvre la fenêtre de connexion Google (à appeler depuis un appui sur un bouton). */
-  async connecter(): Promise<void> {
+  /**
+   * Ouvre la fenêtre de connexion Google (à appeler depuis un appui sur un bouton). Avec `compte`
+   * (adresse déjà autorisée), Google ne redemande ni le compte ni l'autorisation : la fenêtre se
+   * referme d'elle-même.
+   */
+  async connecter(compte?: string): Promise<void> {
     if (!this.configure()) throw new ErreurDrive('Sauvegarde Google Drive pas encore configurée.');
     const gis = await chargerGis();
     await new Promise<void>((resoudre, rejeter) => {
       this.client = gis.accounts.oauth2.initTokenClient({
         client_id: this.idClient,
         scope: PORTEE,
+        ...(compte ? { login_hint: compte } : {}),
         callback: (r) => {
           if (!r.access_token) {
             rejeter(new ErreurDrive(`Connexion refusée (${r.error ?? 'inconnue'}).`));
@@ -120,6 +126,14 @@ export class Drive {
     }
     if (!r.ok) throw new ErreurDrive(`Google Drive a répondu ${r.status}.`);
     return r;
+  }
+
+  /** Adresse du compte Google connecté (pour le reconnecter ensuite sans le redemander). */
+  async compte(): Promise<string | null> {
+    const r = await this.appeler(
+      `https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)`,
+    );
+    return ((await r.json()) as { user?: { emailAddress?: string } }).user?.emailAddress ?? null;
   }
 
   /** Le fichier de sauvegarde, s'il existe (le plus récent s'il y en a plusieurs). */

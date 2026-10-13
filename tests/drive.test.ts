@@ -21,6 +21,9 @@ function fauxDrive() {
         .map(([id, f]) => ({ id, modifiedTime: f.modifie }));
       return json({ files: trouves });
     }
+    if (u.pathname === '/drive/v3/about') {
+      return json({ user: { emailAddress: 'essai@exemple.fr' } });
+    }
     const media = /^\/drive\/v3\/files\/([^/]+)$/.exec(u.pathname);
     if (media && u.searchParams.get('alt') === 'media') {
       return new Response(fichiers.get(media[1]!)!.contenu, { status: 200 });
@@ -64,5 +67,11 @@ describe('sauvegarde Google Drive', () => {
     await expect(drive.lire()).rejects.toThrow(/expirée/);
     expect(drive.connecte()).toBe(false);
     expect(new Drive('').configure()).toBe(false);
+  });
+
+  it('donne l’adresse du compte connecté', async () => {
+    const drive = new Drive('client-test', fauxDrive().requete);
+    drive.utiliserJeton('jeton');
+    expect(await drive.compte()).toBe('essai@exemple.fr');
   });
 });

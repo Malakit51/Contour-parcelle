@@ -502,3 +502,9 @@ td.etats {
   border-radius: 10px;
   box-shadow: 0 1px 4px #0006;
 }
+
+/* Bouton ☁ : modifications à envoyer sur Google Drive, connexion expirée. */
+.barre-haut button.nuage {
+  font-size: 1.5rem;
+  padding: 4px 10px;
+}
