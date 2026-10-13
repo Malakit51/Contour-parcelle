@@ -67,6 +67,7 @@ export class Carte {
       maxZoom: 22,
       zoomSnap: 0.25,
     });
+    this.carte.attributionControl.setPrefix(false);
     const options = { maxNativeZoom: 19, maxZoom: 22, attribution: ATTRIBUTION };
     const fonds = {
       Photo: L.tileLayer(wmts('ORTHOIMAGERY.ORTHOPHOTOS', 'image/jpeg'), options),

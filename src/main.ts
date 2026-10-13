@@ -398,7 +398,7 @@ function enregistrerFichierSauvegarde(): void {
   const nom = `contour-parcelle-sauvegarde-${aujourdhui()}.json`;
   enregistrer(encoder(JSON.stringify(contenu)), nom, 'application/json');
   message = {
-    texte: `${nom} arrive dans « Téléchargements » : range-le sur la clé USB (ou envoie-le).`,
+    texte: `${nom} enregistré dans Téléchargements.`,
     erreur: false,
   };
   afficher();
@@ -449,7 +449,7 @@ async function partagerSauvegarde(): Promise<void> {
 }
 
 function boutonChargerSauvegarde(): HTMLElement {
-  const choix = el('label', { class: 'bouton-fichier secondaire' }, 'Charger une sauvegarde');
+  const choix = el('label', { class: 'bouton-fichier secondaire' }, 'Charger');
   const input = el('input', { type: 'file', accept: '.json,.txt,application/json,text/plain' });
   input.addEventListener('change', async () => {
     const f = input.files?.[0];
@@ -479,7 +479,7 @@ async function chargerReference(f: File): Promise<void> {
       }),
     };
     message = {
-      texte: `${f.name} affiché en référence (gris) : ${td.parcelles.length} parcelle(s). Rien n’est modifié dans ton travail.`,
+      texte: `${f.name} affiché en référence.`,
       erreur: false,
     };
   } catch (e) {
@@ -492,7 +492,7 @@ function panneauReference(): HTMLElement {
   const choix = el(
     'label',
     { class: 'bouton-fichier secondaire' },
-    reference ? 'Autre fichier de référence' : 'Afficher un ancien TASKDATA',
+    reference ? 'Autre référence' : 'Afficher un ancien TASKDATA',
   );
   const input = el('input', { type: 'file' });
   input.addEventListener('change', () => {
@@ -503,14 +503,8 @@ function panneauReference(): HTMLElement {
   return el(
     'div',
     { class: 'info' },
-    el('strong', {}, 'Ancien fichier en référence'),
-    el(
-      'div',
-      { class: 'doux' },
-      reference
-        ? `« ${reference.nom} » est affiché en gris pointillé. Pour reprendre un de ses points : onglet Modifier, « Point », touche ton point, ☝, puis le point gris.`
-        : 'Affiche les contours d’un ancien TASKDATA en gris par-dessus ton travail, sans rien remplacer, pour y recoller des points.',
-    ),
+    el('strong', {}, 'Référence'),
+    reference && el('div', { class: 'doux' }, `${reference.nom} (gris)`),
     el(
       'div',
       { class: 'rangee' },
@@ -524,7 +518,7 @@ function panneauReference(): HTMLElement {
               afficher();
             },
           },
-          'Retirer la référence',
+          'Retirer',
         ),
     ),
   );
@@ -562,21 +556,17 @@ function panneauRemplacement(s: Session): HTMLElement | null {
   const r = parcelleDeReference(s, p);
   const nom = s.td.parcelles[p]!.nom;
   if (!r) {
-    return el(
-      'div',
-      { class: 'info doux' },
-      `Aucune parcelle de « ${reference.nom} » ne correspond à ${nom}.`,
-    );
+    return el('div', { class: 'info doux' }, `${nom} absente de la référence.`);
   }
   const ext = s.etat.anneaux.findIndex((a) => a.parcelle === p && a.type === 1);
   return el(
     'div',
     { class: 'info' },
-    el('strong', {}, 'Contour de la référence'),
+    el('strong', {}, 'Référence'),
     el(
       'div',
       { class: 'doux' },
-      `« ${r.nom} » dans ${reference.nom} : ${r.contour.length} points (${nom} en a ${s.etat.anneaux[ext]!.sommets.length} aujourd’hui).`,
+      `${r.contour.length} points (actuel : ${s.etat.anneaux[ext]!.sommets.length})`,
     ),
     el(
       'div',
@@ -592,14 +582,12 @@ function panneauRemplacement(s: Session): HTMLElement | null {
             modifier(
               () => remplacerContour(s.etat, ext, r.contour),
               `Contour de ${nom} remplacé par celui de ${reference!.nom}` +
-                (communs
-                  ? ' ; il avait des sommets communs avec un voisin : fais « Vérifier avant export »'
-                  : ''),
+                (communs ? ' ; vérifie la limite avec le voisin' : ''),
               false,
             );
           },
         },
-        `Remplacer le contour de ${nom}`,
+        `Remplacer ${nom}`,
       ),
     ),
   );
@@ -609,24 +597,13 @@ function panneauSauvegardeFichier(): HTMLElement {
   return el(
     'div',
     { class: 'info' },
-    el('strong', {}, 'Sauvegarde dans un fichier (clé USB)'),
-    el(
-      'div',
-      { class: 'doux' },
-      'Le fichier ouvert, les contours modifiés, le suivi et le journal, dans un seul fichier à garder sur la clé ou à reprendre sur un autre appareil.',
-    ),
+    el('strong', {}, 'Sauvegarde'),
     el(
       'div',
       { class: 'rangee' },
-      session
-        ? el('button', { onclick: enregistrerFichierSauvegarde }, 'Enregistrer une sauvegarde')
-        : null,
+      session ? el('button', { onclick: enregistrerFichierSauvegarde }, 'Enregistrer') : null,
       session && partagePossible()
-        ? el(
-            'button',
-            { onclick: () => void partagerSauvegarde() },
-            'Partager (Bluetooth, Quick Share…)',
-          )
+        ? el('button', { onclick: () => void partagerSauvegarde() }, 'Partager')
         : null,
       boutonChargerSauvegarde(),
     ),
@@ -634,34 +611,21 @@ function panneauSauvegardeFichier(): HTMLElement {
 }
 
 function panneauDrive(): HTMLElement {
-  const titre = el('strong', {}, 'Sauvegarde Google Drive');
+  const titre = el('strong', {}, 'Google Drive');
   if (!drive.configure()) {
-    return el(
-      'div',
-      { class: 'info' },
-      titre,
-      el(
-        'div',
-        { class: 'doux' },
-        'Pas encore configurée : il faut d’abord créer un identifiant Google pour l’éditeur.',
-      ),
-    );
+    return el('div', { class: 'info' }, titre, el('div', { class: 'doux' }, 'Pas configuré.'));
   }
   return el(
     'div',
     { class: 'info' },
     titre,
-    el(
-      'div',
-      { class: 'doux' },
-      `Cet appareil : ${nomAppareil()}. Le fichier, les contours modifiés, le suivi et le journal sont enregistrés dans ton Drive (l’éditeur ne voit que ce fichier).`,
-    ),
+    el('div', { class: 'doux' }, `Appareil : ${nomAppareil()}`),
     drive.connecte()
       ? el(
           'div',
           { class: 'rangee' },
           el('button', { onclick: () => void sauverSurDrive() }, 'Enregistrer maintenant'),
-          el('button', { onclick: () => void reprendreDepuisDrive() }, 'Reprendre depuis Drive'),
+          el('button', { onclick: () => void reprendreDepuisDrive() }, 'Reprendre'),
         )
       : el(
           'div',
@@ -682,7 +646,7 @@ function panneauDrive(): HTMLElement {
             if (changerNomAppareil()) afficher();
           },
         },
-        'Changer le nom de l’appareil',
+        'Renommer l’appareil',
       ),
     ),
     texteDrive,
@@ -829,7 +793,7 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
       () => placerSommet(s.etat, ref, aimant ?? position),
       aimant
         ? `Point de ${nomParcelle(s, ref.anneau)} placé exactement sur le point de ${reference!.nom}`
-        : `Point de ${nomParcelle(s, ref.anneau)} placé au doigt : ajuste-le avec les flèches`,
+        : `Point de ${nomParcelle(s, ref.anneau)} placé au doigt`,
       true,
     );
     return;
@@ -870,7 +834,7 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
     }
     const limite = proche as { anneau: number; debut: number } | null;
     if (!limite) {
-      message = { texte: 'Touche une limite (un trait) pour y ajouter le point.', erreur: true };
+      message = { texte: 'Touche une limite.', erreur: true };
       afficher();
       return;
     }
@@ -886,8 +850,7 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
       parcelleCourante = s.etat.anneaux[limite.anneau]!.parcelle;
       selSommet = r.sommet;
       message = {
-        texte:
-          'Point ajouté et sélectionné : déplace-le avec les flèches, ☝ ou le long d’un bord.',
+        texte: 'Point ajouté.',
         erreur: false,
       };
     } catch (e) {
@@ -1091,7 +1054,7 @@ function commandesSommet(): HTMLElement {
         onclick: () => {
           placerAuDoigt = !placerAuDoigt;
           message = placerAuDoigt
-            ? { texte: 'Touche la carte à l’endroit où placer le point.', erreur: false }
+            ? { texte: 'Touche la carte à l’endroit voulu.', erreur: false }
             : null;
           afficher();
         },
@@ -1282,7 +1245,7 @@ async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
     }
   } else {
     enregistrer(xml, NOM_FICHIER, 'application/xml');
-    destination = `${NOM_FICHIER} (téléchargements)`;
+    destination = `${NOM_FICHIER} (Téléchargements)`;
   }
   const s = session;
   const quand = new Date().toISOString();
@@ -1307,7 +1270,13 @@ async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
         : []),
     ],
   });
-  message = { texte: `Version ${version} exportée (${destination}).`, erreur: false };
+  message = {
+    texte:
+      quoi === 'xml'
+        ? `Version ${version} : ${NOM_FICHIER} téléchargé, à mettre dans un dossier ${NOM_DOSSIER} sur la clé.`
+        : `Version ${version} exportée (${destination}).`,
+    erreur: false,
+  };
   afficher();
 }
 
@@ -1356,7 +1325,7 @@ function panneauSuiviParcelle(s: Session): HTMLElement | null {
     el(
       'div',
       { class: 'rangee' },
-      el('span', { style: 'flex:1' }, f.remarque ? `Remarque : ${f.remarque}` : 'Pas de remarque.'),
+      el('span', { style: 'flex:1' }, f.remarque),
       el(
         'button',
         {
@@ -1370,12 +1339,7 @@ function panneauSuiviParcelle(s: Session): HTMLElement | null {
         'Remarque',
       ),
     ),
-    derniere &&
-      el(
-        'div',
-        { class: 'doux' },
-        `Dernière modification : ${quandFr(derniere.quand)}, ${derniere.action}`,
-      ),
+    derniere && el('div', { class: 'doux' }, `${quandFr(derniere.quand)} · ${derniere.action}`),
   );
 }
 
@@ -1396,12 +1360,7 @@ function panneauSuiviGeneral(s: Session): HTMLElement {
       {},
       `Suivi des contours : ${compte('verifie')} vérifiés, ${compte('a-confirmer')} à confirmer, ${compte('a-refaire')} à refaire`,
     ),
-    suiviNonEnregistre &&
-      el(
-        'div',
-        { class: 'erreur' },
-        'Attention : le suivi n’a pas pu être enregistré sur le téléphone.',
-      ),
+    suiviNonEnregistre && el('div', { class: 'erreur' }, 'Suivi non enregistré sur cet appareil.'),
     el(
       'table',
       {},
@@ -1455,7 +1414,7 @@ function panneauSuiviGeneral(s: Session): HTMLElement {
         'Journal en CSV',
       ),
     ),
-    el('strong', {}, `Journal (${suivi.journal.length} lignes, les plus récentes d’abord)`),
+    el('strong', {}, 'Journal'),
     ...journal.map((e) =>
       el(
         'div',
@@ -1608,9 +1567,7 @@ function panneauSimplification(s: Session): HTMLElement {
       el(
         'div',
         { class: 'sens' },
-        bordDebut
-          ? 'Touche maintenant le dernier sommet du bord.'
-          : 'Touche le premier sommet du bord à simplifier.',
+        bordDebut ? 'Touche le dernier sommet du bord.' : 'Touche le premier sommet du bord.',
       ),
     );
   }
@@ -1619,7 +1576,7 @@ function panneauSimplification(s: Session): HTMLElement {
       'div',
       { class: 'info' },
       portee,
-      el('div', { class: 'doux' }, 'Touche une parcelle sur la carte.'),
+      el('div', { class: 'doux' }, 'Touche une parcelle.'),
     );
   }
   const p = parcelleCourante;
@@ -1649,7 +1606,7 @@ function panneauSimplification(s: Session): HTMLElement {
       el(
         'div',
         { class: 'rangee' },
-        el('span', { class: 'doux' }, `Bord de ${sommetsDuBord(s.etat, bord).length} points.`),
+        el('span', { class: 'doux' }, `Bord : ${sommetsDuBord(s.etat, bord).length} points`),
         el(
           'button',
           {
@@ -1658,10 +1615,9 @@ function panneauSimplification(s: Session): HTMLElement {
               afficher();
             },
           },
-          'L’autre partie du contour',
+          'Autre côté',
         ),
       ),
-    el('div', { class: 'doux' }, 'Tolérance : écart maximal accepté avec le contour actuel.'),
     el(
       'div',
       { class: 'rangee' },
@@ -1688,20 +1644,15 @@ function panneauSimplification(s: Session): HTMLElement {
       el(
         'div',
         { class: ecartOrigine > tolerance ? 'erreur' : 'doux' },
-        `Écart max avec le contour du fichier d’origine : ${enCm(ecartOrigine)}` +
-          (ecartOrigine > tolerance ? ' (plus que la tolérance : déjà simplifiée ?)' : ''),
+        `Écart avec l’origine : ${enCm(ecartOrigine)}` +
+          (ecartOrigine > tolerance ? ' (déjà simplifiée ?)' : ''),
       ),
-    el(
-      'div',
-      { class: 'doux' },
-      'Aperçu : pointillés = contour actuel. Les côtés sont redressés et les coins recalculés ; les sommets communs avec les voisins ne bougent pas. « Appliquer » pour valider.',
-    ),
   );
 }
 
 function panneauSelection(s: Session): HTMLElement {
   if (mode === 'limite') {
-    if (!selLimite) return el('div', { class: 'info doux' }, 'Touche une limite sur la carte.');
+    if (!selLimite) return el('div', { class: 'info doux' }, 'Touche une limite.');
     const ref = selLimite;
     const x = nomParcelle(s, ref.anneau);
     const jum = limitesJumelles(s.etat, ref);
@@ -1716,14 +1667,10 @@ function panneauSelection(s: Session): HTMLElement {
       'div',
       { class: 'info' },
       el('div', {}, el('strong', {}, titre)),
-      el('div', { class: 'doux' }, `Longueur : ${longueur(s, ref).toFixed(1).replace('.', ',')} m`),
+      el('div', { class: 'doux' }, `${longueur(s, ref).toFixed(1).replace('.', ',')} m`),
       sensLimite
-        ? el('div', { class: 'sens' }, `Sens : ${effetsLimite(s, ref)[sensLimite]}`)
-        : el(
-            'div',
-            { class: 'sens' },
-            'Touche une des deux flèches sur la carte pour choisir le sens.',
-          ),
+        ? el('div', { class: 'sens' }, effetsLimite(s, ref)[sensLimite])
+        : el('div', { class: 'sens' }, 'Choisis une flèche.'),
     );
   }
   const boutonAjout = el(
@@ -1734,25 +1681,17 @@ function panneauSelection(s: Session): HTMLElement {
         const actif = !ajoutEnCours;
         effacerSelection();
         ajoutEnCours = actif;
-        message = actif
-          ? { texte: 'Touche une limite à l’endroit du nouveau point.', erreur: false }
-          : null;
+        message = actif ? { texte: 'Touche une limite.', erreur: false } : null;
         afficher();
       },
     },
-    ajoutEnCours ? 'Ajout en cours… (annuler)' : 'Ajouter un point',
+    ajoutEnCours ? 'Annuler l’ajout' : 'Ajouter un point',
   );
   if (!selSommet) {
     return el(
       'div',
       { class: 'info' },
-      el(
-        'div',
-        { class: 'doux' },
-        ajoutEnCours
-          ? 'Touche une limite (un trait) à l’endroit du nouveau point.'
-          : 'Touche un sommet sur la carte, ou ajoute un point.',
-      ),
+      el('div', { class: 'doux' }, ajoutEnCours ? 'Touche une limite.' : 'Touche un sommet.'),
       el('div', { class: 'rangee' }, boutonAjout),
     );
   }
@@ -1763,12 +1702,12 @@ function panneauSelection(s: Session): HTMLElement {
       .filter((n) => n !== nomParcelle(s, ref.anneau)),
   );
   const glisse = !limiteGlisse
-    ? 'Pour le faire glisser le long d’un bord : touche ce bord sur la carte.'
+    ? null
     : !sensGlisse
-      ? 'Touche une des deux flèches le long du bord pour le sens, puis « Appliquer ».'
+      ? 'Choisis une flèche.'
       : sensGlisse === 'vers'
-        ? 'Sens : le long du bord (le bord raccourcit).'
-        : 'Sens : dans le prolongement du bord (le bord s’allonge).';
+        ? 'Le bord raccourcit.'
+        : 'Le bord s’allonge.';
   return el(
     'div',
     { class: 'info' },
@@ -1776,34 +1715,18 @@ function panneauSelection(s: Session): HTMLElement {
       'div',
       {},
       el('strong', {}, `Sommet de ${nomParcelle(s, ref.anneau)}`),
-      autres.size > 0 ? ` (commun avec ${[...autres].join(', ')})` : '',
+      autres.size > 0 ? ` · commun avec ${[...autres].join(', ')}` : '',
     ),
     el(
       'div',
       { class: 'doux' },
       (() => {
         const v = s.etat.anneaux[ref.anneau]!.sommets[ref.sommet]!;
-        return `Coordonnées : ${v.lat.toFixed(7)}, ${v.lon.toFixed(7)}`;
+        return `${v.lat.toFixed(7)}, ${v.lon.toFixed(7)}`;
       })(),
     ),
-    reference &&
-      el(
-        'div',
-        { class: 'sens' },
-        `☝ puis touche un point gris de « ${reference.nom} » : le point s’y colle exactement.`,
-      ),
-    el(
-      'div',
-      { class: 'doux' },
-      'Flèches en haut à gauche de la carte : la distance réglée à chaque appui ; ☝ au centre : placer au doigt.',
-    ),
-    el(
-      'div',
-      { class: 'rangee' },
-      el('button', { onclick: supprimer }, 'Supprimer ce point'),
-      boutonAjout,
-    ),
-    el('div', { class: 'sens' }, glisse),
+    glisse && el('div', { class: 'sens' }, glisse),
+    el('div', { class: 'rangee' }, el('button', { onclick: supprimer }, 'Supprimer'), boutonAjout),
   );
 }
 
@@ -1864,7 +1787,7 @@ function tableauSurfaces(s: Session): HTMLElement | null {
   return el(
     'div',
     { class: 'info' },
-    el('strong', {}, 'Surfaces (D)'),
+    el('strong', {}, 'Surfaces'),
     el(
       'table',
       {},
@@ -1897,18 +1820,17 @@ function panneauExport(): HTMLElement {
   const bloc = el(
     'div',
     { class: 'info' },
-    el('strong', {}, 'Export'),
     el(
       'div',
       { class: 'rangee' },
-      el('span', { class: 'sens' }, `Cet export sera la version ${prochaineVersion()}`),
+      el('strong', { style: 'flex:1' }, `Version ${prochaineVersion()}`),
       el(
         'button',
         {
           class: 'petit',
           onclick: () => {
             const v = prompt(
-              'Dernière version de TASKDATA déjà exportée (le prochain export prendra la suivante) :',
+              'Dernière version exportée :',
               suivi.derniereVersion ?? VERSION_DE_DEPART,
             );
             if (!v?.trim()) return;
@@ -1932,11 +1854,7 @@ function panneauExport(): HTMLElement {
         'div',
         {},
         exportPrepare.alertes.length === 0
-          ? el(
-              'div',
-              {},
-              '✓ Contrôles : aucun problème (contours fermés, pas de recoupement ni de chevauchement, sommets communs identiques).',
-            )
+          ? el('div', { class: 'ok' }, '✓ Aucun problème')
           : el(
               'div',
               {},
@@ -1944,11 +1862,10 @@ function panneauExport(): HTMLElement {
                 el('div', { class: a.grave ? 'erreur' : '' }, (a.grave ? '✗ ' : '⚠ ') + a.message),
               ),
             ),
-        el('div', {}, `Différences avec l’original : ${exportPrepare.resume}`),
         el(
           'details',
           {},
-          el('summary', {}, 'Voir chaque différence'),
+          el('summary', {}, exportPrepare.resume),
           el('pre', {}, exportPrepare.details),
         ),
         el(
@@ -1958,7 +1875,7 @@ function panneauExport(): HTMLElement {
             el(
               'button',
               { class: 'principal', onclick: () => void telecharger('dossier') },
-              `${graves.length > 0 ? 'Malgré tout : ' : ''}Enregistrer sur la clé (dossier « ${nomDossierVersion(prochaineVersion())} »)`,
+              `${graves.length > 0 ? 'Malgré tout : ' : ''}Enregistrer « ${nomDossierVersion(prochaineVersion())} »`,
             ),
           el(
             'button',
@@ -1971,19 +1888,11 @@ function panneauExport(): HTMLElement {
               : `Télécharger ${NOM_FICHIER} seul`,
           ),
         ),
-        el(
-          'div',
-          { class: 'doux' },
-          ecritureDossierPossible()
-            ? emplacementConnu
-              ? `« Enregistrer sur la clé » : le dossier « ${nomDossierVersion(prochaineVersion())} » sera créé dans « ${emplacementConnu} », sans redemander l’emplacement.`
-              : `« Enregistrer sur la clé » : choisis la clé USB (sa racine) ; l’éditeur y crée le dossier « ${nomDossierVersion(prochaineVersion())} » avec ${NOM_FICHIER} dedans, et se souvient de l’emplacement pour les fois suivantes.`
-            : `${NOM_FICHIER} arrive dans « Téléchargements ». Avec le gestionnaire de fichiers, mets-le dans un dossier ${NOM_DOSSIER} sur la clé.`,
-        ),
         emplacementConnu &&
           el(
             'div',
             { class: 'rangee' },
+            el('span', { class: 'doux', style: 'flex:1' }, `Dans « ${emplacementConnu} »`),
             el(
               'button',
               {
@@ -2027,7 +1936,35 @@ const zones = {
   panneau: el('div', { class: 'panneau' }),
   bas: el('div', { class: 'barre-bas' }),
 };
-zones.carte.append(carte.element, el('div', { class: 'gps-sur-carte' }, texteGps));
+// Messages : bulle posée en bas de la carte, qui disparaît seule (touche-la pour la fermer).
+const bulle = el('div', { class: 'bulle', hidden: '' });
+bulle.addEventListener('click', () => {
+  message = null;
+  majBulle();
+});
+let messageAffiche: { texte: string; erreur: boolean } | null = null;
+let minuterieBulle: ReturnType<typeof setTimeout> | undefined;
+
+function majBulle(): void {
+  bulle.hidden = !message || !session;
+  bulle.className = message?.erreur ? 'bulle erreur' : 'bulle';
+  bulle.textContent = message?.texte ?? '';
+  if (message === messageAffiche) return;
+  messageAffiche = message;
+  clearTimeout(minuterieBulle);
+  const m = message;
+  if (!m || !session) return;
+  minuterieBulle = setTimeout(
+    () => {
+      if (message !== m) return;
+      message = null;
+      majBulle();
+    },
+    m.erreur ? 7000 : 4000,
+  );
+}
+
+zones.carte.append(carte.element, el('div', { class: 'gps-sur-carte' }, texteGps), bulle);
 app.classList.add('mise-en-page');
 app.replaceChildren(...Object.values(zones));
 
@@ -2055,14 +1992,8 @@ function boutonFichier(): HTMLElement {
 
 function contenuFichier(s: Session | null): Node[] {
   const contenu: Node[] = [
-    el('h1', {}, 'Contours parcelles'),
+    ...(s ? [] : [el('h1', {}, 'Contours parcelles')]),
     el('div', { class: 'rangee' }, boutonFichier()),
-    el(
-      'div',
-      { class: 'doux' },
-      'Ouvre le fichier TASKDATA.XML exporté par la console (sur la clé USB, dans le dossier TASKDATA). ',
-      'Rien n’est envoyé sur Internet, sauf dans ton Google Drive si tu actives la sauvegarde en ligne.',
-    ),
     ...(s ? [panneauReference()] : []),
     panneauSauvegardeFichier(),
     panneauDrive(),
@@ -2075,24 +2006,20 @@ function contenuFichier(s: Session | null): Node[] {
         el(
           'button',
           { onclick: reinitialiser, ...(s.historique.length > 0 ? {} : { disabled: '' }) },
-          'Réinitialiser (revenir au fichier d’origine)',
+          'Réinitialiser',
         ),
         el('button', { onclick: fermerFichier }, 'Fermer le fichier'),
       ),
-      el(
-        'div',
-        { class: sessionNonGardee ? 'erreur' : 'doux' },
-        sessionNonGardee
-          ? 'Attention : le travail n’a pas pu être enregistré sur cet appareil.'
-          : `${s.nomFichier} et tes modifications sont enregistrés sur cet appareil : tu les retrouves en rouvrant la page.`,
-      ),
+      ...(sessionNonGardee
+        ? [el('div', { class: 'erreur' }, 'Travail non enregistré sur cet appareil.')]
+        : []),
     );
     if (s.alertesChargement.length > 0) {
       contenu.push(
         el(
           'div',
           { class: 'info' },
-          el('strong', {}, `Remarques sur le fichier (${s.alertesChargement.length})`),
+          el('strong', {}, 'Remarques sur le fichier'),
           ...s.alertesChargement.map((a) => el('div', {}, a)),
         ),
       );
@@ -2104,8 +2031,12 @@ function contenuFichier(s: Session | null): Node[] {
 function afficher(): void {
   gpsAffiche = carte.gpsActif();
   const defilement = zones.panneau.scrollTop;
+  // Sans fichier ouvert (pas de carte), le message reste en tête du panneau.
   const msg =
-    message && el('div', { class: message.erreur ? 'info erreur' : 'info' }, message.texte);
+    message &&
+    !session &&
+    el('div', { class: message.erreur ? 'info erreur' : 'info' }, message.texte);
+  majBulle();
 
   if (!session) {
     onglet = 'fichier';
@@ -2207,12 +2138,7 @@ function afficher(): void {
       break;
     case 'suivi':
       contenu = [
-        panneauSuiviParcelle(s) ??
-          el(
-            'div',
-            { class: 'info doux' },
-            'Touche une parcelle sur la carte pour régler son état.',
-          ),
+        panneauSuiviParcelle(s) ?? el('div', { class: 'info doux' }, 'Touche une parcelle.'),
         el(
           'div',
           { class: 'rangee' },
@@ -2224,7 +2150,7 @@ function afficher(): void {
                 afficher();
               },
             },
-            couleursParEtat ? 'Couleurs de la carte : état' : 'Couleurs de la carte : voisins',
+            couleursParEtat ? 'Couleurs : état' : 'Couleurs : voisins',
           ),
         ),
         panneauSuiviGeneral(s),
