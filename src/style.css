@@ -312,3 +312,38 @@ summary {
 .fleche-limite.choisie {
   background: #d500f9;
 }
+/* Tablette (ou téléphone) en paysage : carte sur toute la hauteur à gauche, commandes à droite. */
+@media (orientation: landscape) and (min-width: 700px) {
+  #app.mise-en-page {
+    max-width: none;
+    display: grid;
+    grid-template-columns: 1fr minmax(340px, 34%);
+    grid-template-rows: auto auto 1fr auto;
+    grid-template-areas:
+      'carte haut'
+      'carte onglets'
+      'carte panneau'
+      'carte bas';
+  }
+  .mise-en-page > .barre-haut {
+    grid-area: haut;
+  }
+  .mise-en-page > .zone-carte {
+    grid-area: carte;
+    min-height: 0;
+  }
+  .mise-en-page > .onglets {
+    grid-area: onglets;
+  }
+  .mise-en-page > .panneau {
+    grid-area: panneau;
+  }
+  .mise-en-page > .barre-bas {
+    grid-area: bas;
+  }
+  /* Sans fichier ouvert, pas de carte : le panneau prend toute la largeur. */
+  .mise-en-page:has(> .zone-carte[hidden]) {
+    grid-template-columns: 1fr;
+    grid-template-areas: 'haut' 'onglets' 'panneau' 'bas';
+  }
+}
