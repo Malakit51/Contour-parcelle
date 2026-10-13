@@ -30,14 +30,16 @@ export class Carte {
   private pointeurs = new Map<number, { x: number; y: number }>();
   private glisse = false;
   private depart: { x: number; y: number } | null = null;
-  private ecartPincement = 0;
 
   constructor(private readonly auToucher: (p: XY, pixelsParMetre: number) => void) {
     this.element = svg('svg', { class: 'carte' });
     this.element.addEventListener('pointerdown', (e) => this.appui(e));
     this.element.addEventListener('pointermove', (e) => this.mouvement(e));
     this.element.addEventListener('pointerup', (e) => this.relache(e));
-    this.element.addEventListener('pointercancel', (e) => this.pointeurs.delete(e.pointerId));
+    this.element.addEventListener('pointercancel', (e) => {
+      this.pointeurs.delete(e.pointerId);
+      if (this.pointeurs.size === 0) this.redessiner();
+    });
     new ResizeObserver(() => this.redessiner()).observe(this.element);
   }
 
@@ -78,21 +80,21 @@ export class Carte {
     if (this.pointeurs.size === 1) {
       this.glisse = false;
       this.depart = { x: e.clientX, y: e.clientY };
-    } else if (this.pointeurs.size === 2) {
+    } else {
       this.glisse = true;
-      this.ecartPincement = this.ecart();
     }
   }
 
-  private ecart(): number {
+  /** Point milieu et écart des deux premiers doigts. */
+  private geste(): { x: number; y: number; ecart: number } | null {
     const [a, b] = [...this.pointeurs.values()];
-    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+    if (!a || !b) return null;
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, ecart: Math.hypot(a.x - b.x, a.y - b.y) };
   }
 
   private mouvement(e: PointerEvent): void {
     const avant = this.pointeurs.get(e.pointerId);
     if (!avant) return;
-    const k = this.echelle();
     if (this.pointeurs.size === 1) {
       if (
         !this.glisse &&
@@ -102,36 +104,56 @@ export class Carte {
         this.glisse = true;
         this.element.setPointerCapture(e.pointerId);
       }
+      this.pointeurs.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (this.glisse) {
+        const k = this.echelle();
         this.centre = [
           this.centre[0] - (e.clientX - avant.x) / k,
           this.centre[1] + (e.clientY - avant.y) / k,
         ];
+        this.majVue();
       }
+      return;
     }
+    // Deux doigts : le point de la carte sous le milieu des doigts suit les doigts, et l'écart
+    // entre les doigts règle le zoom. On peut donc zoomer et déplacer en même temps.
+    const g0 = this.geste();
     this.pointeurs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (this.pointeurs.size === 2) {
-      const ecart = this.ecart();
-      if (this.ecartPincement > 0 && ecart > 0) this.largeur /= ecart / this.ecartPincement;
-      this.ecartPincement = ecart;
-    }
-    if (this.glisse) this.redessiner();
+    const g1 = this.geste();
+    if (!g0 || !g1 || g0.ecart === 0 || g1.ecart === 0) return;
+    const sousLesDoigts = this.versEcran({ clientX: g0.x, clientY: g0.y });
+    this.largeur = Math.max(2, (this.largeur * g0.ecart) / g1.ecart);
+    const r = this.element.getBoundingClientRect();
+    const k = this.echelle();
+    this.centre = [
+      sousLesDoigts[0] - (g1.x - r.left - r.width / 2) / k,
+      sousLesDoigts[1] + (g1.y - r.top - r.height / 2) / k,
+    ];
+    this.majVue();
   }
 
   private relache(e: PointerEvent): void {
     const etaitSeul = this.pointeurs.size === 1;
     this.pointeurs.delete(e.pointerId);
     if (etaitSeul && !this.glisse) this.auToucher(this.versEcran(e), this.echelle());
+    // Fin du geste : on redessine tout (taille des points et des noms adaptée au zoom).
+    if (this.pointeurs.size === 0 && this.glisse) this.redessiner();
+  }
+
+  /** Met seulement à jour le cadrage : rapide, pendant que les doigts bougent. */
+  private majVue(): void {
+    const k = this.echelle();
+    const hauteur = (this.element.clientHeight || 1) / k;
+    this.element.setAttribute(
+      'viewBox',
+      `${this.centre[0] - this.largeur / 2} ${-this.centre[1] - hauteur / 2} ${this.largeur} ${hauteur}`,
+    );
   }
 
   private redessiner(): void {
     const s = this.element;
     const k = this.echelle();
-    const hauteur = (s.clientHeight || 1) / k;
-    s.setAttribute(
-      'viewBox',
-      `${this.centre[0] - this.largeur / 2} ${-this.centre[1] - hauteur / 2} ${this.largeur} ${hauteur}`,
-    );
+    this.majVue();
     s.replaceChildren();
     const chemin = (pts: XY[]) => pts.map((p) => `${p[0]},${-p[1]}`).join(' ');
     for (const a of this.dessin.anneaux) {

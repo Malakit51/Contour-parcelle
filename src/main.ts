@@ -571,7 +571,34 @@ function panneauExport(): HTMLElement {
   return bloc;
 }
 
+// Zones fixes de la page : on ne remplace que leur contenu, jamais la page entière, pour que
+// l'écran ne saute pas à chaque touche.
+const zones = {
+  entete: el('div'),
+  parcelle: el('div'),
+  carte: el('div'),
+  modes: el('div'),
+  selection: el('div'),
+  pave: el('div'),
+  actions: el('div'),
+  message: el('div'),
+  surfaces: el('div'),
+  export: el('div'),
+  remarques: el('div'),
+};
+zones.carte.append(carte.element);
+app.replaceChildren(...Object.values(zones));
+
+function remplir(
+  zone: HTMLElement,
+  ...contenu: (Node | string | null | false | undefined)[]
+): void {
+  zone.replaceChildren(...contenu.filter((c): c is Node | string => !!c));
+}
+
 function afficher(): void {
+  // Précaution : on garde la position de défilement telle quelle.
+  const defilement = window.scrollY;
   const choixFichier = el(
     'label',
     { class: 'bouton-fichier' },
@@ -593,10 +620,15 @@ function afficher(): void {
   const msg =
     message && el('div', { class: message.erreur ? 'info erreur' : 'info' }, message.texte);
 
+  remplir(zones.entete, enTete);
+  remplir(zones.message, msg);
   if (!session) {
-    app.replaceChildren(
-      enTete,
-      msg || '',
+    zones.carte.hidden = true;
+    for (const z of [zones.parcelle, zones.modes, zones.selection, zones.pave, zones.actions])
+      remplir(z);
+    remplir(zones.surfaces);
+    remplir(
+      zones.export,
       el(
         'div',
         { class: 'info' },
@@ -644,8 +676,9 @@ function afficher(): void {
       texte,
     );
 
-  app.replaceChildren(
-    enTete,
+  zones.carte.hidden = false;
+  remplir(
+    zones.parcelle,
     el(
       'div',
       { class: 'rangee' },
@@ -653,15 +686,20 @@ function afficher(): void {
       el('button', { onclick: () => carte.zoomer(1.6) }, '+'),
       el('button', { onclick: () => carte.zoomer(1 / 1.6) }, '−'),
     ),
-    carte.element,
+  );
+  remplir(
+    zones.modes,
     el(
       'div',
       { class: 'rangee' },
       modeBouton('limite', 'Décaler une limite'),
       modeBouton('sommet', 'Déplacer un point'),
     ),
-    panneauSelection(s),
-    pave(),
+  );
+  remplir(zones.selection, panneauSelection(s));
+  remplir(zones.pave, pave());
+  remplir(
+    zones.actions,
     el(
       'div',
       { class: 'rangee' },
@@ -681,19 +719,21 @@ function afficher(): void {
         'Réinitialiser',
       ),
     ),
-    msg || '',
-    tableauSurfaces(s) || '',
-    panneauExport(),
-    s.alertesChargement.length > 0
-      ? el(
-          'details',
-          { class: 'info' },
-          el('summary', {}, `Remarques sur le fichier (${s.alertesChargement.length})`),
-          ...s.alertesChargement.map((a) => el('div', {}, a)),
-        )
-      : '',
+  );
+  remplir(zones.surfaces, tableauSurfaces(s));
+  remplir(zones.export, panneauExport());
+  remplir(
+    zones.remarques,
+    s.alertesChargement.length > 0 &&
+      el(
+        'details',
+        { class: 'info' },
+        el('summary', {}, `Remarques sur le fichier (${s.alertesChargement.length})`),
+        ...s.alertesChargement.map((a) => el('div', {}, a)),
+      ),
   );
   carte.afficher(dessin(s));
+  window.scrollTo({ top: defilement });
 }
 
 afficher();
