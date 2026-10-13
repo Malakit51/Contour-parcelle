@@ -1,0 +1,5 @@
+dist
+coverage
+tests/fixtures
+donnees_locales
+package-lock.json

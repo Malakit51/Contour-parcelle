@@ -1,0 +1,15 @@
+# Données réelles : ne jamais les publier (adresse e-mail, position des parcelles)
+donnees_locales/
+TASKDATA*
+*.XML
+*.xml
+*.BIN
+*.bin
+*.zip
+*.CM
+!tests/fixtures/*.xml
+
+node_modules
+dist
+coverage
+.DS_Store

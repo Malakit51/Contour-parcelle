@@ -1,0 +1,2 @@
+# Le fichier d'exemple garde ses fins de ligne CRLF, comme un vrai export console
+tests/fixtures/* -text

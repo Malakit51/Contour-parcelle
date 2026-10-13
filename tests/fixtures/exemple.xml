@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ISO11783_TaskData VersionMajor="3" VersionMinor="3" ManagementSoftwareManufacturer="Exemple" ManagementSoftwareVersion="1.0" TaskControllerManufacturer="Exemple" TaskControllerVersion="0.1" DataTransferOrigin="2">
+<CTR A="CTR1" B="Client fictif"/>
+<FRM A="FRM1" B="Ferme fictive" I="CTR1"/>
+<PFD A="PFD1" B="00000000000000000000000000000001" C="10 Est &amp; Ouest" D="40000" E="CTR1" F="FRM1">
+<LSG A="5" B="A=B 2026.01.01_10:00_1">
+<PNT A="2" C="45.0001000000000" D="2.0001000000000" E="0"/>
+<PNT A="2" C="45.0017000000000" D="2.0001000000000" E="0"/>
+</LSG>
+<PLN A="1" B="10 Est &amp; Ouest">
+<LSG A="1" B="10 Est_01">
+<PNT A="2" B="start" C="45.0000000000000" D="2.0000000000000"/>
+<PNT A="2" C="45.0000000000000" D="2.0025400000000"/>
+<PNT A="2" C="45.0018000000000" D="2.0025400000000"/>
+<PNT A="2" C="45.0018000000000" D="2.0000000000000"/>
+<PNT A="2" B="end" C="45.0000000000000" D="2.0000000000000"/>
+</LSG>
+<LSG A="2">
+<PNT A="2" B="start" C="45.0005000" D="2.0005000"/>
+<PNT A="2" C="45.0005000" D="2.0006000"/>
+<PNT A="2" C="45.0006000" D="2.0006000"/>
+<PNT A="2" B="end" C="45.0005000" D="2.0005000"/>
+</LSG>
+</PLN>
+</PFD>
+<PFD A="PFD2" B="00000000000000000000000000000002" C="11voisin" D="40000" E="CTR1" F="FRM1">
+<PLN A="1" B="11voisin">
+<LSG A="1">
+<PNT A="2" B="start" C="45.0000000000000" D="2.0025400000000"/>
+<PNT A="2" C="45.0000000000000" D="2.0050800000000"/>
+<PNT A="2" C="45.0018000000000" D="2.0050800000000"/>
+<PNT A="2" C="45.0018000000000" D="2.0025400000000"/>
+<PNT A="2" B="end" C="45.0000000000000" D="2.0025400000000"/>
+</LSG>
+</PLN>
+</PFD>
+<TSK A="TSK1" B="Tâche fictive" E="PFD1" G="1">
+<TZN A="1" B="Zone"/>
+</TSK>
+</ISO11783_TaskData>
