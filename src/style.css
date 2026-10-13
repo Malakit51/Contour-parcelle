@@ -378,3 +378,8 @@ summary {
   flex: 1;
   padding: 8px 4px;
 }
+
+/* Fond blanc (aussi visible pendant le chargement de la photo). */
+.carte.leaflet-container {
+  background: #fff;
+}

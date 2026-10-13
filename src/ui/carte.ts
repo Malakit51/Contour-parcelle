@@ -1,4 +1,4 @@
-// Carte Leaflet : cadastre et photo aérienne IGN, parcelles, sélection, position GPS.
+// Carte Leaflet : photo aérienne IGN ou fond blanc, parcelles, sélection, position GPS.
 //
 // Les touchers sont renvoyés avec une fonction qui donne la position à l'écran (en pixels) de
 // n'importe quel point : c'est la page qui cherche la limite ou le sommet le plus proche.
@@ -68,21 +68,12 @@ export class Carte {
       zoomSnap: 0.25,
     });
     const options = { maxNativeZoom: 19, maxZoom: 22, attribution: ATTRIBUTION };
-    const photo = () => L.tileLayer(wmts('ORTHOIMAGERY.ORTHOPHOTOS', 'image/jpeg'), options);
-    const plan = L.tileLayer(wmts('GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2', 'image/png'), options);
-    // Cadastre (Parcellaire Express) : traits et numéros sur fond transparent.
-    const cadastre = () =>
-      L.tileLayer(
-        wmts('CADASTRALPARCELS.PARCELLAIRE_EXPRESS', 'image/png', 'PCI vecteur'),
-        options,
-      );
     const fonds = {
-      Cadastre: cadastre(),
-      'Photo + cadastre': L.layerGroup([photo(), cadastre()]),
-      Photo: photo(),
-      Plan: plan,
+      Photo: L.tileLayer(wmts('ORTHOIMAGERY.ORTHOPHOTOS', 'image/jpeg'), options),
+      // Aucune tuile : on ne voit que les contours, sur le fond blanc de la carte.
+      'Fond blanc': L.layerGroup(),
     };
-    fonds.Cadastre.addTo(this.carte);
+    fonds.Photo.addTo(this.carte);
     L.control.layers(fonds, {}, { position: 'topright' }).addTo(this.carte);
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(this.carte);
     L.DomEvent.disableClickPropagation(this.commandes);

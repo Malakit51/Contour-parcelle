@@ -73,7 +73,7 @@ import {
   type Suivi,
 } from './suivi/suivi';
 
-// Couleurs lisibles sur le cadastre (fond clair) comme sur la photo ; le violet est réservé à la
+// Couleurs lisibles sur le fond blanc comme sur la photo ; le violet est réservé à la
 // sélection.
 const COULEURS = ['#00b8d4', '#ff4081', '#64dd17', '#ffab00', '#2962ff', '#ff6e40'];
 const SEL = '#d500f9';
