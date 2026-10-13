@@ -15,24 +15,16 @@ import {
 } from './edition/etat';
 import { exporterEtat, nouvelleSurface, parcellesModifiees } from './edition/export';
 import { decalerLimite, ErreurEdition, glisserSommet, sensPositif } from './edition/operations';
-import { planLocal, positionSurSegment, type Plan, type XY } from './geometrie/plan';
+import { planLocal, positionSurSegment, type LatLon, type Plan, type XY } from './geometrie/plan';
 import { comparer } from './isoxml/comparaison';
 import { lireTaskData, type TaskData } from './isoxml/lecture';
 import { decoder, encoder } from './isoxml/octets';
-import { Carte, type Dessin } from './ui/carte';
+import { Carte, type Dessin, type VersEcran } from './ui/carte';
 import { el } from './ui/dom';
 
-const COULEURS = [
-  '#2e7d32',
-  '#1565c0',
-  '#6a1b9a',
-  '#00838f',
-  '#ad1457',
-  '#5d4037',
-  '#827717',
-  '#283593',
-];
-const SEL = '#e65100';
+// Couleurs vives, lisibles sur la photo aérienne ; l'orange-rouge est réservé à la sélection.
+const COULEURS = ['#ffee58', '#00e5ff', '#ff80ab', '#b2ff59', '#ffffff', '#ea80fc'];
+const SEL = '#ff3d00';
 /** Rayon de toucher, en pixels à l'écran. */
 const RAYON_TOUCHER_PX = 26;
 
@@ -43,6 +35,8 @@ interface Session {
   etat: Etat;
   historique: Etat[];
   alertesChargement: string[];
+  /** Indice de couleur de chaque parcelle : deux voisines n'ont jamais la même. */
+  couleurs: number[];
 }
 
 let session: Session | null = null;
@@ -58,7 +52,11 @@ let exportPrepare: { texte: string; alertes: Alerte[]; resume: string; details: 
   null;
 
 const app = document.getElementById('app')!;
-const carte = new Carte(toucher);
+let etatGps = '';
+const carte = new Carte(toucher, (texte) => {
+  etatGps = texte;
+  afficher();
+});
 
 // ---------- Chargement ----------
 
@@ -94,6 +92,7 @@ async function charger(fichier: File): Promise<void> {
       etat: initial,
       historique: [],
       alertesChargement,
+      couleurs: colorier(initial, td.parcelles.length),
     };
     parcelleCourante = null;
     effacerSelection();
@@ -111,31 +110,59 @@ async function charger(fichier: File): Promise<void> {
 
 // ---------- Géométrie d'affichage ----------
 
+/**
+ * Couleur de chaque parcelle, choisie pour que deux parcelles proches (rectangles englobants à
+ * moins d'une vingtaine de mètres) n'aient pas la même : la plus petite couleur libre.
+ */
+function colorier(etat: Etat, n: number): number[] {
+  const marge = 0.0002; // environ 20 m en degrés
+  const boites = Array.from({ length: n }, () => ({ s: 90, n: -90, o: 180, e: -180 }));
+  for (const a of etat.anneaux) {
+    const b = boites[a.parcelle]!;
+    for (const p of a.sommets) {
+      b.s = Math.min(b.s, p.lat);
+      b.n = Math.max(b.n, p.lat);
+      b.o = Math.min(b.o, p.lon);
+      b.e = Math.max(b.e, p.lon);
+    }
+  }
+  const proches = (i: number, j: number) => {
+    const a = boites[i]!;
+    const b = boites[j]!;
+    return a.s - marge <= b.n && b.s - marge <= a.n && a.o - marge <= b.e && b.o - marge <= a.e;
+  };
+  const couleurs: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const prises = new Set<number>();
+    for (let j = 0; j < i; j++) if (proches(i, j)) prises.add(couleurs[j]!);
+    let c = 0;
+    while (prises.has(c)) c++;
+    couleurs.push(c);
+  }
+  return couleurs;
+}
+
 function anneauxXY(s: Session): XY[][] {
   return s.etat.anneaux.map((a) => a.sommets.map((p) => s.plan.versXY(latLon(p))));
 }
 
-function boite(pts: XY[]): [XY, XY] {
-  const xs = pts.map((p) => p[0]);
-  const ys = pts.map((p) => p[1]);
-  return [
-    [Math.min(...xs), Math.min(...ys)],
-    [Math.max(...xs), Math.max(...ys)],
-  ];
+function anneauxLL(s: Session): LatLon[][] {
+  return s.etat.anneaux.map((a) => a.sommets.map(latLon));
 }
 
 function cadrerTout(): void {
   if (!session) return;
-  carte.cadrer(...boite(anneauxXY(session).flat()));
+  carte.cadrer(anneauxLL(session).flat());
 }
 
 function cadrerParcelle(p: number): void {
   if (!session) return;
   const s = session;
-  const pts = anneauxXY(s)
-    .filter((_, i) => s.etat.anneaux[i]!.parcelle === p)
-    .flat();
-  carte.cadrer(...boite(pts));
+  carte.cadrer(
+    anneauxLL(s)
+      .filter((_, i) => s.etat.anneaux[i]!.parcelle === p)
+      .flat(),
+  );
 }
 
 /** « Nord », « Sud », « Est » ou « Ouest » : côté de la parcelle où se trouve la limite. */
@@ -164,11 +191,18 @@ const nomParcelle = (s: Session, anneau: number) =>
 
 // ---------- Sélection au doigt ----------
 
-function toucher(p: XY, pixelsParMetre: number): void {
+function toucher(ecran: { x: number; y: number }, versEcran: VersEcran): void {
   if (!session) return;
   const s = session;
-  const rayon = RAYON_TOUCHER_PX / pixelsParMetre;
-  const anneaux = anneauxXY(s);
+  // Tout se mesure en pixels à l'écran : la cible a la même taille quel que soit le zoom.
+  const p: XY = [ecran.x, ecran.y];
+  const rayon = RAYON_TOUCHER_PX;
+  const anneaux = anneauxLL(s).map((pts) =>
+    pts.map((ll): XY => {
+      const e = versEcran(ll);
+      return [e.x, e.y];
+    }),
+  );
   // La parcelle courante passe en premier : en cas d'égalité (limite partagée), c'est elle qui gagne.
   const ordre = anneaux
     .map((_, i) => i)
@@ -323,13 +357,13 @@ function telecharger(): void {
 // ---------- Affichage ----------
 
 function dessin(s: Session): Dessin {
-  const anneaux = anneauxXY(s);
+  const anneaux = anneauxLL(s);
   const d: Dessin = {
     anneaux: anneaux.map((pts, i) => {
       const a = s.etat.anneaux[i]!;
       return {
         pts,
-        couleur: COULEURS[a.parcelle % COULEURS.length]!,
+        couleur: COULEURS[s.couleurs[a.parcelle]! % COULEURS.length]!,
         courant: a.parcelle === parcelleCourante,
         nom: a.type === 1 ? s.td.parcelles[a.parcelle]!.nom : null,
       };
@@ -697,8 +731,19 @@ function afficher(): void {
       'div',
       { class: 'rangee' },
       choixParcelle,
-      el('button', { onclick: () => carte.zoomer(1.6) }, '+'),
-      el('button', { onclick: () => carte.zoomer(1 / 1.6) }, '−'),
+      el('button', { onclick: () => carte.zoomer(1) }, '+'),
+      el('button', { onclick: () => carte.zoomer(-1) }, '−'),
+    ),
+    el(
+      'div',
+      { class: 'rangee' },
+      el(
+        'button',
+        { class: carte.gpsActif() ? 'actif' : '', onclick: () => carte.basculerGps() },
+        carte.gpsActif() ? 'GPS : arrêter' : 'Ma position GPS',
+      ),
+      carte.gpsActif() && el('button', { onclick: () => carte.centrerSurGps() }, 'Centrer'),
+      etatGps && el('span', { class: 'doux' }, etatGps),
     ),
   );
   remplir(

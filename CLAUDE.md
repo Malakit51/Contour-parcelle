@@ -77,9 +77,14 @@ Et aussi :
 - Journal des modifications : date, parcelle, élément modifié, décalage, surface avant/après. Exportable (CSV) et conservé entre les sessions sur le téléphone.
 - Annuler la dernière modification et réinitialiser.
 
+## Choix techniques
+
+- Vite + TypeScript, tests Vitest, sans framework d'interface. Publication par GitHub Actions sur GitHub Pages (`main`).
+- Carte : Leaflet 1.9 (choisi le 13/10/2026), fond IGN Géoplateforme en WMTS sans clé : `ORTHOIMAGERY.ORTHOPHOTOS` (photo) et `GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2` (plan), zoom natif max 19. La précision vient de la photo IGN et du GPS du téléphone (quelques mètres), pas de la bibliothèque.
+
 ## Points non validés, à ne pas considérer comme acquis
 
-- **Contenu à réimporter dans la console Claas.** Je ne sais pas si la console attend le dossier complet (avec les `.BIN`) ou seulement `TASKDATA.XML`. Par défaut, reproduire le dossier complet en remplaçant seulement `TASKDATA.XML`. Premier essai réel sur une copie et sur une seule parcelle.
+- **Contenu à réimporter dans la console Claas.** Essai réussi le 13/10/2026 : un dossier d'export où seul `TASKDATA.XML` a été remplacé par celui de l'éditeur (une parcelle modifiée) s'importe dans la console avec le nouveau contour. Reste inconnu : si `TASKDATA.XML` seul, sans les `.BIN`, suffit.
 - **La console recalcule-t-elle la surface ?** À vérifier.
 - **Lecture et écriture sur clé USB depuis Chrome Android.** Vérifier ce qui est possible (choix d'un dossier, enregistrement direct). Solution de repli : téléchargement puis copie sur la clé avec le gestionnaire de fichiers.
 - **Journaux TLG.** Un décodage expérimental a été tenté puis abandonné, faute de description officielle du format. Ne pas s'appuyer dessus.

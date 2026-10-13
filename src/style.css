@@ -75,15 +75,29 @@ select {
 .bouton-fichier input {
   display: none;
 }
-svg.carte {
+.carte {
   width: 100%;
-  height: 55vh;
-  display: block;
+  height: 60vh;
   border: 1px solid var(--bord);
   border-radius: 8px;
-  background: var(--carte);
-  touch-action: none;
-  user-select: none;
+  background: #333;
+}
+.leaflet-control-layers label {
+  font-size: 1rem;
+  padding: 6px 4px;
+}
+.nom-parcelle {
+  color: #fff;
+  font-size: 13px;
+  font-weight: bold;
+  white-space: nowrap;
+  text-shadow:
+    0 0 3px #000,
+    0 0 3px #000;
+  transform: translate(-50%, -50%);
+  width: max-content !important;
+  height: auto !important;
+  pointer-events: none;
 }
 .info {
   background: var(--carte);
