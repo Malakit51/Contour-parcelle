@@ -1,4 +1,4 @@
-// Écriture directe d'un dossier TASKDATA contenant TASKDATA.XML, là où l'utilisateur le choisit
+// Écriture directe d'un dossier (« TASKDATA 0.12 »…) contenant TASKDATA.XML, là où l'utilisateur le choisit
 // (la clé USB par exemple).
 //
 // Repose sur l'API « File System Access » de Chrome (showDirectoryPicker). Elle existe sur
@@ -21,7 +21,10 @@ interface PoigneeDossier {
   getDirectoryHandle(nom: string, options?: { create?: boolean }): Promise<PoigneeDossier>;
   getFileHandle(nom: string, options?: { create?: boolean }): Promise<PoigneeFichier>;
 }
-type ChoisirDossier = (options?: { mode?: 'read' | 'readwrite' }) => Promise<PoigneeDossier>;
+type ChoisirDossier = (options?: {
+  id?: string;
+  mode?: 'read' | 'readwrite';
+}) => Promise<PoigneeDossier>;
 
 function choisirDossier(): ChoisirDossier | null {
   const f = (window as unknown as { showDirectoryPicker?: ChoisirDossier }).showDirectoryPicker;
@@ -49,25 +52,25 @@ async function existe(dossier: PoigneeDossier, nom: string, sorte: 'dossier' | '
  */
 export async function ecrireDossierTaskdata(
   contenu: Uint8Array,
+  nomDossier: string,
   confirmerRemplacement: (chemin: string) => boolean,
 ): Promise<string | null> {
   const choisir = choisirDossier();
   if (!choisir) throw new Error('Ce navigateur ne permet pas d’écrire un dossier.');
   let parent: PoigneeDossier;
   try {
-    parent = await choisir({ mode: 'readwrite' });
+    // « id » : Chrome rouvre le sélecteur au dernier endroit choisi (la clé USB).
+    parent = await choisir({ id: 'cle-usb', mode: 'readwrite' });
   } catch {
     return null; // choix annulé
   }
-  // Si l'utilisateur a choisi directement un dossier TASKDATA, on écrit dedans.
-  const dejaTaskdata = parent.name.toUpperCase() === NOM_DOSSIER;
-  const chemin = dejaTaskdata
+  // Si l'utilisateur a choisi directement le dossier à écrire, on écrit dedans.
+  const dejaLa = parent.name === nomDossier;
+  const chemin = dejaLa
     ? `${parent.name}/${NOM_FICHIER}`
-    : `${parent.name}/${NOM_DOSSIER}/${NOM_FICHIER}`;
-  const dossierExiste = dejaTaskdata || (await existe(parent, NOM_DOSSIER, 'dossier'));
-  const dossier = dejaTaskdata
-    ? parent
-    : await parent.getDirectoryHandle(NOM_DOSSIER, { create: true });
+    : `${parent.name}/${nomDossier}/${NOM_FICHIER}`;
+  const dossierExiste = dejaLa || (await existe(parent, nomDossier, 'dossier'));
+  const dossier = dejaLa ? parent : await parent.getDirectoryHandle(nomDossier, { create: true });
   if (dossierExiste && (await existe(dossier, NOM_FICHIER, 'fichier'))) {
     if (!confirmerRemplacement(chemin)) return null;
   }

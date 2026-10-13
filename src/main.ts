@@ -1030,6 +1030,9 @@ function enregistrer(octets: Uint8Array, nom: string, type: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
+/** Nom du dossier écrit sur la clé : « TASKDATA 0.12 », pour le retrouver tel quel sur la console. */
+const nomDossierVersion = (version: string) => `${NOM_DOSSIER} ${version}`;
+
 /** Version que portera le prochain export (« 0.12 » après « 0.11 »…). */
 function prochaineVersion(): string {
   return versionSuivante(suivi.derniereVersion ?? VERSION_DE_DEPART);
@@ -1048,7 +1051,7 @@ async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
   let destination: string;
   if (quoi === 'dossier') {
     try {
-      const chemin = await ecrireDossierTaskdata(xml, (c) =>
+      const chemin = await ecrireDossierTaskdata(xml, nomDossierVersion(version), (c) =>
         confirm(`${c} existe déjà. Le remplacer ?\n\nConseil : travaille sur une copie.`),
       );
       if (!chemin) return;
@@ -1684,22 +1687,29 @@ function panneauExport(): HTMLElement {
         el(
           'div',
           { class: 'rangee' },
-          el(
-            'button',
-            { class: 'principal', onclick: () => void telecharger('xml') },
-            graves.length > 0 ? 'Télécharger malgré tout' : `Télécharger ${NOM_FICHIER}`,
-          ),
           ecritureDossierPossible() &&
             el(
               'button',
-              { onclick: () => void telecharger('dossier') },
-              `Enregistrer dans un dossier ${NOM_DOSSIER}`,
+              { class: 'principal', onclick: () => void telecharger('dossier') },
+              `${graves.length > 0 ? 'Malgré tout : ' : ''}Enregistrer sur la clé (dossier « ${nomDossierVersion(prochaineVersion())} »)`,
             ),
+          el(
+            'button',
+            {
+              class: ecritureDossierPossible() ? '' : 'principal',
+              onclick: () => void telecharger('xml'),
+            },
+            graves.length > 0 && !ecritureDossierPossible()
+              ? 'Télécharger malgré tout'
+              : `Télécharger ${NOM_FICHIER} seul`,
+          ),
         ),
         el(
           'div',
           { class: 'doux' },
-          `${NOM_FICHIER} arrive dans « Téléchargements ». Avec le gestionnaire de fichiers, mets-le dans un dossier ${NOM_DOSSIER} sur la clé.`,
+          ecritureDossierPossible()
+            ? `« Enregistrer sur la clé » : choisis la clé USB (sa racine) ; l’éditeur y crée le dossier « ${nomDossierVersion(prochaineVersion())} » avec ${NOM_FICHIER} dedans. La prochaine fois, le choix s’ouvre directement sur la clé. « Télécharger » : le fichier arrive dans « Téléchargements », à ranger toi-même dans un dossier ${NOM_DOSSIER} sur la clé.`
+            : `${NOM_FICHIER} arrive dans « Téléchargements ». Avec le gestionnaire de fichiers, mets-le dans un dossier ${NOM_DOSSIER} sur la clé.`,
         ),
       ),
     );
