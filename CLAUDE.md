@@ -87,7 +87,7 @@ Et aussi :
 
 ## Points non validés, à ne pas considérer comme acquis
 
-- **Contenu à réimporter dans la console Claas.** Essai réussi le 13/10/2026 : un dossier d'export où seul `TASKDATA.XML` a été remplacé par celui de l'éditeur (une parcelle modifiée) s'importe dans la console avec le nouveau contour. Reste à confirmer : qu'un dossier `TASKDATA` contenant seulement `TASKDATA.XML` (sans les `.BIN`) s'importe aussi.
+- **Contenu à réimporter dans la console Claas.** Essai réussi le 13/10/2026 : un dossier d'export où seul `TASKDATA.XML` a été remplacé par celui de l'éditeur (une parcelle modifiée) s'importe dans la console avec le nouveau contour. Confirmé le 13/10/2026 : un dossier `TASKDATA` contenant seulement `TASKDATA.XML` (sans les `.BIN`) s'importe aussi. Je préfère télécharger `TASKDATA.XML` et le ranger moi-même dans le dossier `TASKDATA` (l'écriture directe d'un dossier marche sur mon téléphone mais n'est pas pratique) : c'est le bouton principal.
 - **La console recalcule-t-elle la surface ?** À vérifier.
 - **Lecture et écriture sur clé USB depuis Chrome Android.** Vérifier ce qui est possible (choix d'un dossier, enregistrement direct). Solution de repli : téléchargement puis copie sur la clé avec le gestionnaire de fichiers.
 - **Journaux TLG.** Un décodage expérimental a été tenté puis abandonné, faute de description officielle du format. Ne pas s'appuyer dessus.

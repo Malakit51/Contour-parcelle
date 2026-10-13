@@ -1014,29 +1014,22 @@ function panneauExport(): HTMLElement {
         el(
           'div',
           { class: 'rangee' },
+          el(
+            'button',
+            { class: 'principal', onclick: () => void telecharger('xml') },
+            graves.length > 0 ? 'Télécharger malgré tout' : `Télécharger ${NOM_FICHIER}`,
+          ),
           ecritureDossierPossible() &&
             el(
               'button',
-              { class: 'principal', onclick: () => void telecharger('dossier') },
-              graves.length > 0
-                ? 'Enregistrer malgré tout'
-                : `Enregistrer dans un dossier ${NOM_DOSSIER}`,
+              { onclick: () => void telecharger('dossier') },
+              `Enregistrer dans un dossier ${NOM_DOSSIER}`,
             ),
-          el(
-            'button',
-            {
-              class: ecritureDossierPossible() ? '' : 'principal',
-              onclick: () => void telecharger('xml'),
-            },
-            `Télécharger ${NOM_FICHIER}`,
-          ),
         ),
         el(
           'div',
           { class: 'doux' },
-          ecritureDossierPossible()
-            ? `« Enregistrer dans un dossier ${NOM_DOSSIER} » : choisis la clé USB (ou un dossier ${NOM_DOSSIER}), le fichier ${NOM_FICHIER} est écrit dans le dossier ${NOM_DOSSIER}.`
-            : `Ce navigateur ne permet pas d’écrire un dossier : ${NOM_FICHIER} arrive dans « Téléchargements ». Avec le gestionnaire de fichiers, crée un dossier ${NOM_DOSSIER} sur la clé et déplace-y le fichier.`,
+          `${NOM_FICHIER} arrive dans « Téléchargements ». Avec le gestionnaire de fichiers, mets-le dans un dossier ${NOM_DOSSIER} sur la clé.`,
         ),
       ),
     );
