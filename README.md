@@ -22,8 +22,9 @@ Page publiée : https://malakit51.github.io/Contour-parcelle/
 3. « Décaler une limite » : toucher la limite, taper la distance en mètres, « Appliquer ».
    « Déplacer un point » : toucher le sommet, choisir la limite le long de laquelle il glisse, taper
    la distance en mètres, « Appliquer ». Le sens du + est écrit en orange.
-4. « Vérifier avant export », puis « Télécharger TASKDATA.zip » : le décompresser sur la clé donne
-   le dossier TASKDATA avec TASKDATA.XML dedans.
+4. « Vérifier avant export », puis « Enregistrer dans un dossier TASKDATA » (choisir la clé USB) si
+   le navigateur le permet, sinon « Télécharger TASKDATA.XML » et le ranger à la main dans un dossier
+   TASKDATA sur la clé.
 
 ## Commandes
 

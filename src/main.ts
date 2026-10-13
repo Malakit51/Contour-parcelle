@@ -26,7 +26,12 @@ import {
 import { planLocal, positionSurSegment, type LatLon, type Plan, type XY } from './geometrie/plan';
 import { comparer } from './isoxml/comparaison';
 import { lireTaskData, type TaskData } from './isoxml/lecture';
-import { NOM_DOSSIER, zipDossierTaskdata } from './isoxml/archive';
+import {
+  ecritureDossierPossible,
+  ecrireDossierTaskdata,
+  NOM_DOSSIER,
+  NOM_FICHIER,
+} from './ui/dossier';
 import { decoder, encoder } from './isoxml/octets';
 import { Carte, type Dessin, type VersEcran } from './ui/carte';
 import { el } from './ui/dom';
@@ -285,7 +290,7 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
     placerAuDoigt = false;
     modifier(
       () => placerSommet(s.etat, ref, position),
-      `Point de ${nomParcelle(s, ref.anneau)} placé au doigt : ajuste-le avec les flèches`,
+      `Point de ${nomParcelle(s, ref.anneau)} placé au doigt : ajustez-le avec les flèches`,
       true,
     );
     return;
@@ -385,7 +390,7 @@ function fleche(sens: 'Nord' | 'Sud' | 'Est' | 'Ouest'): void {
   const ref = selSommet;
   const d = Math.abs(metres());
   if (d === 0) {
-    message = { texte: 'Tape d’abord une distance.', erreur: true };
+    message = { texte: 'Tapez d’abord une distance.', erreur: true };
     afficher();
     return;
   }
@@ -500,16 +505,33 @@ function enregistrer(octets: Uint8Array, nom: string, type: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-function telecharger(quoi: 'dossier' | 'xml'): void {
+async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
   if (!exportPrepare || !session) return;
   if (
     exportPrepare.alertes.some((a) => a.grave) &&
-    !confirm('Des problèmes graves ont été trouvés. Télécharger quand même ?')
+    !confirm('Des problèmes graves ont été trouvés. Exporter quand même ?')
   ) {
     return;
   }
   const xml = encoder(exportPrepare.texte);
-  const nomSortie = quoi === 'dossier' ? `${NOM_DOSSIER}.zip` : 'TASKDATA.XML';
+  let destination: string;
+  if (quoi === 'dossier') {
+    try {
+      const chemin = await ecrireDossierTaskdata(xml, (c) =>
+        confirm(`${c} existe déjà. Le remplacer ?\n\nConseil : travaillez sur une copie.`),
+      );
+      if (!chemin) return;
+      destination = chemin;
+      message = { texte: `Enregistré : ${chemin}`, erreur: false };
+    } catch (e) {
+      message = { texte: `Enregistrement impossible : ${(e as Error).message}`, erreur: true };
+      afficher();
+      return;
+    }
+  } else {
+    enregistrer(xml, NOM_FICHIER, 'application/xml');
+    destination = `${NOM_FICHIER} (téléchargements)`;
+  }
   const s = session;
   majSuivi({
     ...suivi,
@@ -519,14 +541,13 @@ function telecharger(quoi: 'dossier' | 'xml'): void {
         quand: new Date().toISOString(),
         cle: cleParcelle(s.td.parcelles[p]!),
         parcelle: s.td.parcelles[p]!.nom,
-        action: `Exporté dans ${nomSortie}`,
+        action: `Exporté dans ${destination}`,
         surfaceAvant: Number(s.td.parcelles[p]!.surface?.texte ?? NaN) || null,
         surfaceApres: nouvelleSurface(s.td, s.etat, p),
       })),
     ],
   });
-  if (quoi === 'dossier') enregistrer(zipDossierTaskdata(xml), nomSortie, 'application/zip');
-  else enregistrer(xml, nomSortie, 'application/xml');
+  afficher();
 }
 
 // ---------- Affichage ----------
@@ -708,7 +729,7 @@ function dessin(s: Session): Dessin {
 
 function panneauSelection(s: Session): HTMLElement {
   if (mode === 'limite') {
-    if (!selLimite) return el('div', { class: 'info doux' }, 'Touche une limite sur la carte.');
+    if (!selLimite) return el('div', { class: 'info doux' }, 'Touchez une limite sur la carte.');
     const ref = selLimite;
     const x = nomParcelle(s, ref.anneau);
     const jum = limitesJumelles(s.etat, ref);
@@ -734,7 +755,7 @@ function panneauSelection(s: Session): HTMLElement {
       el('div', { class: 'sens' }, sens),
     );
   }
-  if (!selSommet) return el('div', { class: 'info doux' }, 'Touche un sommet sur la carte.');
+  if (!selSommet) return el('div', { class: 'info doux' }, 'Touchez un sommet sur la carte.');
   const ref = selSommet;
   const autres = new Set(
     sommetsEn(s.etat, latLon(s.etat.anneaux[ref.anneau]!.sommets[ref.sommet]!))
@@ -797,7 +818,7 @@ function panneauSelection(s: Session): HTMLElement {
           onclick: () => {
             placerAuDoigt = !placerAuDoigt;
             message = placerAuDoigt
-              ? { texte: 'Touche la carte à l’endroit où placer le point.', erreur: false }
+              ? { texte: 'Touchez la carte à l’endroit où placer le point.', erreur: false }
               : null;
             afficher();
           },
@@ -952,17 +973,29 @@ function panneauExport(): HTMLElement {
         el(
           'div',
           { class: 'rangee' },
+          ecritureDossierPossible() &&
+            el(
+              'button',
+              { class: 'principal', onclick: () => void telecharger('dossier') },
+              graves.length > 0
+                ? 'Enregistrer malgré tout'
+                : `Enregistrer dans un dossier ${NOM_DOSSIER}`,
+            ),
           el(
             'button',
-            { class: 'principal', onclick: () => telecharger('dossier') },
-            graves.length > 0 ? 'Télécharger malgré tout' : `Télécharger ${NOM_DOSSIER}.zip`,
+            {
+              class: ecritureDossierPossible() ? '' : 'principal',
+              onclick: () => void telecharger('xml'),
+            },
+            `Télécharger ${NOM_FICHIER}`,
           ),
-          el('button', { onclick: () => telecharger('xml') }, 'TASKDATA.XML seul'),
         ),
         el(
           'div',
           { class: 'doux' },
-          `${NOM_DOSSIER}.zip arrive dans « Téléchargements ». Décompresse-le sur la clé : ça doit donner un dossier ${NOM_DOSSIER} avec TASKDATA.XML dedans.`,
+          ecritureDossierPossible()
+            ? `« Enregistrer dans un dossier ${NOM_DOSSIER} » : choisissez la clé USB (ou un dossier ${NOM_DOSSIER}), le fichier ${NOM_FICHIER} est écrit dans le dossier ${NOM_DOSSIER}.`
+            : `Ce navigateur ne permet pas d’écrire un dossier : ${NOM_FICHIER} arrive dans « Téléchargements ». Avec le gestionnaire de fichiers, créez un dossier ${NOM_DOSSIER} sur la clé et déplacez-y le fichier.`,
         ),
       ),
     );
@@ -1033,7 +1066,7 @@ function afficher(): void {
       el(
         'div',
         { class: 'info' },
-        'Ouvre le fichier TASKDATA.XML exporté par la console (sur la clé USB, dans le dossier TASKDATA). ',
+        'Ouvrez le fichier TASKDATA.XML exporté par la console (sur la clé USB, dans le dossier TASKDATA). ',
         'Tout reste sur le téléphone : rien n’est envoyé sur Internet.',
       ),
     );

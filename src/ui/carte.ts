@@ -205,7 +205,7 @@ export class Carte {
       (err) =>
         this.surGps(
           err.code === err.PERMISSION_DENIED
-            ? 'Position refusée : autorise la localisation pour ce site dans Chrome.'
+            ? 'Position refusée : autorisez la localisation pour ce site dans Chrome.'
             : `Position indisponible (${err.message}).`,
         ),
       { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 },
