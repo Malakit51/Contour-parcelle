@@ -47,6 +47,9 @@ l'onglet **Fichier**, la partie « Sauvegarde Google Drive » propose **Se conne
 
 ## À la première connexion
 
+Si Google affiche « Accès bloqué … Erreur 403 : access_denied », le compte choisi n'est pas dans
+les **Utilisateurs test** (étape 3) : ajoute-le, puis réessaie.
+
 Google affiche « Google n'a pas validé cette application » : c'est normal pour une application
 « en test » que tu as créée toi-même. Touche **Continuer**, puis autorise l'accès aux fichiers
 créés par l'application.
