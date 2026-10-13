@@ -17,7 +17,7 @@ Utilisateur : un agriculteur (moi), pas un développeur. Les explications doiven
 
 ## Données : ne jamais les publier
 
-Les fichiers ISOXML contiennent mon adresse e-mail et la position exacte de mes parcelles. Ils ne doivent jamais être committés dans le dépôt (le dépôt GitHub Pages sera public). Prévoir un `.gitignore` pour `TASKDATA*`, `*.XML`, `*.BIN`, `*.zip`. Les tests utilisent des données anonymisées ou générées. Tout le traitement se fait dans le navigateur, aucun envoi vers un serveur.
+Les fichiers ISOXML contiennent mon adresse e-mail et la position exacte de mes parcelles. Ils ne doivent jamais être committés dans le dépôt (le dépôt GitHub Pages sera public). Prévoir un `.gitignore` pour `TASKDATA*`, `*.XML`, `*.BIN`, `*.zip`. Les tests utilisent des données anonymisées ou générées. Tout le traitement se fait dans le navigateur, aucun envoi vers un serveur, sauf la sauvegarde en ligne dans mon propre Google Drive quand je l'active (décision du 13/10/2026).
 
 ## Format des fichiers (ce qui est établi)
 
@@ -88,7 +88,7 @@ Et aussi :
 - Carte : Leaflet 1.9 (choisi le 13/10/2026), fonds IGN Géoplateforme en WMTS sans clé. Fond par défaut : le cadastre (`CADASTRALPARCELS.PARCELLAIRE_EXPRESS`, style `PCI vecteur`, demandé le 13/10/2026) ; aussi photo + cadastre, photo (`ORTHOIMAGERY.ORTHOPHOTOS`) et plan (`GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2`). Zoom natif max 19. Toucher l'intérieur d'une parcelle la sélectionne. La précision vient de la photo IGN et du GPS du téléphone (quelques mètres), pas de la bibliothèque.
 - Suivi et journal (13/10/2026) : stockés dans le navigateur du téléphone (localStorage, clé `contour-parcelle/suivi`), indépendamment du fichier ouvert. Une parcelle est repérée par son GUID (attribut `B` du `PFD`), à défaut par son nom. États : vérifié, à confirmer (par défaut), à refaire, avec date et remarque. Journal : une ligne par parcelle touchée à chaque modification (retirée si on annule) et à chaque export. Export CSV (séparateur « ; », BOM UTF-8). Effacer les données de Chrome efface le suivi : pas encore d'import CSV pour le restaurer.
 - Session sur l'appareil (13/10/2026) : le fichier ouvert et les contours modifiés sont enregistrés dans le navigateur (localStorage, clé `contour-parcelle/session`) après chaque modification, et repris à la réouverture de la page. « Fermer le fichier » l'efface.
-- Sauvegarde en ligne entre appareils : option Google Drive choisie (accès limité aux fichiers créés par l'éditeur, identifiant Google à créer par moi), **mise en attente le 13/10/2026**. Le format de session (`sauvegarde/session.ts`) est prévu pour.
+- Sauvegarde en ligne entre appareils (13/10/2026) : Google Drive, un seul fichier `contour-parcelle-sauvegarde.json` (fichier ouvert, contours modifiés, suivi, journal, nom de l'appareil), accès restreint « drive.file ». Connexion Google Identity Services (jeton d'environ une heure). Envoi automatique quelques secondes après chaque modification quand on est connecté ; « Reprendre depuis Drive » remplace le travail de l'appareil et fusionne le suivi (fiche la plus récente, journaux additionnés). Identifiant client dans `src/sauvegarde/config.ts` ; marche à suivre pour le créer : `docs/google-drive.md`. **Identifiant pas encore créé** : la sauvegarde en ligne n'est donc pas encore active.
 
 ## Points non validés, à ne pas considérer comme acquis
 

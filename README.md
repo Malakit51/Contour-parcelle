@@ -26,6 +26,10 @@ Page publiée : https://malakit51.github.io/Contour-parcelle/
 5. Onglet Export : « Vérifier avant export », puis « Télécharger TASKDATA.XML », à ranger dans un
    dossier TASKDATA sur la clé.
 
+## Sauvegarde Google Drive
+
+Voir [`docs/google-drive.md`](docs/google-drive.md) pour l'activer.
+
 ## Commandes
 
 | Commande        | Effet                                                   |

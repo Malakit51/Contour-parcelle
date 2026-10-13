@@ -42,6 +42,8 @@ import {
 import { decoder, encoder } from './isoxml/octets';
 import { Carte, type Dessin, type VersEcran } from './ui/carte';
 import { el } from './ui/dom';
+import { GOOGLE_CLIENT_ID } from './sauvegarde/config';
+import { Drive } from './sauvegarde/drive';
 import {
   enregistrerSession,
   garderSurAppareil,
@@ -57,6 +59,7 @@ import {
   csvSuivi,
   enregistrer as enregistrerSuivi,
   fiche,
+  fusionner,
   LIBELLES,
   type EntreeJournal,
   type EtatContour,
@@ -106,6 +109,7 @@ let couleursParEtat = true;
 function majSuivi(nouveau: Suivi): void {
   suivi = nouveau;
   suiviNonEnregistre = !enregistrerSuivi(stockage, suivi);
+  programmerSauvegardeDrive();
 }
 
 /** Parcelles dont le contour diffère entre deux états. */
@@ -259,6 +263,152 @@ function garderSession(): void {
   sessionNonGardee = !garderSurAppareil(
     stockage,
     enregistrerSession(session.td, session.nomFichier, session.etat, nomAppareil()),
+  );
+  programmerSauvegardeDrive();
+}
+
+function changerNomAppareil(): boolean {
+  const nom = prompt(
+    'Nom de cet appareil (par exemple « téléphone » ou « tablette ») :',
+    nomAppareil(),
+  );
+  if (!nom?.trim()) return false;
+  try {
+    stockage?.setItem('contour-parcelle/appareil', nom.trim());
+  } catch {
+    // pas de stockage : le nom par défaut reste
+  }
+  return true;
+}
+
+// ---------- Sauvegarde Google Drive ----------
+
+const drive = new Drive(GOOGLE_CLIENT_ID);
+/** État de la sauvegarde en ligne : élément fixe, mis à jour seul (comme le texte du GPS). */
+const texteDrive = el('div', { class: 'doux' });
+let minuterieDrive: ReturnType<typeof setTimeout> | undefined;
+
+/** Après chaque modification, si on est connecté : sauvegarde en ligne quelques secondes après. */
+function programmerSauvegardeDrive(): void {
+  if (!drive.connecte() || !session) return;
+  clearTimeout(minuterieDrive);
+  texteDrive.textContent = 'Modifications à envoyer sur Google Drive…';
+  minuterieDrive = setTimeout(() => void sauverSurDrive(), 4000);
+}
+
+async function sauverSurDrive(): Promise<void> {
+  if (!session) return;
+  clearTimeout(minuterieDrive);
+  try {
+    texteDrive.textContent = 'Envoi sur Google Drive…';
+    const f = await drive.ecrire(
+      enregistrerSession(session.td, session.nomFichier, session.etat, nomAppareil(), suivi),
+    );
+    texteDrive.textContent = `Enregistré sur Google Drive le ${quandFr(f.modifie)}.`;
+  } catch (e) {
+    texteDrive.textContent = `Pas enregistré sur Google Drive : ${(e as Error).message}`;
+    afficher();
+  }
+}
+
+async function connecterDrive(): Promise<void> {
+  try {
+    if (nomAppareil() === 'appareil' && !changerNomAppareil()) return;
+    await drive.connecter();
+    texteDrive.textContent = 'Connecté. Recherche d’une sauvegarde en ligne…';
+    afficher();
+    const lu = await drive.lire();
+    const enLigne = lu?.contenu as { enregistreLe?: string; appareil?: string } | undefined;
+    texteDrive.textContent = lu
+      ? `Sauvegarde en ligne du ${quandFr(enLigne?.enregistreLe ?? lu.fichier.modifie)} (${enLigne?.appareil ?? '?'}).`
+      : 'Aucune sauvegarde en ligne pour l’instant.';
+  } catch (e) {
+    texteDrive.textContent = (e as Error).message;
+  }
+  afficher();
+}
+
+/** Remplace le travail de cet appareil par celui enregistré dans Drive ; le suivi est fusionné. */
+async function reprendreDepuisDrive(): Promise<void> {
+  try {
+    texteDrive.textContent = 'Lecture de la sauvegarde en ligne…';
+    const lu = await drive.lire();
+    if (!lu) {
+      texteDrive.textContent = 'Aucune sauvegarde en ligne pour l’instant.';
+      return;
+    }
+    const r = relireSession(lu.contenu);
+    const quand = `${quandFr(r.session.enregistreLe)} (${r.session.appareil})`;
+    if (
+      session &&
+      parcellesModifiees(session.etat).length > 0 &&
+      !confirm(`Remplacer le travail de cet appareil par la sauvegarde en ligne du ${quand} ?`)
+    ) {
+      texteDrive.textContent = 'Reprise annulée.';
+      return;
+    }
+    if (r.session.suivi) majSuivi(fusionner(suivi, r.session.suivi));
+    ouvrir(r.td, r.nom, r.etat, `Travail repris depuis Google Drive : sauvegarde du ${quand}.`);
+    texteDrive.textContent = `Repris depuis la sauvegarde en ligne du ${quand}.`;
+  } catch (e) {
+    texteDrive.textContent = `Reprise impossible : ${(e as Error).message}`;
+  }
+  afficher();
+}
+
+function panneauDrive(): HTMLElement {
+  const titre = el('strong', {}, 'Sauvegarde Google Drive');
+  if (!drive.configure()) {
+    return el(
+      'div',
+      { class: 'info' },
+      titre,
+      el(
+        'div',
+        { class: 'doux' },
+        'Pas encore configurée : il faut d’abord créer un identifiant Google pour l’éditeur.',
+      ),
+    );
+  }
+  return el(
+    'div',
+    { class: 'info' },
+    titre,
+    el(
+      'div',
+      { class: 'doux' },
+      `Cet appareil : ${nomAppareil()}. Le fichier, les contours modifiés, le suivi et le journal sont enregistrés dans ton Drive (l’éditeur ne voit que ce fichier).`,
+    ),
+    drive.connecte()
+      ? el(
+          'div',
+          { class: 'rangee' },
+          el('button', { onclick: () => void sauverSurDrive() }, 'Enregistrer maintenant'),
+          el('button', { onclick: () => void reprendreDepuisDrive() }, 'Reprendre depuis Drive'),
+        )
+      : el(
+          'div',
+          { class: 'rangee' },
+          el(
+            'button',
+            { class: 'principal', onclick: () => void connecterDrive() },
+            'Se connecter à Google',
+          ),
+        ),
+    el(
+      'div',
+      { class: 'rangee' },
+      el(
+        'button',
+        {
+          onclick: () => {
+            if (changerNomAppareil()) afficher();
+          },
+        },
+        'Changer le nom de l’appareil',
+      ),
+    ),
+    texteDrive,
   );
 }
 
@@ -1453,8 +1603,9 @@ function contenuFichier(s: Session | null): Node[] {
       'div',
       { class: 'doux' },
       'Ouvre le fichier TASKDATA.XML exporté par la console (sur la clé USB, dans le dossier TASKDATA). ',
-      'Tout reste sur le téléphone : rien n’est envoyé sur Internet.',
+      'Rien n’est envoyé sur Internet, sauf dans ton Google Drive si tu actives la sauvegarde en ligne.',
     ),
+    panneauDrive(),
   ];
   if (s) {
     contenu.push(

@@ -139,3 +139,25 @@ export function csvJournal(suivi: Suivi): string {
   }
   return BOM + lignes.join('\r\n') + '\r\n';
 }
+
+/**
+ * Fusionne deux suivis (deux appareils) : pour chaque parcelle, la fiche la plus récente l'emporte
+ * (à date égale, celle de `b`) ; les journaux s'additionnent sans doublons, dans l'ordre du temps.
+ */
+export function fusionner(a: Suivi, b: Suivi): Suivi {
+  const fiches: Record<string, Fiche> = { ...a.fiches };
+  for (const [cle, f] of Object.entries(b.fiches)) {
+    const g = fiches[cle];
+    if (!g || f.date >= g.date) fiches[cle] = f;
+  }
+  const vues = new Set<string>();
+  const journal = [...a.journal, ...b.journal]
+    .filter((e) => {
+      const id = `${e.quand}|${e.cle}|${e.action}`;
+      if (vues.has(id)) return false;
+      vues.add(id);
+      return true;
+    })
+    .sort((x, y) => x.quand.localeCompare(y.quand));
+  return { version: 1, fiches, journal };
+}

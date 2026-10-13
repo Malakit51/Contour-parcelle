@@ -7,6 +7,7 @@ import {
   csvSuivi,
   enregistrer,
   fiche,
+  fusionner,
   suiviVide,
 } from '../src/suivi/suivi';
 import { preparer } from './outils';
@@ -86,5 +87,38 @@ describe('suivi des contours', () => {
       '﻿Date;Heure;Parcelle;Action;Surface avant (m²);Surface après (m²)\r\n' +
         '2026-10-13;15:30;Le Bois;Limite Sud décalée de +0,5 m;10000;10050\r\n',
     );
+  });
+});
+
+describe('fusion de deux appareils', () => {
+  it('garde la fiche la plus récente et additionne les journaux sans doublons', () => {
+    const lundi = new Date(2026, 9, 12);
+    const mardi = new Date(2026, 9, 13);
+    const ligne = (quand: string, action: string) => ({
+      quand,
+      cle: cleParcelle(bois!),
+      parcelle: 'Le Bois',
+      action,
+      surfaceAvant: null,
+      surfaceApres: null,
+    });
+    const telephone = {
+      ...changerFiche(suiviVide(), bois!, { etat: 'a-refaire' }, lundi),
+      journal: [ligne('2026-10-12T08:00:00.000Z', 'A'), ligne('2026-10-13T08:00:00.000Z', 'C')],
+    };
+    const tablette = {
+      ...changerFiche(
+        changerFiche(suiviVide(), bois!, { etat: 'verifie' }, mardi),
+        jard!,
+        { etat: 'a-refaire' },
+        lundi,
+      ),
+      journal: [ligne('2026-10-12T08:00:00.000Z', 'A'), ligne('2026-10-12T09:00:00.000Z', 'B')],
+    };
+    const f = fusionner(telephone, tablette);
+    expect(fiche(f, bois!).etat).toBe('verifie');
+    expect(fiche(f, jard!).etat).toBe('a-refaire');
+    expect(f.journal.map((e) => e.action)).toEqual(['A', 'B', 'C']);
+    expect(fusionner(tablette, telephone).fiches).toEqual(f.fiches);
   });
 });
