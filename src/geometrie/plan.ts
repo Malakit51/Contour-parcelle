@@ -43,3 +43,21 @@ export function aireSignee(anneau: readonly XY[]): number {
 export function distance(a: XY, b: XY): number {
   return Math.hypot(b[0] - a[0], b[1] - a[1]);
 }
+
+/** Intersection des droites (p + t·u) et (q + s·w). Renvoie null si elles sont presque parallèles. */
+export function intersection(p: XY, u: XY, q: XY, w: XY, sinMin = 1e-9): XY | null {
+  const det = u[0] * w[1] - u[1] * w[0];
+  if (Math.abs(det) <= sinMin * Math.hypot(...u) * Math.hypot(...w)) return null;
+  const t = ((q[0] - p[0]) * w[1] - (q[1] - p[1]) * w[0]) / det;
+  return [p[0] + t * u[0], p[1] + t * u[1]];
+}
+
+/** Position de `p` par rapport au segment [a, b] : t (0 en a, 1 en b) et distance à la droite (m). */
+export function positionSurSegment(p: XY, a: XY, b: XY): { t: number; ecart: number } {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const l2 = dx * dx + dy * dy;
+  const t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2;
+  const ecart = Math.abs((p[0] - a[0]) * dy - (p[1] - a[1]) * dx) / Math.sqrt(l2);
+  return { t, ecart };
+}

@@ -21,6 +21,8 @@ export interface Point {
   lon: number;
   latBrute: ValeurBrute;
   lonBrute: ValeurBrute;
+  /** Position de la balise <PNT …/> entière. */
+  balise: Plage;
 }
 
 /** Anneau d'une limite de parcelle. Il est fermé dans le fichier : le dernier point répète le premier. */
@@ -200,6 +202,7 @@ export function lireTaskData(texte: string): TaskData {
         lon: nombre(lon, 'Longitude'),
         latBrute: lat,
         lonBrute: lon,
+        balise: b.plage,
       });
     }
 
