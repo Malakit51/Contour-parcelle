@@ -7,6 +7,8 @@ export interface Changements {
   points?: ReadonlyArray<{ point: Point; lat: number; lon: number }>;
   /** Points ajoutés, écrits sur de nouvelles lignes juste après la ligne du point `apres`. */
   insertions?: ReadonlyArray<{ apres: Point; points: ReadonlyArray<{ lat: number; lon: number }> }>;
+  /** Points retirés : leur ligne entière disparaît. */
+  suppressions?: ReadonlyArray<Point>;
   /** Nouvelles surfaces, en m². */
   surfaces?: ReadonlyArray<{ parcelle: Parcelle; m2: number }>;
   /** Retire les segments LSG A="5" (oui par défaut). */
@@ -68,6 +70,12 @@ export function exporterTaskData(td: TaskData, changements: Changements = {}): s
       )
       .join('');
     remplacements.push({ plage: { debut: finLigne + 1, fin: finLigne + 1 }, texte });
+  }
+  for (const point of changements.suppressions ?? []) {
+    const debutLigne = td.texte.lastIndexOf('\n', point.balise.debut - 1) + 1;
+    const finLigne = td.texte.indexOf('\n', point.balise.fin);
+    const fin = finLigne < 0 ? td.texte.length : finLigne + 1;
+    remplacements.push({ plage: { debut: debutLigne, fin }, texte: '' });
   }
   for (const { parcelle, m2 } of changements.surfaces ?? []) {
     if (!parcelle.surface) continue;

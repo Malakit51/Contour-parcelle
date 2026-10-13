@@ -44,7 +44,11 @@ export class Carte {
   private dernierePosition: GeolocationPosition | null = null;
 
   constructor(
-    private readonly auToucher: (ecran: { x: number; y: number }, versEcran: VersEcran) => void,
+    private readonly auToucher: (
+      ecran: { x: number; y: number },
+      versEcran: VersEcran,
+      position: LatLon,
+    ) => void,
     private readonly surGps: (etat: string) => void,
   ) {
     this.element = document.createElement('div');
@@ -72,7 +76,10 @@ export class Carte {
     this.gps.addTo(this.carte);
     this.carte.setView([46.6, 2.5], 6);
     this.carte.on('click', (e: L.LeafletMouseEvent) =>
-      this.auToucher(e.containerPoint, (p) => this.carte.latLngToContainerPoint(ll(p))),
+      this.auToucher(e.containerPoint, (p) => this.carte.latLngToContainerPoint(ll(p)), [
+        e.latlng.lat,
+        e.latlng.lng,
+      ]),
     );
     // Les noms n'apparaissent qu'à partir d'un certain zoom, pour ne pas encombrer.
     this.carte.on('zoomend', () => this.majNoms());

@@ -14,7 +14,15 @@ import {
   type RefSommet,
 } from './edition/etat';
 import { exporterEtat, nouvelleSurface, parcellesModifiees } from './edition/export';
-import { decalerLimite, ErreurEdition, glisserSommet, sensPositif } from './edition/operations';
+import {
+  decalerLimite,
+  decalerSommet,
+  ErreurEdition,
+  glisserSommet,
+  placerSommet,
+  sensPositif,
+  supprimerSommet,
+} from './edition/operations';
 import { planLocal, positionSurSegment, type LatLon, type Plan, type XY } from './geometrie/plan';
 import { comparer } from './isoxml/comparaison';
 import { lireTaskData, type TaskData } from './isoxml/lecture';
@@ -44,6 +52,8 @@ let mode: 'limite' | 'sommet' = 'limite';
 let selLimite: RefLimite | null = null;
 let selSommet: RefSommet | null = null;
 let limiteGlisse: RefLimite | null = null;
+/** Le prochain toucher sur la carte place le sommet sélectionné à cet endroit. */
+let placerAuDoigt = false;
 let parcelleCourante: number | null = null;
 /** Distance en mètres telle que tapée, avec une virgule décimale (« -0,35 »). */
 let saisie = '0,5';
@@ -191,9 +201,19 @@ const nomParcelle = (s: Session, anneau: number) =>
 
 // ---------- Sélection au doigt ----------
 
-function toucher(ecran: { x: number; y: number }, versEcran: VersEcran): void {
+function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position: LatLon): void {
   if (!session) return;
   const s = session;
+  if (mode === 'sommet' && selSommet && placerAuDoigt) {
+    const ref = selSommet;
+    placerAuDoigt = false;
+    modifier(
+      () => placerSommet(s.etat, ref, position),
+      `Point de ${nomParcelle(s, ref.anneau)} placé au doigt : ajustez-le avec les flèches`,
+      true,
+    );
+    return;
+  }
   // Tout se mesure en pixels à l'écran : la cible a la même taille quel que soit le zoom.
   const p: XY = [ecran.x, ecran.y];
   const rayon = RAYON_TOUCHER_PX;
@@ -244,6 +264,7 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran): void {
 }
 
 function effacerSelection(): void {
+  placerAuDoigt = false;
   selLimite = null;
   selSommet = null;
   limiteGlisse = null;
@@ -259,6 +280,64 @@ function metres(): number {
 
 /** Écrit un nombre de mètres à la française, au millimètre près : « 0,35 ». */
 const enMetres = (v: number) => String(Math.round(v * 1000) / 1000).replace('.', ',');
+
+/**
+ * Applique une modification (annulable). `garderSelection` : le sommet reste sélectionné pour
+ * enchaîner (flèches, placement au doigt) ; ses indices ne changent pas quand il bouge.
+ */
+function modifier(operation: () => Etat, quoi: string, garderSelection: boolean): void {
+  if (!session) return;
+  const s = session;
+  try {
+    const nouveau = operation();
+    if (nouveau !== s.etat) {
+      s.historique.push(s.etat);
+      s.etat = nouveau;
+    }
+    if (garderSelection) exportPrepare = null;
+    else effacerSelection();
+    message = { texte: `${quoi}.`, erreur: false };
+  } catch (e) {
+    message = {
+      texte: e instanceof ErreurEdition ? e.message : `Erreur : ${(e as Error).message}`,
+      erreur: true,
+    };
+  }
+  afficher();
+}
+
+function fleche(sens: 'Nord' | 'Sud' | 'Est' | 'Ouest'): void {
+  if (!session || !selSommet) return;
+  const s = session;
+  const ref = selSommet;
+  const d = Math.abs(metres());
+  if (d === 0) {
+    message = { texte: 'Tapez d’abord une distance.', erreur: true };
+    afficher();
+    return;
+  }
+  const [est, nord] = { Nord: [0, d], Sud: [0, -d], Est: [d, 0], Ouest: [-d, 0] }[sens] as [
+    number,
+    number,
+  ];
+  modifier(
+    () => decalerSommet(s.etat, ref, est, nord),
+    `Point de ${nomParcelle(s, ref.anneau)} déplacé de ${enMetres(d)} m vers ${sens === 'Est' || sens === 'Ouest' ? 'l’' : 'le '}${sens}`,
+    true,
+  );
+}
+
+function supprimer(): void {
+  if (!session || !selSommet) return;
+  const s = session;
+  const ref = selSommet;
+  if (!confirm('Supprimer ce point ?')) return;
+  modifier(
+    () => supprimerSommet(s.etat, ref),
+    `Point de ${nomParcelle(s, ref.anneau)} supprimé`,
+    false,
+  );
+}
 
 function appliquer(): void {
   if (!session) return;
@@ -460,7 +539,39 @@ function panneauSelection(s: Session): HTMLElement {
       el('strong', {}, `Sommet de ${nomParcelle(s, ref.anneau)}`),
       autres.size > 0 ? ` (commun avec ${[...autres].join(', ')})` : '',
     ),
-    el('div', { class: 'doux' }, 'Le long de quelle limite le faire glisser ?'),
+    el(
+      'div',
+      { class: 'doux' },
+      `Flèches : déplacer de ${enMetres(Math.abs(metres()))} m à chaque appui`,
+    ),
+    el(
+      'div',
+      { class: 'fleches' },
+      el('span'),
+      el('button', { onclick: () => fleche('Nord') }, '↑ N'),
+      el('span'),
+      el('button', { onclick: () => fleche('Ouest') }, '← O'),
+      el(
+        'button',
+        {
+          class: placerAuDoigt ? 'actif' : '',
+          onclick: () => {
+            placerAuDoigt = !placerAuDoigt;
+            message = placerAuDoigt
+              ? { texte: 'Touchez la carte à l’endroit où placer le point.', erreur: false }
+              : null;
+            afficher();
+          },
+        },
+        'Au doigt',
+      ),
+      el('button', { onclick: () => fleche('Est') }, 'E →'),
+      el('span'),
+      el('button', { onclick: () => fleche('Sud') }, '↓ S'),
+      el('span'),
+    ),
+    el('div', { class: 'rangee' }, el('button', { onclick: supprimer }, 'Supprimer ce point')),
+    el('div', { class: 'doux' }, 'Ou le faire glisser le long d’une limite (puis « Appliquer ») :'),
     boutons,
     sens && el('div', { class: 'sens' }, sens),
   );

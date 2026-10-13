@@ -167,3 +167,14 @@ pre {
   white-space: pre-wrap;
   word-break: break-all;
 }
+.fleches {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  max-width: 280px;
+  margin: 8px 0;
+}
+.fleches button {
+  font-size: 1.1rem;
+  min-height: 52px;
+}

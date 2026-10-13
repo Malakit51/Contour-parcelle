@@ -22,6 +22,8 @@ export interface AnneauEdite {
   readonly type: 1 | 2;
   /** Sommets sans répétition du premier à la fin. */
   readonly sommets: readonly Sommet[];
+  /** Nombre de sommets dans le fichier d'origine (pour repérer les suppressions). */
+  readonly nbOrigine: number;
 }
 
 export interface Etat {
@@ -53,6 +55,7 @@ export function etatInitial(td: TaskData): Etat {
         anneau: ia,
         type: anneau.type,
         sommets: anneau.points.slice(0, n).map((p) => ({ lat: p.lat, lon: p.lon, origine: p })),
+        nbOrigine: n,
       });
     });
   });

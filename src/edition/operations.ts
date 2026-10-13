@@ -229,3 +229,48 @@ export function glisserSommet(
     [],
   );
 }
+
+/** Place un sommet à une position donnée, dans toutes les parcelles qui le contiennent. */
+export function placerSommet(etat: Etat, ref: RefSommet, position: LatLon): Etat {
+  const V = latLon(sommet(etat, ref));
+  return appliquer(
+    etat,
+    sommetsEn(etat, V).map((r) => ({ anneau: r.anneau, sommet: r.sommet, ll: position })),
+    [],
+  );
+}
+
+/** Déplace un sommet de `est` mètres vers l'Est et `nord` mètres vers le Nord (négatif : Ouest, Sud). */
+export function decalerSommet(etat: Etat, ref: RefSommet, est: number, nord: number): Etat {
+  if (est === 0 && nord === 0) return etat;
+  const V = latLon(sommet(etat, ref));
+  return placerSommet(etat, ref, planLocal(V).versLatLon([est, nord]));
+}
+
+/**
+ * Supprime un sommet. Refusé pour un sommet commun à plusieurs parcelles (le retirer chez toutes
+ * créerait un chevauchement ou une bande vide) et pour un contour qui n'aurait plus que 2 points.
+ */
+export function supprimerSommet(etat: Etat, ref: RefSommet): Etat {
+  const anneau = etat.anneaux[ref.anneau]!;
+  const V = latLon(sommet(etat, ref));
+  const autres = sommetsEn(etat, V).filter((r) => r.anneau !== ref.anneau);
+  if (autres.length > 0) {
+    throw new ErreurEdition(
+      'Ce point est commun avec une autre parcelle : le supprimer créerait un chevauchement. Déplacez-le plutôt.',
+    );
+  }
+  if (anneau.sommets.length <= 3) {
+    throw new ErreurEdition('Un contour doit garder au moins 3 points.');
+  }
+  const sommets = [...anneau.sommets];
+  if (ref.sommet === 0) {
+    // Le premier point du fichier porte B="start" et se répète à la fin : on garde sa ligne et on
+    // y met les coordonnées du point suivant, qui devient le premier.
+    const [premier, second] = sommets;
+    sommets.splice(0, 2, { lat: second!.lat, lon: second!.lon, origine: premier!.origine });
+  } else {
+    sommets.splice(ref.sommet, 1);
+  }
+  return { anneaux: etat.anneaux.map((a, i) => (i === ref.anneau ? { ...a, sommets } : a)) };
+}

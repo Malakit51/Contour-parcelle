@@ -4,11 +4,15 @@ import { exporterTaskData, type Changements } from '../isoxml/ecriture';
 import type { Point, TaskData } from '../isoxml/lecture';
 import { etatInitial, surfaceEtat, type Etat } from './etat';
 
-/** Parcelles dont au moins un sommet a bougé ou a été ajouté. */
+/** Parcelles dont au moins un sommet a bougé, a été ajouté ou supprimé. */
 export function parcellesModifiees(etat: Etat): number[] {
   const modifiees = new Set<number>();
   for (const a of etat.anneaux) {
-    if (a.sommets.some((s) => !s.origine || s.lat !== s.origine.lat || s.lon !== s.origine.lon)) {
+    const supprime = a.sommets.filter((s) => s.origine).length < a.nbOrigine;
+    if (
+      supprime ||
+      a.sommets.some((s) => !s.origine || s.lat !== s.origine.lat || s.lon !== s.origine.lon)
+    ) {
       modifiees.add(a.parcelle);
     }
   }
@@ -31,8 +35,12 @@ export function nouvelleSurface(td: TaskData, etat: Etat, parcelle: number): num
 export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
   const points: NonNullable<Changements['points']>[number][] = [];
   const insertions: { apres: Point; points: { lat: number; lon: number }[] }[] = [];
+  const suppressions: Point[] = [];
   for (const a of etat.anneaux) {
     const anneau = td.parcelles[a.parcelle]!.anneaux[a.anneau]!;
+    // Points du fichier qui ne sont plus utilisés (hors répétition finale du premier).
+    const utilises = new Set(a.sommets.map((s) => s.origine));
+    suppressions.push(...anneau.points.slice(0, a.nbOrigine).filter((p) => !utilises.has(p)));
     let dernier: Point | null = null;
     a.sommets.forEach((s, i) => {
       if (s.origine) {
@@ -54,7 +62,7 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
     const m2 = nouvelleSurface(td, etat, p);
     return m2 === null ? [] : [{ parcelle: td.parcelles[p]!, m2 }];
   });
-  return { points, insertions, surfaces };
+  return { points, insertions, suppressions, surfaces };
 }
 
 export function exporterEtat(td: TaskData, etat: Etat): string {
