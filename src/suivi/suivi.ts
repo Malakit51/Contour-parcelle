@@ -38,6 +38,29 @@ export interface Suivi {
   version: 1;
   fiches: Record<string, Fiche>;
   journal: EntreeJournal[];
+  /** Dernière version de TASKDATA exportée (« 0.12 »…), partagée entre appareils. */
+  derniereVersion?: string;
+}
+
+/** Version utilisée avant l'éditeur (notation « task data 0.11 ») : le premier export sera 0.12. */
+export const VERSION_DE_DEPART = '0.11';
+
+/** Version suivante : « 0.11 » → « 0.12 », « 0.9 » → « 0.10 », « 3 » → « 4 ». */
+export function versionSuivante(v: string): string {
+  const m = /^(.*?)(\d+)$/.exec(v.trim());
+  if (!m) return `${v.trim()}.1`;
+  return `${m[1]}${Number(m[2]) + 1}`;
+}
+
+/** Compare deux versions « 0.12 » / « 0.9 » nombre par nombre ; positif si a est plus récente. */
+export function comparerVersions(a: string, b: string): number {
+  const na = a.split(/\D+/).filter(Boolean).map(Number);
+  const nb = b.split(/\D+/).filter(Boolean).map(Number);
+  for (let i = 0; i < Math.max(na.length, nb.length); i++) {
+    const d = (na[i] ?? 0) - (nb[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
 }
 
 export const suiviVide = (): Suivi => ({ version: 1, fiches: {}, journal: [] });
@@ -159,5 +182,7 @@ export function fusionner(a: Suivi, b: Suivi): Suivi {
       return true;
     })
     .sort((x, y) => x.quand.localeCompare(y.quand));
-  return { version: 1, fiches, journal };
+  const versions = [a.derniereVersion, b.derniereVersion].filter((v): v is string => !!v);
+  const derniereVersion = versions.sort(comparerVersions).at(-1);
+  return { version: 1, fiches, journal, ...(derniereVersion ? { derniereVersion } : {}) };
 }

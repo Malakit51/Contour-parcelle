@@ -62,6 +62,8 @@ import {
   fiche,
   fusionner,
   LIBELLES,
+  VERSION_DE_DEPART,
+  versionSuivante,
   type EntreeJournal,
   type EtatContour,
   type Suivi,
@@ -1028,6 +1030,11 @@ function enregistrer(octets: Uint8Array, nom: string, type: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
+/** Version que portera le prochain export (« 0.12 » après « 0.11 »…). */
+function prochaineVersion(): string {
+  return versionSuivante(suivi.derniereVersion ?? VERSION_DE_DEPART);
+}
+
 async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
   if (!exportPrepare || !session) return;
   if (
@@ -1037,6 +1044,7 @@ async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
     return;
   }
   const xml = encoder(exportPrepare.texte);
+  const version = prochaineVersion();
   let destination: string;
   if (quoi === 'dossier') {
     try {
@@ -1056,20 +1064,29 @@ async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
     destination = `${NOM_FICHIER} (téléchargements)`;
   }
   const s = session;
+  const quand = new Date().toISOString();
+  const modifiees = parcellesModifiees(s.etat);
+  const action = `Exporté : version ${version} (${destination})`;
   majSuivi({
     ...suivi,
+    derniereVersion: version,
     journal: [
       ...suivi.journal,
-      ...parcellesModifiees(s.etat).map((p) => ({
-        quand: new Date().toISOString(),
+      ...modifiees.map((p) => ({
+        quand,
         cle: cleParcelle(s.td.parcelles[p]!),
         parcelle: s.td.parcelles[p]!.nom,
-        action: `Exporté dans ${destination}`,
+        action,
         surfaceAvant: Number(s.td.parcelles[p]!.surface?.texte ?? NaN) || null,
         surfaceApres: nouvelleSurface(s.td, s.etat, p),
       })),
+      // Export sans aucune parcelle modifiée : une ligne quand même, pour suivre les versions.
+      ...(modifiees.length === 0
+        ? [{ quand, cle: 'export', parcelle: '—', action, surfaceAvant: null, surfaceApres: null }]
+        : []),
     ],
   });
+  message = { texte: `Version ${version} exportée (${destination}).`, erreur: false };
   afficher();
 }
 
@@ -1611,6 +1628,27 @@ function panneauExport(): HTMLElement {
     'div',
     { class: 'info' },
     el('strong', {}, 'Export'),
+    el(
+      'div',
+      { class: 'rangee' },
+      el('span', { class: 'sens' }, `Cet export sera la version ${prochaineVersion()}`),
+      el(
+        'button',
+        {
+          class: 'petit',
+          onclick: () => {
+            const v = prompt(
+              'Dernière version de TASKDATA déjà exportée (le prochain export prendra la suivante) :',
+              suivi.derniereVersion ?? VERSION_DE_DEPART,
+            );
+            if (!v?.trim()) return;
+            majSuivi({ ...suivi, derniereVersion: v.trim() });
+            afficher();
+          },
+        },
+        'Changer',
+      ),
+    ),
     el(
       'div',
       { class: 'rangee' },

@@ -3,12 +3,14 @@ import {
   changerFiche,
   charger,
   cleParcelle,
+  comparerVersions,
   csvJournal,
   csvSuivi,
   enregistrer,
   fiche,
   fusionner,
   suiviVide,
+  versionSuivante,
 } from '../src/suivi/suivi';
 import { preparer } from './outils';
 
@@ -120,5 +122,23 @@ describe('fusion de deux appareils', () => {
     expect(fiche(f, jard!).etat).toBe('a-refaire');
     expect(f.journal.map((e) => e.action)).toEqual(['A', 'B', 'C']);
     expect(fusionner(tablette, telephone).fiches).toEqual(f.fiches);
+  });
+});
+
+describe('numéro de version des exports', () => {
+  it('continue la notation : 0.11 → 0.12, 0.9 → 0.10', () => {
+    expect(versionSuivante('0.11')).toBe('0.12');
+    expect(versionSuivante('0.9')).toBe('0.10');
+    expect(versionSuivante('3')).toBe('4');
+    expect(versionSuivante('v')).toBe('v.1');
+  });
+
+  it('la fusion de deux appareils garde la version la plus récente', () => {
+    expect(comparerVersions('0.10', '0.9')).toBeGreaterThan(0);
+    const a = { ...suiviVide(), derniereVersion: '0.10' };
+    const b = { ...suiviVide(), derniereVersion: '0.9' };
+    expect(fusionner(a, b).derniereVersion).toBe('0.10');
+    expect(fusionner(b, a).derniereVersion).toBe('0.10');
+    expect(fusionner(suiviVide(), suiviVide()).derniereVersion).toBeUndefined();
   });
 });
