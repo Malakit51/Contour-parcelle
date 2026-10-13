@@ -1,0 +1,155 @@
+:root {
+  color-scheme: light dark;
+  --fg: #1f1f1f;
+  --bg: #f4f4f0;
+  --carte: #ffffff;
+  --bord: #8886;
+  --vert: #2e7d32;
+  --sel: #e65100;
+  --rouge: #c62828;
+  --doux: #666;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #eee;
+    --bg: #161616;
+    --carte: #222;
+    --doux: #aaa;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+  font-family: system-ui, sans-serif;
+  font-size: 16px;
+  background: var(--bg);
+  color: var(--fg);
+}
+#app {
+  max-width: 720px;
+  margin: 0 auto;
+}
+h1 {
+  font-size: 1.15rem;
+  margin: 4px 0 8px;
+}
+.rangee {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+button,
+select,
+.bouton-fichier {
+  font: inherit;
+  min-height: 46px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--bord);
+  background: var(--carte);
+  color: var(--fg);
+}
+button.principal,
+.bouton-fichier {
+  background: var(--vert);
+  border-color: var(--vert);
+  color: #fff;
+}
+button.actif {
+  background: var(--sel);
+  border-color: var(--sel);
+  color: #fff;
+}
+button:disabled {
+  opacity: 0.45;
+}
+select {
+  flex: 1;
+  min-width: 0;
+}
+.bouton-fichier input {
+  display: none;
+}
+svg.carte {
+  width: 100%;
+  height: 55vh;
+  display: block;
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  background: var(--carte);
+  touch-action: none;
+  user-select: none;
+}
+.info {
+  background: var(--carte);
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  padding: 10px;
+  margin: 8px 0;
+}
+.sens {
+  font-weight: bold;
+  color: var(--sel);
+}
+.doux {
+  color: var(--doux);
+  font-size: 0.9rem;
+}
+.erreur {
+  color: var(--rouge);
+  font-weight: bold;
+}
+.affichage-cm {
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 120px;
+  text-align: right;
+  padding: 6px 10px;
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  background: var(--carte);
+}
+.pave {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  max-width: 360px;
+}
+.pave button {
+  font-size: 1.3rem;
+  min-height: 52px;
+}
+.raccourcis {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  max-width: 360px;
+}
+.raccourcis button {
+  padding: 8px 0;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95rem;
+}
+td,
+th {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--bord);
+  text-align: right;
+}
+td:first-child,
+th:first-child {
+  text-align: left;
+}
+pre {
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
