@@ -453,3 +453,51 @@ export function retrouverLimite(avant: Etat, apres: Etat, ref: RefLimite): RefLi
   );
   return trouves.length === 1 ? { anneau: ref.anneau, debut: trouves[0]! } : null;
 }
+
+/**
+ * Ajoute un sommet sur la limite `limite`, à la position `position` (ramenée sur la limite). Si la
+ * limite est commune avec une autre parcelle, le sommet est ajouté chez les deux. Renvoie aussi
+ * la référence du nouveau sommet dans l'anneau de `limite`.
+ */
+export function ajouterPoint(
+  etat: Etat,
+  limite: RefLimite,
+  position: LatLon,
+): { etat: Etat; sommet: RefSommet } {
+  const a = latLon(sommet(etat, { anneau: limite.anneau, sommet: limite.debut }));
+  const fin = suivant(etat, limite.anneau, limite.debut);
+  const b = latLon(sommet(etat, { anneau: limite.anneau, sommet: fin }));
+  const plan = planLocal(a);
+  const pb = plan.versXY(b);
+  const t = positionSurSegment(plan.versXY(position), [0, 0], pb).t;
+  if (t <= 0.001 || t >= 0.999) {
+    throw new ErreurEdition('Touche la limite entre ses deux extrémités, pas sur un sommet.');
+  }
+  const ll = plan.versLatLon([pb[0] * t, pb[1] * t]);
+  const ajouts: Ajout[] = [
+    { anneau: limite.anneau, v: limite.debut, w: fin, ll },
+    ...limitesJumelles(etat, limite).map((j) => ({ anneau: j.anneau, v: j.debut, w: j.fin, ll })),
+  ];
+  return {
+    etat: appliquer(etat, [], ajouts),
+    // Ajouté juste après `debut` (ou en fin d'anneau si `debut` est le dernier sommet).
+    sommet: { anneau: limite.anneau, sommet: limite.debut + 1 },
+  };
+}
+
+/**
+ * Remplace tout le contour extérieur `anneau` par `points` (contour ouvert, sans répétition du
+ * premier point). La ligne « start » du fichier est réutilisée pour le premier point, les autres
+ * points d'origine disparaissent. Les sommets communs avec les voisins ne sont pas suivis : la
+ * vérification avant export signalera les écarts éventuels.
+ */
+export function remplacerContour(etat: Etat, anneau: number, points: LatLon[]): Etat {
+  const a = etat.anneaux[anneau]!;
+  if (points.length < 3) throw new ErreurEdition('Le contour de remplacement a moins de 3 points.');
+  const sommets: Sommet[] = points.map(([lat, lon], i) => ({
+    lat,
+    lon,
+    origine: i === 0 ? a.sommets[0]!.origine : null,
+  }));
+  return { anneaux: etat.anneaux.map((x, i) => (i === anneau ? { ...a, sommets } : x)) };
+}

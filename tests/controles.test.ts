@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { controler, seCroisent, sommetsPresqueCommuns } from '../src/edition/controles';
-import { decalerLimite } from '../src/edition/operations';
+import {
+  ajouterPoint,
+  decalerLimite,
+  decalerSommet,
+  remplacerContour,
+} from '../src/edition/operations';
 import type { XY } from '../src/geometrie/plan';
-import { preparer } from './outils';
+import { latLon } from '../src/edition/etat';
+import { plan, preparer } from './outils';
 
 const carre = (x: number, y: number, c: number): XY[] => [
   [x, y],
@@ -72,5 +78,52 @@ describe('contrôles avant export', () => {
     expect(presque).toHaveLength(2);
     expect(presque[0]!.distance).toBeCloseTo(0.5, 2);
     expect(controler(td, etat, [1]).map((a) => a.grave)).toEqual([false, false]);
+  });
+});
+
+describe('limite commune qui ne coïncide plus', () => {
+  it('signalée quand un voisin perd ses sommets communs, pas après un déplacement commun', () => {
+    const { td, etat } = preparer({ X: carre(0, 0, 100), Y: carre(100, 0, 100) });
+    // Déplacement d'un sommet commun : il bouge chez les deux, rien à signaler.
+    expect(controler(td, decalerSommet(etat, { anneau: 0, sommet: 2 }, 1, 0), [0, 1])).toEqual([]);
+    // Contour de X remplacé : ses sommets communs avec Y ont disparu.
+    const remplace = remplacerContour(
+      etat,
+      0,
+      carre(0, 0, 98).map((p) => plan.versLatLon(p)),
+    );
+    expect(controler(td, remplace, [0]).map((a) => a.message)).toEqual([
+      'X / Y : la limite commune ne coïncide plus (2 sommet(s) commun(s) perdu(s)) ; risque de bande vide ou de chevauchement, vérifie sur la carte.',
+    ]);
+  });
+});
+
+describe('point ajouté sur une limite commune puis décollé', () => {
+  it('signale la bande vide quand un seul des deux voisins garde le point', () => {
+    const { td, etat } = preparer({ X: carre(0, 0, 100), Y: carre(100, 0, 100) });
+    const r = ajouterPoint(etat, { anneau: 0, debut: 1 }, plan.versLatLon([100, 50]));
+    const deplace = decalerSommet(r.etat, r.sommet, 20, 0); // bouge chez les deux : rien à dire
+    expect(controler(td, deplace, [0, 1])).toEqual([]);
+    // X reprend son contour d'origine : Y garde le point déplacé, la limite ne coïncide plus.
+    const remplace = remplacerContour(deplace, 0, etat.anneaux[0]!.sommets.map(latLon));
+    const messages = controler(td, remplace, [0, 1]).map((a) => a.message);
+    expect(messages).toEqual([
+      'Y / X : la limite commune ne coïncide plus (1 point(s) de Y hors de la limite de X) ; risque de bande vide ou de chevauchement, vérifie sur la carte.',
+    ]);
+  });
+
+  it("ne prend pas le reste d'une parcelle étroite pour la limite commune", () => {
+    // Bande de 100 × 20 m le long de X, plusieurs points sur ses autres côtés.
+    const bande: XY[] = [
+      [100, 0],
+      [100, 100],
+      [110, 100],
+      [120, 100],
+      [120, 50],
+      [120, 0],
+      [110, 0],
+    ];
+    const { td, etat } = preparer({ X: carre(0, 0, 100), Y: bande });
+    expect(controler(td, etat, [0, 1])).toEqual([]);
   });
 });

@@ -20,9 +20,11 @@ import {
   ErreurEdition,
   glisserSommetLeLong,
   placerSommet,
+  remplacerContour,
   cotesLimite,
   repereLeLong,
   retrouverLimite,
+  ajouterPoint,
   bordLePlusCourt,
   simplifierParcelle,
   sommetsDuBord,
@@ -166,7 +168,14 @@ let limiteGlisse: RefLimite | null = null;
 /** Le prochain toucher sur la carte place le sommet sélectionné à cet endroit. */
 let placerAuDoigt = false;
 /** Ancien fichier affiché en référence (gris) : ses points servent d'aimant pour « au doigt ». */
-let reference: { nom: string; anneaux: LatLon[][] } | null = null;
+let reference: {
+  nom: string;
+  anneaux: LatLon[][];
+  /** Contour extérieur de chaque parcelle de la référence, pour « Remplacer le contour ». */
+  parcelles: { nom: string; guid: string; contour: LatLon[] }[];
+} | null = null;
+/** Mode Point : le prochain toucher sur une limite y ajoute un point. */
+let ajoutEnCours = false;
 /** Sens choisi pour décaler la limite sélectionnée, avec les flèches posées sur la carte. */
 let sensLimite: 'exterieur' | 'interieur' | null = null;
 /** Sens choisi pour faire glisser le point le long du bord : vers l'autre extrémité ou à l'opposé. */
@@ -461,7 +470,14 @@ async function chargerReference(f: File): Promise<void> {
   try {
     const td = lireTaskData(decoder(new Uint8Array(await f.arrayBuffer())));
     const e = etatInitial(td);
-    reference = { nom: f.name, anneaux: e.anneaux.map((a) => a.sommets.map(latLon)) };
+    reference = {
+      nom: f.name,
+      anneaux: e.anneaux.map((a) => a.sommets.map(latLon)),
+      parcelles: td.parcelles.flatMap((p, i) => {
+        const ext = e.anneaux.find((a) => a.parcelle === i && a.type === 1);
+        return ext ? [{ nom: p.nom, guid: p.guid, contour: ext.sommets.map(latLon) }] : [];
+      }),
+    };
     message = {
       texte: `${f.name} affiché en référence (gris) : ${td.parcelles.length} parcelle(s). Rien n’est modifié dans ton travail.`,
       erreur: false,
@@ -510,6 +526,81 @@ function panneauReference(): HTMLElement {
           },
           'Retirer la référence',
         ),
+    ),
+  );
+}
+
+/** Parcelle de la référence qui correspond à la parcelle `p` : même GUID, même nom, ou qui la recouvre. */
+function parcelleDeReference(s: Session, p: number) {
+  if (!reference) return null;
+  const parcelle = s.td.parcelles[p]!;
+  const parGuid = parcelle.guid && reference.parcelles.find((r) => r.guid === parcelle.guid);
+  if (parGuid) return parGuid;
+  const parNom = reference.parcelles.find((r) => r.nom === parcelle.nom);
+  if (parNom) return parNom;
+  const ext = s.etat.anneaux.find((a) => a.parcelle === p && a.type === 1);
+  if (!ext) return null;
+  const plan = planLocal(latLon(ext.sommets[0]!));
+  const pts = ext.sommets.map((x) => plan.versXY(latLon(x)));
+  const centre: XY = [
+    pts.reduce((u, q) => u + q[0], 0) / pts.length,
+    pts.reduce((u, q) => u + q[1], 0) / pts.length,
+  ];
+  return (
+    reference.parcelles.find((r) =>
+      pointDansPolygone(
+        centre,
+        r.contour.map((q) => plan.versXY(q)),
+      ),
+    ) ?? null
+  );
+}
+
+function panneauRemplacement(s: Session): HTMLElement | null {
+  if (!reference || parcelleCourante === null) return null;
+  const p = parcelleCourante;
+  const r = parcelleDeReference(s, p);
+  const nom = s.td.parcelles[p]!.nom;
+  if (!r) {
+    return el(
+      'div',
+      { class: 'info doux' },
+      `Aucune parcelle de « ${reference.nom} » ne correspond à ${nom}.`,
+    );
+  }
+  const ext = s.etat.anneaux.findIndex((a) => a.parcelle === p && a.type === 1);
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, 'Contour de la référence'),
+    el(
+      'div',
+      { class: 'doux' },
+      `« ${r.nom} » dans ${reference.nom} : ${r.contour.length} points (${nom} en a ${s.etat.anneaux[ext]!.sommets.length} aujourd’hui).`,
+    ),
+    el(
+      'div',
+      { class: 'rangee' },
+      el(
+        'button',
+        {
+          onclick: () => {
+            if (!confirm(`Remplacer tout le contour de ${nom} par celui de la référence ?`)) return;
+            const communs = s.etat.anneaux[ext]!.sommets.some((x) =>
+              sommetsEn(s.etat, latLon(x)).some((q) => q.anneau !== ext),
+            );
+            modifier(
+              () => remplacerContour(s.etat, ext, r.contour),
+              `Contour de ${nom} remplacé par celui de ${reference!.nom}` +
+                (communs
+                  ? ' ; il avait des sommets communs avec un voisin : fais « Vérifier avant export »'
+                  : ''),
+              false,
+            );
+          },
+        },
+        `Remplacer le contour de ${nom}`,
+      ),
     ),
   );
 }
@@ -760,6 +851,51 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
         Number(s.etat.anneaux[j]!.parcelle === parcelleCourante) -
         Number(s.etat.anneaux[i]!.parcelle === parcelleCourante),
     );
+  // Ajout d'un point : la limite la plus proche du toucher reçoit un nouveau sommet.
+  if (mode === 'sommet' && ajoutEnCours) {
+    let proche: { anneau: number; debut: number; d: number } | null = null;
+    for (const i of ordre) {
+      const pts = anneaux[i]!;
+      pts.forEach((q, k) => {
+        const pos = positionSurSegment(p, q, pts[(k + 1) % pts.length]!);
+        if (
+          pos.t > 0 &&
+          pos.t < 1 &&
+          pos.ecart <= rayon &&
+          (!proche || pos.ecart < proche.d - 1e-6)
+        ) {
+          proche = { anneau: i, debut: k, d: pos.ecart };
+        }
+      });
+    }
+    const limite = proche as { anneau: number; debut: number } | null;
+    if (!limite) {
+      message = { texte: 'Touche une limite (un trait) pour y ajouter le point.', erreur: true };
+      afficher();
+      return;
+    }
+    try {
+      const r = ajouterPoint(s.etat, { anneau: limite.anneau, debut: limite.debut }, position);
+      ajoutEnCours = false;
+      enregistrerModification(
+        s,
+        r.etat,
+        `Point ajouté sur une limite de ${nomParcelle(s, limite.anneau)}`,
+      );
+      effacerSelection();
+      parcelleCourante = s.etat.anneaux[limite.anneau]!.parcelle;
+      selSommet = r.sommet;
+      message = {
+        texte:
+          'Point ajouté et sélectionné : déplace-le avec les flèches, ☝ ou le long d’un bord.',
+        erreur: false,
+      };
+    } catch (e) {
+      message = { texte: (e as Error).message, erreur: true };
+    }
+    afficher();
+    return;
+  }
   // Mode point, sommet déjà choisi : toucher un des deux bords qui y aboutissent choisit le bord
   // le long duquel il glissera (sans désélectionner le sommet).
   if (mode === 'sommet' && selSommet) {
@@ -858,6 +994,7 @@ function pointDansPolygone(p: XY, pts: XY[]): boolean {
 
 function effacerSelection(): void {
   placerAuDoigt = false;
+  ajoutEnCours = false;
   sensGlisse = null;
   bordDebut = null;
   bord = null;
@@ -1589,7 +1726,36 @@ function panneauSelection(s: Session): HTMLElement {
           ),
     );
   }
-  if (!selSommet) return el('div', { class: 'info doux' }, 'Touche un sommet sur la carte.');
+  const boutonAjout = el(
+    'button',
+    {
+      class: ajoutEnCours ? 'actif' : '',
+      onclick: () => {
+        const actif = !ajoutEnCours;
+        effacerSelection();
+        ajoutEnCours = actif;
+        message = actif
+          ? { texte: 'Touche une limite à l’endroit du nouveau point.', erreur: false }
+          : null;
+        afficher();
+      },
+    },
+    ajoutEnCours ? 'Ajout en cours… (annuler)' : 'Ajouter un point',
+  );
+  if (!selSommet) {
+    return el(
+      'div',
+      { class: 'info' },
+      el(
+        'div',
+        { class: 'doux' },
+        ajoutEnCours
+          ? 'Touche une limite (un trait) à l’endroit du nouveau point.'
+          : 'Touche un sommet sur la carte, ou ajoute un point.',
+      ),
+      el('div', { class: 'rangee' }, boutonAjout),
+    );
+  }
   const ref = selSommet;
   const autres = new Set(
     sommetsEn(s.etat, latLon(s.etat.anneaux[ref.anneau]!.sommets[ref.sommet]!))
@@ -1631,7 +1797,12 @@ function panneauSelection(s: Session): HTMLElement {
       { class: 'doux' },
       'Flèches en haut à gauche de la carte : la distance réglée à chaque appui ; ☝ au centre : placer au doigt.',
     ),
-    el('div', { class: 'rangee' }, el('button', { onclick: supprimer }, 'Supprimer ce point')),
+    el(
+      'div',
+      { class: 'rangee' },
+      el('button', { onclick: supprimer }, 'Supprimer ce point'),
+      boutonAjout,
+    ),
     el('div', { class: 'sens' }, glisse),
   );
 }
@@ -2030,6 +2201,7 @@ function afficher(): void {
           modeBouton('simplifier', 'Simplifier'),
         ),
         mode === 'simplifier' ? panneauSimplification(s) : panneauSelection(s),
+        panneauRemplacement(s),
         raccourcis(),
       ];
       break;

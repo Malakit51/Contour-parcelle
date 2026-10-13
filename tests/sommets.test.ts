@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { etatInitial, latLon } from '../src/edition/etat';
 import { exporterEtat, parcellesModifiees } from '../src/edition/export';
 import {
+  ajouterPoint,
   decalerSommet,
   ErreurEdition,
   glisserSommetLeLong,
   placerSommet,
+  remplacerContour,
   supprimerSommet,
 } from '../src/edition/operations';
 import type { XY } from '../src/geometrie/plan';
@@ -108,5 +110,49 @@ describe('faire glisser un point le long d’un bord', () => {
     const oppose = glisserSommetLeLong(etat, ref, limiteNord, 0.5, false);
     expect(enMetres(oppose, 0)[2]).toEqual([100.5, 100]);
     expect(() => glisserSommetLeLong(etat, ref, limiteNord, 150, true)).toThrow(ErreurEdition);
+  });
+});
+
+describe('ajouter un point', () => {
+  it('sur une limite commune : ajouté chez les deux voisins, puis déplaçable', () => {
+    const { td, etat } = preparer(deuxCarres);
+    const limiteCommune = { anneau: 0, debut: 1 }; // (100, 0) → (100, 100)
+    const r = ajouterPoint(etat, limiteCommune, plan.versLatLon([100.4, 30]));
+    expect(enMetres(r.etat, 0)).toHaveLength(5);
+    expect(enMetres(r.etat, 0)[2]).toEqual([100, 30]);
+    expect(enMetres(r.etat, 1)).toContainEqual([100, 30]);
+    expect(r.sommet).toEqual({ anneau: 0, sommet: 2 });
+    const deplace = decalerSommet(r.etat, r.sommet, 1, 0);
+    expect(enMetres(deplace, 1)).toContainEqual([101, 30]);
+    const relu = etatInitial(lireTaskData(exporterEtat(td, deplace)));
+    expect(enMetres(relu, 0)).toEqual(enMetres(deplace, 0));
+  });
+
+  it('refuse un toucher sur un sommet', () => {
+    const { etat } = preparer(deuxCarres);
+    expect(() => ajouterPoint(etat, { anneau: 0, debut: 1 }, plan.versLatLon([100, 0]))).toThrow(
+      ErreurEdition,
+    );
+  });
+});
+
+describe('remplacer un contour', () => {
+  it('garde la ligne « start », retire les anciens points, se relit à l’identique', () => {
+    const { td, etat } = preparer(deuxCarres);
+    const nouveau = (
+      [
+        [-5, -5],
+        [50, -8],
+        [95, -5],
+        [95, 95],
+        [-5, 95],
+      ] as XY[]
+    ).map((p) => plan.versLatLon(p));
+    const apres = remplacerContour(etat, 0, nouveau);
+    const texte = exporterEtat(td, apres);
+    expect(texte).toMatch(/<PNT A="2" B="start" C="[\d.]+" D="[\d.]+"\/>/);
+    const relu = etatInitial(lireTaskData(texte));
+    expect(enMetres(relu, 0)).toEqual(enMetres(apres, 0));
+    expect(enMetres(relu, 1)).toEqual(enMetres(etat, 1));
   });
 });

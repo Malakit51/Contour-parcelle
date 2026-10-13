@@ -2,7 +2,7 @@
 
 import { planLocal, type Plan, type XY } from '../geometrie/plan';
 import type { TaskData } from '../isoxml/lecture';
-import { distanceM, latLon, TOLERANCE_PARTAGE_M, type Etat } from './etat';
+import { distanceM, etatInitial, latLon, TOLERANCE_PARTAGE_M, type Etat } from './etat';
 
 export interface Alerte {
   grave: boolean;
@@ -87,6 +87,24 @@ export function controler(td: TaskData, etat: Etat, parcelles: readonly number[]
       }
     });
   }
+  // Le long d'une limite commune, un point d'une parcelle qui n'est pas sur la limite du voisin.
+  for (const m of limitesDecollees(td, etat, parcelles)) {
+    alertes.push({ grave: false, message: m });
+  }
+  // Voisins qui avaient des sommets communs dans le fichier d'origine et en ont perdu : leur
+  // limite commune ne coïncide plus (bande vide ou chevauchement le long de cette limite).
+  const avant = paresDeVoisins(etatInitial(td));
+  const apres = paresDeVoisins(etat);
+  for (const [cle, n] of avant) {
+    const [a, b] = cle.split('|').map(Number) as [number, number];
+    if (!parcelles.includes(a) && !parcelles.includes(b)) continue;
+    if ((apres.get(cle) ?? 0) < n) {
+      alertes.push({
+        grave: false,
+        message: `${td.parcelles[a]!.nom} / ${td.parcelles[b]!.nom} : la limite commune ne coïncide plus (${n - (apres.get(cle) ?? 0)} sommet(s) commun(s) perdu(s)) ; risque de bande vide ou de chevauchement, vérifie sur la carte.`,
+      });
+    }
+  }
   for (const p of sommetsPresqueCommuns(td, etat, 1, true)) {
     if (parcelles.includes(p.parcelles[0]) || parcelles.includes(p.parcelles[1])) {
       alertes.push({
@@ -154,4 +172,90 @@ export function sommetsPresqueCommuns(
     }
   }
   return resultat;
+}
+
+/** Nombre de sommets communs (coordonnées identiques) entre chaque paire de parcelles « a|b ». */
+function paresDeVoisins(etat: Etat): Map<string, number> {
+  const parPosition = new Map<string, Set<number>>();
+  for (const a of etat.anneaux) {
+    for (const s of a.sommets) {
+      const cle = `${s.lat} ${s.lon}`;
+      if (!parPosition.has(cle)) parPosition.set(cle, new Set());
+      parPosition.get(cle)!.add(a.parcelle);
+    }
+  }
+  const paires = new Map<string, number>();
+  for (const parcelles of parPosition.values()) {
+    const liste = [...parcelles].sort((x, y) => x - y);
+    for (let i = 0; i < liste.length; i++) {
+      for (let j = i + 1; j < liste.length; j++) {
+        const cle = `${liste[i]}|${liste[j]}`;
+        paires.set(cle, (paires.get(cle) ?? 0) + 1);
+      }
+    }
+  }
+  return paires;
+}
+
+/**
+ * Limites communes qui ne coïncident plus : entre deux sommets communs consécutifs d'une parcelle B,
+ * reliés directement dans la parcelle voisine A, tous les points de B doivent être sur ce segment
+ * de A. Sinon il reste une bande vide ou un chevauchement (par exemple après le remplacement du
+ * contour de A, ou un point ajouté puis déplacé chez un seul des deux).
+ */
+function limitesDecollees(td: TaskData, etat: Etat, parcelles: readonly number[]): string[] {
+  const messages: string[] = [];
+  const cle = (s: { lat: number; lon: number }) => `${s.lat} ${s.lon}`;
+  for (const b of etat.anneaux) {
+    for (const a of etat.anneaux) {
+      if (a === b || a.parcelle === b.parcelle) continue;
+      if (!parcelles.includes(a.parcelle) && !parcelles.includes(b.parcelle)) continue;
+      const indexA = new Map(a.sommets.map((s, i) => [cle(s), i]));
+      const communs = b.sommets.flatMap((s, i) => (indexA.has(cle(s)) ? [i] : []));
+      if (communs.length < 2) continue;
+      const n = b.sommets.length;
+      let probleme = 0;
+      communs.forEach((i, k) => {
+        const j = communs[(k + 1) % communs.length]!;
+        const entre: number[] = [];
+        for (let x = (i + 1) % n; x !== j; x = (x + 1) % n) entre.push(x);
+        if (entre.length === 0) return;
+        // Sommets aussi reliés directement dans B : la limite commune est ce segment, et le
+        // chemin trouvé est le reste du contour (parcelle étroite).
+        if ((j + 1) % n === i) return;
+        // Les deux sommets doivent être reliés directement dans A.
+        const ia = indexA.get(cle(b.sommets[i]!))!;
+        const ja = indexA.get(cle(b.sommets[j]!))!;
+        const m = a.sommets.length;
+        if ((ia + 1) % m !== ja && (ja + 1) % m !== ia) return;
+        const plan = planLocal(latLon(b.sommets[i]!));
+        const p1 = plan.versXY(latLon(b.sommets[i]!));
+        const p2 = plan.versXY(latLon(b.sommets[j]!));
+        const pts = entre.map((x) => plan.versXY(latLon(b.sommets[x]!)));
+        // Le chemin de B doit longer le segment (sinon c'est l'autre côté de la parcelle).
+        let longueur = 0;
+        let prec = p1;
+        for (const q of [...pts, p2]) {
+          longueur += Math.hypot(q[0] - prec[0], q[1] - prec[1]);
+          prec = q;
+        }
+        if (longueur > 1.5 * Math.hypot(p2[0] - p1[0], p2[1] - p1[1])) return;
+        probleme += pts.filter((q) => distanceAuSegment(q, p1, p2) > 0.01).length;
+      });
+      if (probleme > 0) {
+        messages.push(
+          `${td.parcelles[b.parcelle]!.nom} / ${td.parcelles[a.parcelle]!.nom} : la limite commune ne coïncide plus (${probleme} point(s) de ${td.parcelles[b.parcelle]!.nom} hors de la limite de ${td.parcelles[a.parcelle]!.nom}) ; risque de bande vide ou de chevauchement, vérifie sur la carte.`,
+        );
+      }
+    }
+  }
+  return messages;
+}
+
+function distanceAuSegment(p: XY, a: XY, b: XY): number {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const l2 = dx * dx + dy * dy;
+  const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2));
+  return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
 }
