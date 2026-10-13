@@ -36,6 +36,8 @@ import { lireTaskData, type TaskData } from './isoxml/lecture';
 import {
   ecritureDossierPossible,
   ecrireDossierTaskdata,
+  nomEmplacement,
+  oublierEmplacement,
   NOM_DOSSIER,
   NOM_FICHIER,
 } from './ui/dossier';
@@ -1030,6 +1032,12 @@ function enregistrer(octets: Uint8Array, nom: string, type: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
+/** Emplacement mémorisé pour « Enregistrer sur la clé » (nom affiché), ou null. */
+let emplacementConnu: string | null = null;
+void nomEmplacement().then((n) => {
+  emplacementConnu = n;
+});
+
 /** Nom du dossier écrit sur la clé : « TASKDATA 0.12 », pour le retrouver tel quel sur la console. */
 const nomDossierVersion = (version: string) => `${NOM_DOSSIER} ${version}`;
 
@@ -1057,6 +1065,7 @@ async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
       if (!chemin) return;
       destination = chemin;
       message = { texte: `Enregistré : ${chemin}`, erreur: false };
+      emplacementConnu = await nomEmplacement();
     } catch (e) {
       message = { texte: `Enregistrement impossible : ${(e as Error).message}`, erreur: true };
       afficher();
@@ -1708,9 +1717,29 @@ function panneauExport(): HTMLElement {
           'div',
           { class: 'doux' },
           ecritureDossierPossible()
-            ? `« Enregistrer sur la clé » : choisis la clé USB (sa racine) ; l’éditeur y crée le dossier « ${nomDossierVersion(prochaineVersion())} » avec ${NOM_FICHIER} dedans. La prochaine fois, le choix s’ouvre directement sur la clé. « Télécharger » : le fichier arrive dans « Téléchargements », à ranger toi-même dans un dossier ${NOM_DOSSIER} sur la clé.`
+            ? emplacementConnu
+              ? `« Enregistrer sur la clé » : le dossier « ${nomDossierVersion(prochaineVersion())} » sera créé dans « ${emplacementConnu} », sans redemander l’emplacement.`
+              : `« Enregistrer sur la clé » : choisis la clé USB (sa racine) ; l’éditeur y crée le dossier « ${nomDossierVersion(prochaineVersion())} » avec ${NOM_FICHIER} dedans, et se souvient de l’emplacement pour les fois suivantes.`
             : `${NOM_FICHIER} arrive dans « Téléchargements ». Avec le gestionnaire de fichiers, mets-le dans un dossier ${NOM_DOSSIER} sur la clé.`,
         ),
+        emplacementConnu &&
+          el(
+            'div',
+            { class: 'rangee' },
+            el(
+              'button',
+              {
+                class: 'petit',
+                onclick: () => {
+                  void oublierEmplacement().then(() => {
+                    emplacementConnu = null;
+                    afficher();
+                  });
+                },
+              },
+              'Changer d’emplacement',
+            ),
+          ),
       ),
     );
   }
