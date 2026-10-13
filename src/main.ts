@@ -389,9 +389,53 @@ function enregistrerFichierSauvegarde(): void {
   afficher();
 }
 
+// Partage direct (menu Android : Bluetooth, Quick Share, messagerie…). Chrome n'accepte de
+// partager que certains types de fichiers, pas le .json : la sauvegarde part en .txt (même
+// contenu, que « Charger une sauvegarde » relit aussi).
+type NavigateurPartage = Navigator & {
+  canShare?: (donnees: { files: File[] }) => boolean;
+  share?: (donnees: { files: File[]; title?: string }) => Promise<void>;
+};
+
+function partagePossible(): boolean {
+  const n = navigator as NavigateurPartage;
+  try {
+    return (
+      typeof n.share === 'function' &&
+      typeof n.canShare === 'function' &&
+      n.canShare({ files: [new File(['{}'], 'essai.txt', { type: 'text/plain' })] })
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function partagerSauvegarde(): Promise<void> {
+  if (!session) return;
+  if (nomAppareil() === 'appareil') changerNomAppareil();
+  const contenu = enregistrerSession(
+    session.td,
+    session.nomFichier,
+    session.etat,
+    nomAppareil(),
+    suivi,
+  );
+  const nom = `contour-parcelle-sauvegarde-${aujourdhui()}.txt`;
+  const fichier = new File([JSON.stringify(contenu)], nom, { type: 'text/plain' });
+  try {
+    await (navigator as NavigateurPartage).share!({ files: [fichier], title: nom });
+    message = { texte: `${nom} partagé.`, erreur: false };
+  } catch (e) {
+    // Fermer le menu de partage sans choisir n'est pas une erreur.
+    if ((e as Error).name === 'AbortError') return;
+    message = { texte: `Partage impossible : ${(e as Error).message}`, erreur: true };
+  }
+  afficher();
+}
+
 function boutonChargerSauvegarde(): HTMLElement {
   const choix = el('label', { class: 'bouton-fichier secondaire' }, 'Charger une sauvegarde');
-  const input = el('input', { type: 'file', accept: '.json,application/json' });
+  const input = el('input', { type: 'file', accept: '.json,.txt,application/json,text/plain' });
   input.addEventListener('change', async () => {
     const f = input.files?.[0];
     if (!f) return;
@@ -422,6 +466,13 @@ function panneauSauvegardeFichier(): HTMLElement {
       { class: 'rangee' },
       session
         ? el('button', { onclick: enregistrerFichierSauvegarde }, 'Enregistrer une sauvegarde')
+        : null,
+      session && partagePossible()
+        ? el(
+            'button',
+            { onclick: () => void partagerSauvegarde() },
+            'Partager (Bluetooth, Quick Share…)',
+          )
         : null,
       boutonChargerSauvegarde(),
     ),
