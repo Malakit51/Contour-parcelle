@@ -17,14 +17,14 @@ fictif ; si `donnees_locales/TASKDATA.XML` existe, des tests supplémentaires to
 
 Page publiée : https://malakit51.github.io/Contour-parcelle/
 
-1. « Ouvrir TASKDATA.XML » : choisir le fichier dans le dossier exporté par la console.
-2. Choisir une parcelle dans la liste pour zoomer (ou pincer, glisser, boutons + et −).
-3. « Décaler une limite » : toucher la limite, taper la distance en mètres, « Appliquer ».
-   « Déplacer un point » : toucher le sommet, choisir la limite le long de laquelle il glisse, taper
-   la distance en mètres, « Appliquer ». Le sens du + est écrit en orange.
-4. « Vérifier avant export », puis « Enregistrer dans un dossier TASKDATA » (choisir la clé USB) si
-   le navigateur le permet, sinon « Télécharger TASKDATA.XML » et le ranger à la main dans un dossier
-   TASKDATA sur la clé.
+1. Onglet Fichier : « Ouvrir TASKDATA.XML » (dans le dossier TASKDATA exporté par la console).
+2. Choisir une parcelle dans la liste du haut, ou la toucher sur la carte.
+3. Onglet Modifier : « Décaler une limite » ou « Déplacer un point », toucher la limite ou le sommet,
+   régler la distance au pavé, puis « Appliquer » dans la barre du bas. Le sens du + est écrit en
+   orange.
+4. Onglet Suivi : état du contour (vérifié, à confirmer, à refaire), remarque, liste et journal.
+5. Onglet Export : « Vérifier avant export », puis « Télécharger TASKDATA.XML », à ranger dans un
+   dossier TASKDATA sur la clé.
 
 ## Commandes
 

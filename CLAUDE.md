@@ -81,6 +81,8 @@ Et aussi :
 
 ## Choix techniques
 
+- Mise en page (choisie le 13/10/2026, option A) : la page ne défile pas. Barre du haut (parcelle, zoom, GPS), carte (environ la moitié de l'écran), onglets Modifier / Suivi / Export / Fichier dont seul le panneau défile, barre du bas toujours visible (distance, Appliquer, Annuler).
+
 - Vite + TypeScript, tests Vitest, sans framework d'interface. Publication par GitHub Actions sur GitHub Pages (`main`).
 - Carte : Leaflet 1.9 (choisi le 13/10/2026), fonds IGN Géoplateforme en WMTS sans clé. Fond par défaut : le cadastre (`CADASTRALPARCELS.PARCELLAIRE_EXPRESS`, style `PCI vecteur`, demandé le 13/10/2026) ; aussi photo + cadastre, photo (`ORTHOIMAGERY.ORTHOPHOTOS`) et plan (`GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2`). Zoom natif max 19. Toucher l'intérieur d'une parcelle la sélectionne. La précision vient de la photo IGN et du GPS du téléphone (quelques mètres), pas de la bibliothèque.
 - Suivi et journal (13/10/2026) : stockés dans le navigateur du téléphone (localStorage, clé `contour-parcelle/suivi`), indépendamment du fichier ouvert. Une parcelle est repérée par son GUID (attribut `B` du `PFD`), à défaut par son nom. États : vérifié, à confirmer (par défaut), à refaire, avec date et remarque. Journal : une ligne par parcelle touchée à chaque modification (retirée si on annule) et à chaque export. Export CSV (séparateur « ; », BOM UTF-8). Effacer les données de Chrome efface le suivi : pas encore d'import CSV pour le restaurer.

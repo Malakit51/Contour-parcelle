@@ -191,6 +191,7 @@ async function charger(fichier: File): Promise<void> {
       couleurs: colorier(initial, td.parcelles.length),
     };
     parcelleCourante = null;
+    onglet = 'modifier';
     effacerSelection();
     message = {
       texte: `${fichier.name} chargé : ${td.parcelles.length} parcelles.`,
@@ -344,6 +345,7 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
     parcelleCourante = s.etat.anneaux[choix.anneau]!.parcelle;
     if (mode === 'limite') selLimite = { anneau: choix.anneau, debut: choix.indice };
     else selSommet = { anneau: choix.anneau, sommet: choix.indice };
+    onglet = 'modifier';
   } else {
     // Toucher à l'intérieur d'une parcelle (loin de ses limites) : on la sélectionne.
     const dedans = anneaux.findIndex(
@@ -583,7 +585,7 @@ function quandFr(iso: string): string {
   return `${z(d.getDate())}/${z(d.getMonth() + 1)}/${d.getFullYear()} ${z(d.getHours())}:${z(d.getMinutes())}`;
 }
 /** La liste du suivi reste ouverte d'un affichage à l'autre. */
-let suiviOuvert = false;
+let suiviOuvert = true;
 
 /** État du contour de la parcelle courante : trois boutons et la remarque. */
 function panneauSuiviParcelle(s: Session): HTMLElement | null {
@@ -675,7 +677,6 @@ function panneauSuiviGeneral(s: Session): HTMLElement {
           effacerSelection();
           afficher();
           cadrerParcelle(i);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
         });
         const ligne = el(
           'tr',
@@ -908,13 +909,6 @@ function pave(): HTMLElement {
     {},
     el(
       'div',
-      { class: 'rangee' },
-      'Distance :',
-      el('span', { class: 'affichage-cm' }, saisie === '' ? '0' : saisie),
-      'm',
-    ),
-    el(
-      'div',
       { class: 'raccourcis' },
       ...[-1, -0.5, -0.1, 0.1, 0.5, 1].map((v) =>
         el(
@@ -1039,22 +1033,29 @@ function panneauExport(): HTMLElement {
 
 // Zones fixes de la page : on ne remplace que leur contenu, jamais la page entière, pour que
 // l'écran ne saute pas à chaque touche.
-const zones = {
-  entete: el('div'),
-  parcelle: el('div'),
-  carte: el('div'),
-  suiviParcelle: el('div'),
-  modes: el('div'),
-  selection: el('div'),
-  pave: el('div'),
-  actions: el('div'),
-  message: el('div'),
-  surfaces: el('div'),
-  export: el('div'),
-  suiviGeneral: el('div'),
-  remarques: el('div'),
+// ---------- Mise en page ----------
+//
+// La page ne défile pas : barre du haut, carte, onglets et leur panneau (seul à défiler), puis une
+// barre du bas toujours visible (distance, Appliquer, Annuler).
+
+type Onglet = 'modifier' | 'suivi' | 'export' | 'fichier';
+const ONGLETS: Record<Onglet, string> = {
+  modifier: 'Modifier',
+  suivi: 'Suivi',
+  export: 'Export',
+  fichier: 'Fichier',
 };
-zones.carte.append(carte.element);
+let onglet: Onglet = 'fichier';
+
+const zones = {
+  haut: el('div', { class: 'barre-haut' }),
+  carte: el('div', { class: 'zone-carte' }),
+  onglets: el('div', { class: 'onglets' }),
+  panneau: el('div', { class: 'panneau' }),
+  bas: el('div', { class: 'barre-bas' }),
+};
+zones.carte.append(carte.element, el('div', { class: 'gps-sur-carte' }, texteGps));
+app.classList.add('mise-en-page');
 app.replaceChildren(...Object.values(zones));
 
 function remplir(
@@ -1064,50 +1065,75 @@ function remplir(
   zone.replaceChildren(...contenu.filter((c): c is Node | string => !!c));
 }
 
-function afficher(): void {
-  gpsAffiche = carte.gpsActif();
-  // Précaution : on garde la position de défilement telle quelle.
-  const defilement = window.scrollY;
-  const choixFichier = el(
+function boutonFichier(): HTMLElement {
+  const choix = el(
     'label',
     { class: 'bouton-fichier' },
-    session ? 'Autre fichier' : 'Ouvrir TASKDATA.XML',
+    session ? 'Ouvrir un autre TASKDATA.XML' : 'Ouvrir TASKDATA.XML',
   );
   const input = el('input', { type: 'file' });
   input.addEventListener('change', () => {
     const f = input.files?.[0];
     if (f) void charger(f);
   });
-  choixFichier.append(input);
+  choix.append(input);
+  return choix;
+}
 
-  const enTete = el(
-    'div',
-    { class: 'rangee' },
-    el('h1', { style: 'flex:1' }, 'Contours parcelles'),
-    choixFichier,
-  );
+function contenuFichier(s: Session | null): Node[] {
+  const contenu: Node[] = [
+    el('h1', {}, 'Contours parcelles'),
+    el('div', { class: 'rangee' }, boutonFichier()),
+    el(
+      'div',
+      { class: 'doux' },
+      'Ouvre le fichier TASKDATA.XML exporté par la console (sur la clé USB, dans le dossier TASKDATA). ',
+      'Tout reste sur le téléphone : rien n’est envoyé sur Internet.',
+    ),
+  ];
+  if (s) {
+    contenu.push(
+      el(
+        'div',
+        { class: 'rangee' },
+        el(
+          'button',
+          { onclick: reinitialiser, ...(s.historique.length > 0 ? {} : { disabled: '' }) },
+          'Réinitialiser (revenir au fichier d’origine)',
+        ),
+      ),
+    );
+    if (s.alertesChargement.length > 0) {
+      contenu.push(
+        el(
+          'div',
+          { class: 'info' },
+          el('strong', {}, `Remarques sur le fichier (${s.alertesChargement.length})`),
+          ...s.alertesChargement.map((a) => el('div', {}, a)),
+        ),
+      );
+    }
+  }
+  return contenu;
+}
+
+function afficher(): void {
+  gpsAffiche = carte.gpsActif();
+  const defilement = zones.panneau.scrollTop;
   const msg =
     message && el('div', { class: message.erreur ? 'info erreur' : 'info' }, message.texte);
 
-  remplir(zones.entete, enTete);
-  remplir(zones.message, msg);
   if (!session) {
+    onglet = 'fichier';
     zones.carte.hidden = true;
-    for (const z of [zones.parcelle, zones.modes, zones.selection, zones.pave, zones.actions])
-      remplir(z);
-    remplir(zones.surfaces);
-    remplir(
-      zones.export,
-      el(
-        'div',
-        { class: 'info' },
-        'Ouvre le fichier TASKDATA.XML exporté par la console (sur la clé USB, dans le dossier TASKDATA). ',
-        'Tout reste sur le téléphone : rien n’est envoyé sur Internet.',
-      ),
-    );
+    remplir(zones.haut);
+    remplir(zones.onglets);
+    remplir(zones.bas);
+    remplir(zones.panneau, msg, ...contenuFichier(null));
     return;
   }
   const s = session;
+  zones.carte.hidden = false;
 
   const choixParcelle = el('select', {});
   choixParcelle.append(el('option', { value: '' }, 'Toutes les parcelles'));
@@ -1127,9 +1153,42 @@ function afficher(): void {
     else cadrerParcelle(parcelleCourante);
   });
 
-  const peutAppliquer =
-    (mode === 'limite' && selLimite !== null) ||
-    (mode === 'sommet' && selSommet !== null && limiteGlisse !== null);
+  remplir(
+    zones.haut,
+    choixParcelle,
+    el('button', { onclick: () => carte.zoomer(1) }, '+'),
+    el('button', { onclick: () => carte.zoomer(-1) }, '−'),
+    el(
+      'button',
+      {
+        class: carte.gpsActif() ? 'actif' : '',
+        onclick: () => {
+          carte.basculerGps();
+          afficher();
+        },
+      },
+      'GPS',
+    ),
+    carte.gpsActif() && el('button', { onclick: () => carte.centrerSurGps() }, '⌖'),
+  );
+
+  remplir(
+    zones.onglets,
+    ...(Object.keys(ONGLETS) as Onglet[]).map((o) =>
+      el(
+        'button',
+        {
+          class: o === onglet ? 'onglet choisi' : 'onglet',
+          onclick: () => {
+            onglet = o;
+            zones.panneau.scrollTop = 0;
+            afficher();
+          },
+        },
+        ONGLETS[o],
+      ),
+    ),
+  );
 
   const modeBouton = (m: typeof mode, texte: string) =>
     el(
@@ -1145,93 +1204,83 @@ function afficher(): void {
       texte,
     );
 
-  zones.carte.hidden = false;
+  let contenu: (Node | null | false)[];
+  switch (onglet) {
+    case 'modifier':
+      contenu = [
+        el(
+          'div',
+          { class: 'rangee' },
+          modeBouton('limite', 'Décaler une limite'),
+          modeBouton('sommet', 'Déplacer un point'),
+        ),
+        panneauSelection(s),
+        pave(),
+      ];
+      break;
+    case 'suivi':
+      contenu = [
+        panneauSuiviParcelle(s) ??
+          el(
+            'div',
+            { class: 'info doux' },
+            'Touche une parcelle sur la carte pour régler son état.',
+          ),
+        el(
+          'div',
+          { class: 'rangee' },
+          el(
+            'button',
+            {
+              onclick: () => {
+                couleursParEtat = !couleursParEtat;
+                afficher();
+              },
+            },
+            couleursParEtat ? 'Couleurs de la carte : état' : 'Couleurs de la carte : voisins',
+          ),
+        ),
+        panneauSuiviGeneral(s),
+      ];
+      break;
+    case 'export':
+      contenu = [tableauSurfaces(s), panneauExport()];
+      break;
+    case 'fichier':
+      contenu = contenuFichier(s);
+      break;
+  }
+  remplir(zones.panneau, msg, ...contenu);
+
+  const peutAppliquer =
+    (mode === 'limite' && selLimite !== null) ||
+    (mode === 'sommet' && selSommet !== null && limiteGlisse !== null);
   remplir(
-    zones.parcelle,
+    zones.bas,
     el(
-      'div',
-      { class: 'rangee' },
-      choixParcelle,
-      el('button', { onclick: () => carte.zoomer(1) }, '+'),
-      el('button', { onclick: () => carte.zoomer(-1) }, '−'),
-    ),
-    el(
-      'div',
-      { class: 'rangee' },
-      el(
-        'button',
-        {
-          class: carte.gpsActif() ? 'actif' : '',
-          onclick: () => {
-            carte.basculerGps();
-            afficher();
-          },
+      'button',
+      {
+        class: 'affichage-distance',
+        onclick: () => {
+          onglet = 'modifier';
+          afficher();
         },
-        carte.gpsActif() ? 'GPS : arrêter' : 'Ma position GPS',
-      ),
-      carte.gpsActif() && el('button', { onclick: () => carte.centrerSurGps() }, 'Centrer'),
-      el(
-        'button',
-        {
-          onclick: () => {
-            couleursParEtat = !couleursParEtat;
-            afficher();
-          },
-        },
-        couleursParEtat ? 'Couleurs : état' : 'Couleurs : voisins',
-      ),
-      texteGps,
+      },
+      `${saisie === '' ? '0' : saisie} m`,
     ),
-  );
-  remplir(
-    zones.modes,
     el(
-      'div',
-      { class: 'rangee' },
-      modeBouton('limite', 'Décaler une limite'),
-      modeBouton('sommet', 'Déplacer un point'),
+      'button',
+      { class: 'principal', onclick: appliquer, ...(peutAppliquer ? {} : { disabled: '' }) },
+      'Appliquer',
     ),
-  );
-  remplir(zones.suiviParcelle, panneauSuiviParcelle(s));
-  remplir(zones.suiviGeneral, panneauSuiviGeneral(s));
-  remplir(zones.selection, panneauSelection(s));
-  remplir(zones.pave, pave());
-  remplir(
-    zones.actions,
     el(
-      'div',
-      { class: 'rangee' },
-      el(
-        'button',
-        { class: 'principal', onclick: appliquer, ...(peutAppliquer ? {} : { disabled: '' }) },
-        'Appliquer',
-      ),
-      el(
-        'button',
-        { onclick: annuler, ...(s.historique.length > 0 ? {} : { disabled: '' }) },
-        'Annuler',
-      ),
-      el(
-        'button',
-        { onclick: reinitialiser, ...(s.historique.length > 0 ? {} : { disabled: '' }) },
-        'Réinitialiser',
-      ),
+      'button',
+      { onclick: annuler, ...(s.historique.length > 0 ? {} : { disabled: '' }) },
+      'Annuler',
     ),
-  );
-  remplir(zones.surfaces, tableauSurfaces(s));
-  remplir(zones.export, panneauExport());
-  remplir(
-    zones.remarques,
-    s.alertesChargement.length > 0 &&
-      el(
-        'details',
-        { class: 'info' },
-        el('summary', {}, `Remarques sur le fichier (${s.alertesChargement.length})`),
-        ...s.alertesChargement.map((a) => el('div', {}, a)),
-      ),
   );
   carte.afficher(dessin(s));
-  window.scrollTo({ top: defilement });
+  zones.panneau.scrollTop = defilement;
 }
 
 afficher();
