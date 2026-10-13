@@ -178,3 +178,37 @@ pre {
   font-size: 1.1rem;
   min-height: 52px;
 }
+.etat-verifie.choisi {
+  background: #00a152;
+  border-color: #00a152;
+  color: #fff;
+}
+.etat-a-confirmer.choisi {
+  background: #ffc400;
+  border-color: #ffc400;
+  color: #222;
+}
+.etat-a-refaire.choisi {
+  background: #d50000;
+  border-color: #d50000;
+  color: #fff;
+}
+.texte-verifie {
+  color: #00a152;
+  font-weight: bold;
+}
+.texte-a-refaire {
+  color: #d50000;
+  font-weight: bold;
+}
+tr.cliquable {
+  cursor: pointer;
+}
+tr.cliquable td {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+summary {
+  font-weight: bold;
+  min-height: 32px;
+}

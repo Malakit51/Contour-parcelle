@@ -36,10 +36,28 @@ import {
 import { decoder, encoder } from './isoxml/octets';
 import { Carte, type Dessin, type VersEcran } from './ui/carte';
 import { el } from './ui/dom';
+import {
+  changerFiche,
+  charger as chargerSuivi,
+  cleParcelle,
+  csvJournal,
+  csvSuivi,
+  enregistrer as enregistrerSuivi,
+  fiche,
+  LIBELLES,
+  type EntreeJournal,
+  type EtatContour,
+  type Suivi,
+} from './suivi/suivi';
 
 // Couleurs vives, lisibles sur la photo aérienne ; l'orange-rouge est réservé à la sélection.
 const COULEURS = ['#ffee58', '#00e5ff', '#ff80ab', '#b2ff59', '#ffffff', '#ea80fc'];
-const SEL = '#ff3d00';
+const SEL = '#d500f9';
+const COULEURS_ETAT: Record<EtatContour, string> = {
+  verifie: '#00e676',
+  'a-confirmer': '#ffc400',
+  'a-refaire': '#ff1744',
+};
 /** Rayon de toucher, en pixels à l'écran. */
 const RAYON_TOUCHER_PX = 26;
 
@@ -51,13 +69,67 @@ interface Session {
   plan: Plan;
   initial: Etat;
   etat: Etat;
-  historique: Etat[];
+  /** États précédents, avec les lignes de journal à retirer si on annule. */
+  historique: { etat: Etat; journal: EntreeJournal[] }[];
   alertesChargement: string[];
   /** Indice de couleur de chaque parcelle : deux voisines n'ont jamais la même. */
   couleurs: number[];
 }
 
 let session: Session | null = null;
+
+// Suivi des contours et journal : conservés sur le téléphone, indépendamment du fichier ouvert.
+const stockage = (() => {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+})();
+let suivi: Suivi = chargerSuivi(stockage);
+let suiviNonEnregistre = false;
+/** Couleur des parcelles sur la carte : selon l'état du contour, ou pour distinguer les voisines. */
+let couleursParEtat = true;
+
+function majSuivi(nouveau: Suivi): void {
+  suivi = nouveau;
+  suiviNonEnregistre = !enregistrerSuivi(stockage, suivi);
+}
+
+/** Parcelles dont le contour diffère entre deux états. */
+function parcellesChangees(a: Etat, b: Etat): number[] {
+  const changees = new Set<number>();
+  a.anneaux.forEach((r, i) => {
+    const q = b.anneaux[i]!;
+    if (
+      r.sommets.length !== q.sommets.length ||
+      r.sommets.some((u, k) => u.lat !== q.sommets[k]!.lat || u.lon !== q.sommets[k]!.lon)
+    ) {
+      changees.add(r.parcelle);
+    }
+  });
+  return [...changees];
+}
+
+/** Passe à un nouvel état (annulable) et note la modification au journal. */
+function enregistrerModification(s: Session, nouveau: Etat, quoi: string): void {
+  const entrees: EntreeJournal[] = parcellesChangees(s.etat, nouveau).map((p) => ({
+    quand: new Date().toISOString(),
+    cle: cleParcelle(s.td.parcelles[p]!),
+    parcelle: s.td.parcelles[p]!.nom,
+    action: quoi,
+    surfaceAvant: nouvelleSurface(s.td, s.etat, p),
+    surfaceApres: nouvelleSurface(s.td, nouveau, p),
+  }));
+  s.historique.push({ etat: s.etat, journal: entrees });
+  s.etat = nouveau;
+  majSuivi({ ...suivi, journal: [...suivi.journal, ...entrees] });
+}
+
+function retirerDuJournal(entrees: EntreeJournal[]): void {
+  if (entrees.length === 0) return;
+  majSuivi({ ...suivi, journal: suivi.journal.filter((e) => !entrees.includes(e)) });
+}
 let mode: 'limite' | 'sommet' = 'limite';
 let selLimite: RefLimite | null = null;
 let selSommet: RefSommet | null = null;
@@ -306,10 +378,7 @@ function modifier(operation: () => Etat, quoi: string, garderSelection: boolean)
   const s = session;
   try {
     const nouveau = operation();
-    if (nouveau !== s.etat) {
-      s.historique.push(s.etat);
-      s.etat = nouveau;
-    }
+    if (nouveau !== s.etat) enregistrerModification(s, nouveau, quoi);
     if (garderSelection) exportPrepare = null;
     else effacerSelection();
     message = { texte: `${quoi}.`, erreur: false };
@@ -372,8 +441,7 @@ function appliquer(): void {
       return;
     }
     if (nouveau === s.etat) return;
-    s.historique.push(s.etat);
-    s.etat = nouveau;
+    enregistrerModification(s, nouveau, quoi);
     effacerSelection();
     message = { texte: `${quoi}.`, erreur: false };
   } catch (e) {
@@ -389,9 +457,10 @@ const signe = (v: number) => (v > 0 ? `+${v}` : String(v));
 const signeM = (v: number) => (v > 0 ? `+${enMetres(v)}` : enMetres(v));
 
 function annuler(): void {
-  const precedentEtat = session?.historique.pop();
-  if (!session || !precedentEtat) return;
-  session.etat = precedentEtat;
+  const precedent = session?.historique.pop();
+  if (!session || !precedent) return;
+  session.etat = precedent.etat;
+  retirerDuJournal(precedent.journal);
   effacerSelection();
   message = { texte: 'Dernière modification annulée.', erreur: false };
   afficher();
@@ -401,6 +470,7 @@ function reinitialiser(): void {
   if (!session || session.historique.length === 0) return;
   if (!confirm('Revenir au fichier d’origine ? Toutes les modifications seront perdues.')) return;
   session.etat = session.initial;
+  retirerDuJournal(session.historique.flatMap((h) => h.journal));
   session.historique = [];
   effacerSelection();
   message = { texte: 'Retour au fichier d’origine.', erreur: false };
@@ -451,15 +521,174 @@ function telecharger(quoi: 'zip' | 'xml'): void {
     return;
   }
   const xml = encoder(exportPrepare.texte);
+  const nomSortie =
+    quoi === 'zip' && session.archive
+      ? `${session.nomFichier.replace(/\.zip$/i, '')}-corrige.zip`
+      : 'TASKDATA.XML';
+  const s = session;
+  majSuivi({
+    ...suivi,
+    journal: [
+      ...suivi.journal,
+      ...parcellesModifiees(s.etat).map((p) => ({
+        quand: new Date().toISOString(),
+        cle: cleParcelle(s.td.parcelles[p]!),
+        parcelle: s.td.parcelles[p]!.nom,
+        action: `Exporté dans ${nomSortie}`,
+        surfaceAvant: Number(s.td.parcelles[p]!.surface?.texte ?? NaN) || null,
+        surfaceApres: nouvelleSurface(s.td, s.etat, p),
+      })),
+    ],
+  });
   if (quoi === 'zip' && session.archive) {
-    const base = session.nomFichier.replace(/\.zip$/i, '');
-    enregistrer(refaireArchive(session.archive, xml), `${base}-corrige.zip`, 'application/zip');
+    enregistrer(refaireArchive(session.archive, xml), nomSortie, 'application/zip');
   } else {
     enregistrer(xml, 'TASKDATA.XML', 'application/xml');
   }
 }
 
 // ---------- Affichage ----------
+
+const dateFr = (iso: string) => (iso ? iso.split('-').reverse().join('/') : '');
+/** « 13/10/2026 14:05 » en heure du téléphone. */
+function quandFr(iso: string): string {
+  const d = new Date(iso);
+  const z = (n: number) => String(n).padStart(2, '0');
+  return `${z(d.getDate())}/${z(d.getMonth() + 1)}/${d.getFullYear()} ${z(d.getHours())}:${z(d.getMinutes())}`;
+}
+/** La liste du suivi reste ouverte d'un affichage à l'autre. */
+let suiviOuvert = false;
+
+/** État du contour de la parcelle courante : trois boutons et la remarque. */
+function panneauSuiviParcelle(s: Session): HTMLElement | null {
+  if (parcelleCourante === null) return null;
+  const p = s.td.parcelles[parcelleCourante]!;
+  const f = fiche(suivi, p);
+  const derniere = [...suivi.journal].reverse().find((e) => e.cle === cleParcelle(p));
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, `Contour de ${p.nom}`),
+    f.date
+      ? el('span', { class: 'doux' }, ` · ${LIBELLES[f.etat].toLowerCase()} le ${dateFr(f.date)}`)
+      : '',
+    el(
+      'div',
+      { class: 'rangee' },
+      ...(Object.keys(LIBELLES) as EtatContour[]).map((e) =>
+        el(
+          'button',
+          {
+            class: `etat-${e}${f.etat === e ? ' choisi' : ''}`,
+            onclick: () => {
+              majSuivi(changerFiche(suivi, p, { etat: e }));
+              afficher();
+            },
+          },
+          LIBELLES[e],
+        ),
+      ),
+    ),
+    el(
+      'div',
+      { class: 'rangee' },
+      el('span', { style: 'flex:1' }, f.remarque ? `Remarque : ${f.remarque}` : 'Pas de remarque.'),
+      el(
+        'button',
+        {
+          onclick: () => {
+            const r = prompt(`Remarque pour ${p.nom}`, f.remarque);
+            if (r === null) return;
+            majSuivi(changerFiche(suivi, p, { remarque: r.trim() }));
+            afficher();
+          },
+        },
+        'Remarque',
+      ),
+    ),
+    derniere &&
+      el(
+        'div',
+        { class: 'doux' },
+        `Dernière modification : ${quandFr(derniere.quand)}, ${derniere.action}`,
+      ),
+  );
+}
+
+/** Liste de toutes les parcelles avec leur état, journal et exports CSV. */
+function panneauSuiviGeneral(s: Session): HTMLElement {
+  const parcelles = s.td.parcelles
+    .map((p, i) => ({ p, i, f: fiche(suivi, p) }))
+    .sort((a, b) => a.p.nom.localeCompare(b.p.nom, 'fr', { numeric: true }));
+  const compte = (e: EtatContour) => parcelles.filter((x) => x.f.etat === e).length;
+  const journal = [...suivi.journal].reverse().slice(0, 50);
+  const telechargerCsv = (texte: string, nom: string) =>
+    enregistrer(encoder(texte), nom, 'text/csv');
+  const bloc = el(
+    'details',
+    { class: 'info', ...(suiviOuvert ? { open: '' } : {}) },
+    el(
+      'summary',
+      {},
+      `Suivi des contours : ${compte('verifie')} vérifiés, ${compte('a-confirmer')} à confirmer, ${compte('a-refaire')} à refaire`,
+    ),
+    suiviNonEnregistre &&
+      el(
+        'div',
+        { class: 'erreur' },
+        'Attention : le suivi n’a pas pu être enregistré sur le téléphone.',
+      ),
+    el(
+      'table',
+      {},
+      el('tr', {}, el('th', {}, 'Parcelle'), el('th', {}, 'État'), el('th', {}, 'Date')),
+      ...parcelles.map(({ p, i, f }) => {
+        const ligne = el(
+          'tr',
+          { class: 'cliquable' },
+          el('td', {}, p.nom),
+          el('td', { class: `texte-${f.etat}` }, LIBELLES[f.etat]),
+          el('td', {}, dateFr(f.date)),
+        );
+        ligne.addEventListener('click', () => {
+          parcelleCourante = i;
+          effacerSelection();
+          afficher();
+          cadrerParcelle(i);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        return ligne;
+      }),
+    ),
+    el(
+      'div',
+      { class: 'rangee' },
+      el(
+        'button',
+        { onclick: () => telechargerCsv(csvSuivi(suivi, s.td.parcelles), 'suivi-contours.csv') },
+        'Suivi en CSV',
+      ),
+      el(
+        'button',
+        { onclick: () => telechargerCsv(csvJournal(suivi), 'journal-contours.csv') },
+        'Journal en CSV',
+      ),
+    ),
+    el('strong', {}, `Journal (${suivi.journal.length} lignes, les plus récentes d’abord)`),
+    ...journal.map((e) =>
+      el(
+        'div',
+        { class: 'doux' },
+        `${quandFr(e.quand)} · ${e.parcelle} · ${e.action}` +
+          (e.surfaceAvant !== null && e.surfaceApres !== null
+            ? ` · ${Math.round(e.surfaceApres - e.surfaceAvant) >= 0 ? '+' : ''}${Math.round(e.surfaceApres - e.surfaceAvant)} m²`
+            : ''),
+      ),
+    ),
+  );
+  bloc.addEventListener('toggle', () => (suiviOuvert = bloc.open));
+  return bloc;
+}
 
 function dessin(s: Session): Dessin {
   const anneaux = anneauxLL(s);
@@ -468,7 +697,9 @@ function dessin(s: Session): Dessin {
       const a = s.etat.anneaux[i]!;
       return {
         pts,
-        couleur: COULEURS[s.couleurs[a.parcelle]! % COULEURS.length]!,
+        couleur: couleursParEtat
+          ? COULEURS_ETAT[fiche(suivi, s.td.parcelles[a.parcelle]!).etat]
+          : COULEURS[s.couleurs[a.parcelle]! % COULEURS.length]!,
         courant: a.parcelle === parcelleCourante,
         nom: a.type === 1 ? s.td.parcelles[a.parcelle]!.nom : null,
       };
@@ -773,6 +1004,7 @@ const zones = {
   entete: el('div'),
   parcelle: el('div'),
   carte: el('div'),
+  suiviParcelle: el('div'),
   modes: el('div'),
   selection: el('div'),
   pave: el('div'),
@@ -780,6 +1012,7 @@ const zones = {
   message: el('div'),
   surfaces: el('div'),
   export: el('div'),
+  suiviGeneral: el('div'),
   remarques: el('div'),
 };
 zones.carte.append(carte.element);
@@ -891,6 +1124,16 @@ function afficher(): void {
         carte.gpsActif() ? 'GPS : arrêter' : 'Ma position GPS',
       ),
       carte.gpsActif() && el('button', { onclick: () => carte.centrerSurGps() }, 'Centrer'),
+      el(
+        'button',
+        {
+          onclick: () => {
+            couleursParEtat = !couleursParEtat;
+            afficher();
+          },
+        },
+        couleursParEtat ? 'Couleurs : état' : 'Couleurs : voisins',
+      ),
       etatGps && el('span', { class: 'doux' }, etatGps),
     ),
   );
@@ -903,6 +1146,8 @@ function afficher(): void {
       modeBouton('sommet', 'Déplacer un point'),
     ),
   );
+  remplir(zones.suiviParcelle, panneauSuiviParcelle(s));
+  remplir(zones.suiviGeneral, panneauSuiviGeneral(s));
   remplir(zones.selection, panneauSelection(s));
   remplir(zones.pave, pave());
   remplir(

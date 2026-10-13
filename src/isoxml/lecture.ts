@@ -35,6 +35,8 @@ export interface Anneau {
 export interface Parcelle {
   /** Identifiant du fichier : PFD1, PFD2… */
   id: string;
+  /** Attribut B : identifiant unique (GUID), stable d'un export à l'autre. Vide s'il manque. */
+  guid: string;
   nom: string;
   /** Attribut D (surface en m²), absent dans certains fichiers. */
   surface: ValeurBrute | null;
@@ -173,6 +175,7 @@ export function lireTaskData(texte: string): TaskData {
       const id = attribut(b, 'A')?.texte ?? '';
       parcelle = {
         id,
+        guid: attribut(b, 'B')?.texte ?? '',
         nom: decoderEntites(attribut(b, 'C')?.texte ?? id),
         surface: attribut(b, 'D') ?? null,
         anneaux: [],
