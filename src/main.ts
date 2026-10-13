@@ -43,6 +43,13 @@ import { decoder, encoder } from './isoxml/octets';
 import { Carte, type Dessin, type VersEcran } from './ui/carte';
 import { el } from './ui/dom';
 import {
+  enregistrerSession,
+  garderSurAppareil,
+  lireSurAppareil,
+  oublierSurAppareil,
+  relireSession,
+} from './sauvegarde/session';
+import {
   changerFiche,
   charger as chargerSuivi,
   cleParcelle,
@@ -128,6 +135,7 @@ function enregistrerModification(s: Session, nouveau: Etat, quoi: string): void 
   }));
   s.historique.push({ etat: s.etat, journal: entrees });
   s.etat = nouveau;
+  garderSession();
   majSuivi({ ...suivi, journal: [...suivi.journal, ...entrees] });
 }
 
@@ -172,55 +180,122 @@ const carte = new Carte(toucher, (texte) => {
 
 // ---------- Chargement ----------
 
+/** Ouvre un fichier lu (ou une session reprise) : `etat` est l'état modifié, s'il y en a un. */
+function ouvrir(td: TaskData, nomFichier: string, etat: Etat | null, texteMessage: string): void {
+  if (td.parcelles.length === 0) throw new Error('Aucune parcelle (PFD) dans ce fichier.');
+  const initial = etatInitial(td);
+  const tous = initial.anneaux.flatMap((a) => a.sommets.map(latLon));
+  const centre: [number, number] = [
+    tous.reduce((s, p) => s + p[0], 0) / tous.length,
+    tous.reduce((s, p) => s + p[1], 0) / tous.length,
+  ];
+  const alertesChargement = [];
+  if (td.segmentsIgnores.length > 0) {
+    alertesChargement.push(
+      `${td.segmentsIgnores.length} segment(s) à deux points (LSG A="5") ignoré(s) : ils seront retirés à l'export.`,
+    );
+  }
+  const vus = new Set<string>();
+  for (const p of sommetsPresqueCommuns(td, initial, 1)) {
+    const cle = `${p.noms[0]}|${p.noms[1]}|${p.distance.toFixed(3)}`;
+    if (vus.has(cle)) continue;
+    vus.add(cle);
+    alertesChargement.push(
+      `${p.noms[0]} / ${p.noms[1]} : deux sommets presque communs, à ${(p.distance * 100).toFixed(0)} cm.`,
+    );
+  }
+  session = {
+    td,
+    nomFichier,
+    plan: planLocal(centre),
+    initial,
+    etat: etat ?? initial,
+    historique: [],
+    alertesChargement,
+    couleurs: colorier(initial, td.parcelles.length),
+  };
+  parcelleCourante = null;
+  onglet = 'modifier';
+  effacerSelection();
+  message = { texte: texteMessage, erreur: false };
+  garderSession();
+  afficher();
+  cadrerTout();
+}
+
 async function charger(fichier: File): Promise<void> {
   try {
-    const octets = new Uint8Array(await fichier.arrayBuffer());
-    const td = lireTaskData(decoder(octets));
-    if (td.parcelles.length === 0) throw new Error('Aucune parcelle (PFD) dans ce fichier.');
-    const initial = etatInitial(td);
-    const tous = initial.anneaux.flatMap((a) => a.sommets.map(latLon));
-    const centre: [number, number] = [
-      tous.reduce((s, p) => s + p[0], 0) / tous.length,
-      tous.reduce((s, p) => s + p[1], 0) / tous.length,
-    ];
-    const alertesChargement = [];
-    if (td.segmentsIgnores.length > 0) {
-      alertesChargement.push(
-        `${td.segmentsIgnores.length} segment(s) à deux points (LSG A="5") ignoré(s) : ils seront retirés à l'export.`,
-      );
+    const td = lireTaskData(decoder(new Uint8Array(await fichier.arrayBuffer())));
+    if (
+      session &&
+      parcellesModifiees(session.etat).length > 0 &&
+      !confirm(
+        'Des modifications en cours sur le fichier ouvert seront perdues (pense à exporter). Continuer ?',
+      )
+    ) {
+      return;
     }
-    const vus = new Set<string>();
-    for (const p of sommetsPresqueCommuns(td, initial, 1)) {
-      const cle = `${p.noms[0]}|${p.noms[1]}|${p.distance.toFixed(3)}`;
-      if (vus.has(cle)) continue;
-      vus.add(cle);
-      alertesChargement.push(
-        `${p.noms[0]} / ${p.noms[1]} : deux sommets presque communs, à ${(p.distance * 100).toFixed(0)} cm.`,
-      );
-    }
-    session = {
-      td,
-      nomFichier: fichier.name,
-      plan: planLocal(centre),
-      initial,
-      etat: initial,
-      historique: [],
-      alertesChargement,
-      couleurs: colorier(initial, td.parcelles.length),
-    };
-    parcelleCourante = null;
-    onglet = 'modifier';
-    effacerSelection();
-    message = {
-      texte: `${fichier.name} chargé : ${td.parcelles.length} parcelles.`,
-      erreur: false,
-    };
-    afficher();
-    cadrerTout();
+    ouvrir(td, fichier.name, null, `${fichier.name} chargé : ${td.parcelles.length} parcelles.`);
   } catch (e) {
     message = { texte: `Lecture impossible : ${(e as Error).message}`, erreur: true };
     afficher();
   }
+}
+
+// ---------- Session gardée sur l'appareil ----------
+
+/** Nom de cet appareil (pour la sauvegarde en ligne et le journal). */
+function nomAppareil(): string {
+  try {
+    return stockage?.getItem('contour-parcelle/appareil') ?? 'appareil';
+  } catch {
+    return 'appareil';
+  }
+}
+
+/** Enregistre le fichier ouvert et les contours modifiés sur l'appareil (après chaque changement). */
+function garderSession(): void {
+  if (!session) return;
+  sessionNonGardee = !garderSurAppareil(
+    stockage,
+    enregistrerSession(session.td, session.nomFichier, session.etat, nomAppareil()),
+  );
+}
+
+let sessionNonGardee = false;
+
+/** Au démarrage : reprend le travail laissé sur cet appareil. */
+function reprendreSession(): void {
+  const brut = lireSurAppareil(stockage);
+  if (!brut) return;
+  try {
+    const r = relireSession(brut);
+    const n = parcellesModifiees(r.etat).length;
+    ouvrir(
+      r.td,
+      r.nom,
+      r.etat,
+      `Travail repris : ${r.nom}, enregistré le ${quandFr(r.session.enregistreLe)}` +
+        (n > 0 ? `, ${n} parcelle(s) modifiée(s).` : ', sans modification.'),
+    );
+  } catch {
+    oublierSurAppareil(stockage);
+  }
+}
+
+function fermerFichier(): void {
+  if (!session) return;
+  if (
+    parcellesModifiees(session.etat).length > 0 &&
+    !confirm('Fermer le fichier ? Les modifications non exportées seront perdues.')
+  ) {
+    return;
+  }
+  session = null;
+  oublierSurAppareil(stockage);
+  effacerSelection();
+  message = { texte: 'Fichier fermé.', erreur: false };
+  afficher();
 }
 
 // ---------- Géométrie d'affichage ----------
@@ -627,6 +702,7 @@ function annuler(): void {
   if (!session || !precedent) return;
   session.etat = precedent.etat;
   retirerDuJournal(precedent.journal);
+  garderSession();
   effacerSelection();
   message = { texte: 'Dernière modification annulée.', erreur: false };
   afficher();
@@ -638,6 +714,7 @@ function reinitialiser(): void {
   session.etat = session.initial;
   retirerDuJournal(session.historique.flatMap((h) => h.journal));
   session.historique = [];
+  garderSession();
   effacerSelection();
   message = { texte: 'Retour au fichier d’origine.', erreur: false };
   afficher();
@@ -1389,6 +1466,14 @@ function contenuFichier(s: Session | null): Node[] {
           { onclick: reinitialiser, ...(s.historique.length > 0 ? {} : { disabled: '' }) },
           'Réinitialiser (revenir au fichier d’origine)',
         ),
+        el('button', { onclick: fermerFichier }, 'Fermer le fichier'),
+      ),
+      el(
+        'div',
+        { class: sessionNonGardee ? 'erreur' : 'doux' },
+        sessionNonGardee
+          ? 'Attention : le travail n’a pas pu être enregistré sur cet appareil.'
+          : `${s.nomFichier} et tes modifications sont enregistrés sur cet appareil : tu les retrouves en rouvrant la page.`,
       ),
     );
     if (s.alertesChargement.length > 0) {
@@ -1568,3 +1653,4 @@ function afficher(): void {
 }
 
 afficher();
+reprendreSession();
