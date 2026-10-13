@@ -13,6 +13,7 @@ import { exporterEtat } from '../src/edition/export';
 import {
   cotesLimite,
   decalerLimite,
+  retrouverLimite,
   ErreurEdition,
   glisserSommet,
   sensPositif,
@@ -328,4 +329,46 @@ describe('côtés d’une limite (flèches sur la carte)', () => {
     const apres = decalerLimite(etat, ref, 1);
     expect(enMetres(apres, 0)[2]![1]).toBe(51);
   });
+});
+
+describe('retrouver la limite après un décalage (pour l’appliquer plusieurs fois)', () => {
+  const schema = {
+    X: [
+      [0, 0],
+      [100, 0],
+      [100, 100],
+      [0, 80],
+    ] as XY[],
+    Y: [
+      [100, 0],
+      [200, 0],
+      [200, 70],
+      [100, 100],
+    ] as XY[],
+  };
+  for (const [nom, anneau, debut, distance] of [
+    ['X perd du terrain', 0, 1, -1],
+    ['X gagne (reçoit un sommet)', 0, 1, 1],
+    ['depuis Y, Y gagne', 1, 3, 1],
+  ] as const) {
+    it(nom, () => {
+      const { etat } = preparer(schema);
+      let e = etat;
+      let ref: RefLimite = { anneau, debut };
+      for (let i = 1; i <= 3; i++) {
+        const apres = decalerLimite(e, ref, distance);
+        const r = retrouverLimite(e, apres, ref);
+        expect(r).not.toBeNull();
+        ref = r!;
+        e = apres;
+      }
+      // Trois décalages de 1 m : la limite commune est à 3 m de sa position de départ.
+      const pts = enMetres(e, ref.anneau);
+      const a = pts[ref.debut]!;
+      const b = pts[(ref.debut + 1) % pts.length]!;
+      const xAttendu = anneau === 0 ? 100 + 3 * distance : 100 - 3 * distance;
+      expect(a[0]).toBeCloseTo(xAttendu, 3);
+      expect(b[0]).toBeCloseTo(xAttendu, 3);
+    });
+  }
 });

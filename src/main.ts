@@ -22,6 +22,7 @@ import {
   placerSommet,
   cotesLimite,
   repereLeLong,
+  retrouverLimite,
   bordLePlusCourt,
   simplifierParcelle,
   sommetsDuBord,
@@ -590,10 +591,25 @@ function appliquer(): void {
       return;
     }
     if (nouveau === s.etat) return;
+    const avant = s.etat;
     enregistrerModification(s, nouveau, quoi);
-    effacerSelection();
-    // Une simplification se fait une fois : on revient au décalage de limite pour les retouches.
-    if (mode === 'simplifier') mode = 'limite';
+    if (mode === 'limite' && selLimite) {
+      // La limite reste sélectionnée (avec son sens) pour pouvoir appliquer plusieurs fois.
+      const retrouvee = retrouverLimite(avant, nouveau, selLimite);
+      const sens = sensLimite;
+      effacerSelection();
+      if (retrouvee) {
+        selLimite = retrouvee;
+        sensLimite = sens;
+      }
+    } else if (mode === 'sommet') {
+      // Le sommet ne change pas d'indice en glissant : on garde sommet, bord et sens.
+      exportPrepare = null;
+    } else {
+      effacerSelection();
+      // Une simplification se fait une fois : on revient au décalage de limite pour les retouches.
+      if (mode === 'simplifier') mode = 'limite';
+    }
     message = { texte: `${quoi}.`, erreur: false };
   } catch (e) {
     message = {

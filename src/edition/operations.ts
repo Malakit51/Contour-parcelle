@@ -438,3 +438,18 @@ export function repereLeLong(
   const k = (versAutreBout ? 1 : -1) / Math.hypot(...q);
   return plan.versLatLon([q[0] * k, q[1] * k]);
 }
+
+/**
+ * Après `decalerLimite`, retrouve la limite décalée dans l'anneau de `ref` : ses deux extrémités
+ * sont les deux seuls sommets voisins de l'anneau dont la position est nouvelle. (Elle peut changer
+ * d'indice : la parcelle qui s'agrandit reçoit parfois de nouveaux sommets.)
+ */
+export function retrouverLimite(avant: Etat, apres: Etat, ref: RefLimite): RefLimite | null {
+  const anciens = new Set(avant.anneaux[ref.anneau]!.sommets.map((s) => `${s.lat} ${s.lon}`));
+  const sommets = apres.anneaux[ref.anneau]!.sommets;
+  const nouveau = sommets.map((s) => !anciens.has(`${s.lat} ${s.lon}`));
+  const trouves = sommets.flatMap((_, k) =>
+    nouveau[k] && nouveau[(k + 1) % sommets.length] ? [k] : [],
+  );
+  return trouves.length === 1 ? { anneau: ref.anneau, debut: trouves[0]! } : null;
+}
