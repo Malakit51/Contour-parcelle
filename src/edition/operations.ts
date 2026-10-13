@@ -24,6 +24,7 @@ import {
   type RefSommet,
   type Sommet,
 } from './etat';
+import { simplifierContour } from '../geometrie/simplification';
 
 export class ErreurEdition extends Error {
   override name = 'ErreurEdition';
@@ -298,4 +299,50 @@ export function supprimerSommet(etat: Etat, ref: RefSommet): Etat {
     sommets.splice(ref.sommet, 1);
   }
   return { anneaux: etat.anneaux.map((a, i) => (i === ref.anneau ? { ...a, sommets } : a)) };
+}
+
+export interface BilanSimplification {
+  anneau: number;
+  avant: number;
+  apres: number;
+  /** Plus grande distance (m) entre un point d'origine et le nouveau contour. */
+  ecartMax: number;
+}
+
+/**
+ * Simplifie tous les contours d'une parcelle (Douglas-Peucker puis redressement des côtés, voir
+ * geometrie/simplification). Les sommets communs avec une autre parcelle ne bougent pas.
+ */
+export function simplifierParcelle(
+  etat: Etat,
+  parcelle: number,
+  tolerance: number,
+): { etat: Etat; bilan: BilanSimplification[] } {
+  const bilan: BilanSimplification[] = [];
+  const anneaux = etat.anneaux.map((a, ia) => {
+    if (a.parcelle !== parcelle) return a;
+    const plan = planLocal(latLon(a.sommets[0]!));
+    const pts = a.sommets.map((s) => plan.versXY(latLon(s)));
+    const fixes = new Set(
+      a.sommets.flatMap((s, i) =>
+        sommetsEn(etat, latLon(s)).some((r) => r.anneau !== ia) ? [i] : [],
+      ),
+    );
+    const r = simplifierContour(pts, tolerance, fixes);
+    bilan.push({
+      anneau: ia,
+      avant: a.sommets.length,
+      apres: r.points.length,
+      ecartMax: r.ecartMax,
+    });
+    const sommets = r.points.map((p, k): Sommet => {
+      const ancien = a.sommets[r.origines[k]!]!;
+      // Un sommet fixe garde exactement ses coordonnées (pas d'aller-retour par le plan local).
+      if (fixes.has(r.origines[k]!)) return ancien;
+      const [lat, lon] = plan.versLatLon(p);
+      return { lat, lon, origine: ancien.origine };
+    });
+    return { ...a, sommets };
+  });
+  return { etat: { anneaux }, bilan };
 }

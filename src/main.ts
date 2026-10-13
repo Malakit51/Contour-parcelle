@@ -22,9 +22,11 @@ import {
   placerSommet,
   cotesLimite,
   sensPositif,
+  simplifierParcelle,
   supprimerSommet,
 } from './edition/operations';
 import { planLocal, positionSurSegment, type LatLon, type Plan, type XY } from './geometrie/plan';
+import { ecartMaximal } from './geometrie/simplification';
 import { comparer } from './isoxml/comparaison';
 import { lireTaskData, type TaskData } from './isoxml/lecture';
 import {
@@ -129,7 +131,10 @@ function retirerDuJournal(entrees: EntreeJournal[]): void {
   if (entrees.length === 0) return;
   majSuivi({ ...suivi, journal: suivi.journal.filter((e) => !entrees.includes(e)) });
 }
-let mode: 'limite' | 'sommet' = 'limite';
+let mode: 'limite' | 'sommet' | 'simplifier' = 'limite';
+/** Tolérance de simplification choisie (m). */
+let tolerance = 0.25;
+const TOLERANCES = [0.1, 0.25, 0.5, 1];
 let selLimite: RefLimite | null = null;
 let selSommet: RefSommet | null = null;
 let limiteGlisse: RefLimite | null = null;
@@ -347,7 +352,7 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
   if (choix) {
     parcelleCourante = s.etat.anneaux[choix.anneau]!.parcelle;
     if (mode === 'limite') selLimite = { anneau: choix.anneau, debut: choix.indice };
-    else selSommet = { anneau: choix.anneau, sommet: choix.indice };
+    else if (mode === 'sommet') selSommet = { anneau: choix.anneau, sommet: choix.indice };
     onglet = 'modifier';
   } else {
     // Toucher à l'intérieur d'une parcelle (loin de ses limites) : on la sélectionne.
@@ -493,6 +498,14 @@ function supprimer(): void {
   );
 }
 
+/** Aperçu de la simplification de la parcelle courante (rien n'est encore modifié). */
+function apercuSimplification(s: Session) {
+  if (mode !== 'simplifier' || parcelleCourante === null) return null;
+  return simplifierParcelle(s.etat, parcelleCourante, tolerance);
+}
+
+const enCm = (m: number) => `${Math.round(m * 100)} cm`;
+
 function appliquer(): void {
   if (!session) return;
   const s = session;
@@ -507,12 +520,20 @@ function appliquer(): void {
     } else if (mode === 'sommet' && selSommet && limiteGlisse) {
       quoi = `Sommet de ${nomParcelle(s, selSommet.anneau)} déplacé de ${signeM(d)} m`;
       nouveau = glisserSommet(s.etat, selSommet, limiteGlisse, d);
+    } else if (mode === 'simplifier' && parcelleCourante !== null) {
+      const r = apercuSimplification(s)!;
+      const avant = r.bilan.reduce((n, b) => n + b.avant, 0);
+      const apres = r.bilan.reduce((n, b) => n + b.apres, 0);
+      quoi = `${s.td.parcelles[parcelleCourante]!.nom} simplifiée (tolérance ${enCm(tolerance)}) : ${avant} → ${apres} points`;
+      nouveau = r.etat;
     } else {
       return;
     }
     if (nouveau === s.etat) return;
     enregistrerModification(s, nouveau, quoi);
     effacerSelection();
+    // Une simplification se fait une fois : on revient au décalage de limite pour les retouches.
+    if (mode === 'simplifier') mode = 'limite';
     message = { texte: `${quoi}.`, erreur: false };
   } catch (e) {
     message = {
@@ -789,8 +810,14 @@ function panneauSuiviGeneral(s: Session): HTMLElement {
 
 function dessin(s: Session): Dessin {
   const anneaux = anneauxLL(s);
+  // Simplification : la parcelle courante est dessinée telle qu'elle serait, l'actuelle en pointillés.
+  const apercu = apercuSimplification(s);
+  const affiches = apercu ? apercu.etat.anneaux.map((a) => a.sommets.map(latLon)) : anneaux;
   const d: Dessin = {
-    anneaux: anneaux.map((pts, i) => {
+    fantomes: apercu
+      ? anneaux.filter((_, i) => s.etat.anneaux[i]!.parcelle === parcelleCourante)
+      : [],
+    anneaux: affiches.map((pts, i) => {
       const a = s.etat.anneaux[i]!;
       return {
         pts,
@@ -856,6 +883,70 @@ function effetsLimite(s: Session, ref: RefLimite): { exterieur: string; interieu
     exterieur: `vers l'extérieur (${x} s'agrandit)`,
     interieur: `vers l'intérieur (${x} rétrécit)`,
   };
+}
+
+function panneauSimplification(s: Session): HTMLElement {
+  if (parcelleCourante === null) {
+    return el('div', { class: 'info doux' }, 'Touche une parcelle sur la carte.');
+  }
+  const p = parcelleCourante;
+  const r = apercuSimplification(s)!;
+  const avant = r.bilan.reduce((n, b) => n + b.avant, 0);
+  const apres = r.bilan.reduce((n, b) => n + b.apres, 0);
+  const ecart = Math.max(...r.bilan.map((b) => b.ecartMax));
+  const surface = Math.round(
+    (nouvelleSurface(s.td, r.etat, p) ?? 0) - (nouvelleSurface(s.td, s.etat, p) ?? 0),
+  );
+  // Écart avec le contour du fichier d'origine : il s'additionne si on simplifie plusieurs fois.
+  const ecartOrigine = Math.max(
+    ...r.etat.anneaux.flatMap((a, i) => {
+      if (a.parcelle !== p) return [];
+      const plan = planLocal(latLon(s.initial.anneaux[i]!.sommets[0]!));
+      const versXY = (ss: readonly { lat: number; lon: number }[]) =>
+        ss.map((x) => plan.versXY([x.lat, x.lon]));
+      return [ecartMaximal(versXY(s.initial.anneaux[i]!.sommets), versXY(a.sommets))];
+    }),
+  );
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, `Simplifier ${s.td.parcelles[p]!.nom}`),
+    el('div', { class: 'doux' }, 'Tolérance : écart maximal accepté avec le contour actuel.'),
+    el(
+      'div',
+      { class: 'rangee' },
+      ...TOLERANCES.map((t) =>
+        el(
+          'button',
+          {
+            class: t === tolerance ? 'actif' : '',
+            onclick: () => {
+              tolerance = t;
+              afficher();
+            },
+          },
+          t < 1 ? enCm(t) : `${t} m`,
+        ),
+      ),
+    ),
+    el(
+      'div',
+      { class: 'sens' },
+      `${avant} → ${apres} points · écart max ${enCm(ecart)} · surface ${surface >= 0 ? '+' : ''}${surface} m²`,
+    ),
+    Math.abs(ecartOrigine - ecart) > 0.005 &&
+      el(
+        'div',
+        { class: ecartOrigine > tolerance ? 'erreur' : 'doux' },
+        `Écart max avec le contour du fichier d’origine : ${enCm(ecartOrigine)}` +
+          (ecartOrigine > tolerance ? ' (plus que la tolérance : déjà simplifiée ?)' : ''),
+      ),
+    el(
+      'div',
+      { class: 'doux' },
+      'Aperçu : pointillés = contour actuel. Les côtés sont redressés et les coins recalculés ; les sommets communs avec les voisins ne bougent pas. « Appliquer » pour valider.',
+    ),
+  );
 }
 
 function panneauSelection(s: Session): HTMLElement {
@@ -1276,8 +1367,9 @@ function afficher(): void {
           { class: 'rangee' },
           modeBouton('limite', 'Décaler une limite'),
           modeBouton('sommet', 'Déplacer un point'),
+          modeBouton('simplifier', 'Simplifier'),
         ),
-        panneauSelection(s),
+        mode === 'simplifier' ? panneauSimplification(s) : panneauSelection(s),
         pave(),
       ];
       break;
@@ -1317,7 +1409,9 @@ function afficher(): void {
 
   const peutAppliquer =
     (mode === 'limite' && selLimite !== null && sensLimite !== null) ||
-    (mode === 'sommet' && selSommet !== null && limiteGlisse !== null);
+    (mode === 'sommet' && selSommet !== null && limiteGlisse !== null) ||
+    (mode === 'simplifier' &&
+      (apercuSimplification(s)?.bilan.some((b) => b.apres !== b.avant || b.ecartMax > 0) ?? false));
   remplir(
     zones.bas,
     el(

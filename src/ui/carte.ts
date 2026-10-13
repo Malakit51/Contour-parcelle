@@ -21,6 +21,8 @@ export interface Dessin {
   traits: { a: LatLon; b: LatLon; couleur: string; epaisseur: number }[];
   /** Points surlignés (sommet sélectionné). */
   points: { p: LatLon; couleur: string; rayon: number }[];
+  /** Contours affichés en pointillés (état actuel pendant un aperçu). */
+  fantomes?: LatLon[][];
   /** Flèches à toucher, posées en `depuis` et pointant vers `vers` (choix du sens d'un décalage). */
   fleches?: { depuis: LatLon; vers: LatLon; choisie: boolean; action: () => void }[];
 }
@@ -148,6 +150,15 @@ export class Carte {
           icon: L.divIcon({ className: 'nom-parcelle', html: echapper(a.nom), iconSize: [0, 0] }),
         }).addTo(this.noms);
       }
+    }
+    for (const f of dessin.fantomes ?? []) {
+      L.polygon(f.map(ll), {
+        color: '#333',
+        weight: 2,
+        dashArray: '6 6',
+        fill: false,
+        interactive: false,
+      }).addTo(this.calque);
     }
     for (const t of dessin.traits) {
       L.polyline([ll(t.a), ll(t.b)], {
