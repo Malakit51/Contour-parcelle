@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { controler } from '../src/edition/controles';
 import { etatInitial, surfaceEtat } from '../src/edition/etat';
 import { exporterEtat } from '../src/edition/export';
-import { simplifierParcelle } from '../src/edition/operations';
+import { bordLePlusCourt, simplifierParcelle, sommetsDuBord } from '../src/edition/operations';
 import { lireTaskData } from '../src/isoxml/lecture';
+import { enMetres, preparer } from './outils';
 import { aireSignee, type XY } from '../src/geometrie/plan';
 import { simplifierContour } from '../src/geometrie/simplification';
 
@@ -120,5 +121,52 @@ describe.runIf(existsSync(REEL))('simplification de l’export réel', () => {
     expect(relu.anneaux.reduce((n, a) => n + a.sommets.length, 0)).toBeLessThan(
       avant.anneaux.reduce((n, a) => n + a.sommets.length, 0),
     );
+  });
+});
+
+describe('simplifier un seul bord', () => {
+  it('seuls les points entre les deux sommets choisis changent', () => {
+    // Côté Nord en arc tremblé (beaucoup de points), trois autres côtés droits avec points superflus.
+    const pts: XY[] = [
+      [0, 0],
+      [50, 0.05],
+      [100, 0],
+      [100.04, 25],
+      [100, 50],
+    ];
+    for (let i = 1; i < 50; i++) pts.push([100 - i * 2, 50 + Math.sin((i / 50) * Math.PI) * 3]);
+    pts.push([0, 50], [0.03, 25]);
+    const { etat } = preparer({ P: pts });
+    const n = pts.length;
+    const bord = bordLePlusCourt(etat, 0, 4, n - 2); // du coin Nord-Est au coin Nord-Ouest
+    expect(bord.aRebours).toBe(false);
+    expect(sommetsDuBord(etat, bord)).toHaveLength(51);
+    const r = simplifierParcelle(etat, 0, 0.25, bord);
+    const avant = enMetres(etat, 0);
+    const apres = enMetres(r.etat, 0);
+    // Les 4 premiers points et les 2 derniers sont intacts (y compris les points superflus).
+    expect(apres.slice(0, 5)).toEqual(avant.slice(0, 5));
+    expect(apres.slice(-2)).toEqual(avant.slice(-2));
+    expect(apres.length).toBeLessThan(avant.length);
+    expect(r.bilan[0]!.ecartMax).toBeLessThan(0.25);
+  });
+
+  it('à rebours, c’est l’autre partie du contour', () => {
+    const { etat } = preparer({
+      C: [
+        [0, 0],
+        [10, 0],
+        [20, 0],
+        [20, 10],
+        [10, 10],
+        [0, 10],
+      ],
+    });
+    expect(sommetsDuBord(etat, { anneau: 0, debut: 1, fin: 4, aRebours: false })).toEqual([
+      1, 2, 3, 4,
+    ]);
+    expect(sommetsDuBord(etat, { anneau: 0, debut: 1, fin: 4, aRebours: true })).toEqual([
+      1, 0, 5, 4,
+    ]);
   });
 });

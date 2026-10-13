@@ -13,6 +13,7 @@ import {
   type XY,
 } from '../geometrie/plan';
 import {
+  distanceM,
   latLon,
   limitesJumelles,
   precedent,
@@ -301,6 +302,45 @@ export function supprimerSommet(etat: Etat, ref: RefSommet): Etat {
   return { anneaux: etat.anneaux.map((a, i) => (i === ref.anneau ? { ...a, sommets } : a)) };
 }
 
+/** Portion de contour entre deux sommets, parcourue dans le sens de l'anneau ou à rebours. */
+export interface Bord {
+  anneau: number;
+  debut: number;
+  fin: number;
+  /** Faux : de `debut` à `fin` en suivant l'anneau ; vrai : en le remontant. */
+  aRebours: boolean;
+}
+
+/** Indices des sommets du bord, extrémités comprises, de `debut` à `fin`. */
+export function sommetsDuBord(etat: Etat, bord: Bord): number[] {
+  const n = etat.anneaux[bord.anneau]!.sommets.length;
+  const indices = [bord.debut];
+  let i = bord.debut;
+  while (i !== bord.fin) {
+    i = bord.aRebours ? (i - 1 + n) % n : (i + 1) % n;
+    indices.push(i);
+  }
+  return indices;
+}
+
+/**
+ * Bord le plus court (en mètres) entre deux sommets d'un anneau. Pas en nombre de points : un
+ * bord arrondi tracé au tracteur en a justement beaucoup.
+ */
+export function bordLePlusCourt(etat: Etat, anneau: number, debut: number, fin: number): Bord {
+  const longueur = (b: Bord) => {
+    const ids = sommetsDuBord(etat, b);
+    const s = etat.anneaux[anneau]!.sommets;
+    let l = 0;
+    for (let k = 1; k < ids.length; k++)
+      l += distanceM(latLon(s[ids[k - 1]!]!), latLon(s[ids[k]!]!));
+    return l;
+  };
+  const enAvant: Bord = { anneau, debut, fin, aRebours: false };
+  const aRebours: Bord = { anneau, debut, fin, aRebours: true };
+  return longueur(enAvant) <= longueur(aRebours) ? enAvant : aRebours;
+}
+
 export interface BilanSimplification {
   anneau: number;
   avant: number;
@@ -317,15 +357,22 @@ export function simplifierParcelle(
   etat: Etat,
   parcelle: number,
   tolerance: number,
+  bord?: Bord,
 ): { etat: Etat; bilan: BilanSimplification[] } {
   const bilan: BilanSimplification[] = [];
+  const interieurs = bord ? new Set(sommetsDuBord(etat, bord).slice(1, -1)) : null;
   const anneaux = etat.anneaux.map((a, ia) => {
     if (a.parcelle !== parcelle) return a;
+    if (bord && ia !== bord.anneau) return a;
     const plan = planLocal(latLon(a.sommets[0]!));
     const pts = a.sommets.map((s) => plan.versXY(latLon(s)));
     const fixes = new Set(
       a.sommets.flatMap((s, i) =>
-        sommetsEn(etat, latLon(s)).some((r) => r.anneau !== ia) ? [i] : [],
+        // Pour un bord seul, tout ce qui n'est pas à l'intérieur du bord est fixe.
+        (interieurs && !interieurs.has(i)) ||
+        sommetsEn(etat, latLon(s)).some((r) => r.anneau !== ia)
+          ? [i]
+          : [],
       ),
     );
     const r = simplifierContour(pts, tolerance, fixes);

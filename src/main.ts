@@ -22,8 +22,11 @@ import {
   placerSommet,
   cotesLimite,
   sensPositif,
+  bordLePlusCourt,
   simplifierParcelle,
+  sommetsDuBord,
   supprimerSommet,
+  type Bord,
 } from './edition/operations';
 import { planLocal, positionSurSegment, type LatLon, type Plan, type XY } from './geometrie/plan';
 import { ecartMaximal } from './geometrie/simplification';
@@ -135,6 +138,10 @@ let mode: 'limite' | 'sommet' | 'simplifier' = 'limite';
 /** Tolérance de simplification choisie (m). */
 let tolerance = 0.25;
 const TOLERANCES = [0.1, 0.25, 0.5, 1];
+/** Simplifier toute la parcelle, ou seulement un bord choisi entre deux sommets. */
+let porteeSimplif: 'parcelle' | 'bord' = 'parcelle';
+let bordDebut: RefSommet | null = null;
+let bord: Bord | null = null;
 let selLimite: RefLimite | null = null;
 let selSommet: RefSommet | null = null;
 let limiteGlisse: RefLimite | null = null;
@@ -331,7 +338,7 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
     const pts = anneaux[i]!;
     pts.forEach((q, k) => {
       let d: number;
-      if (mode === 'sommet') {
+      if (mode === 'sommet' || (mode === 'simplifier' && porteeSimplif === 'bord')) {
         d = Math.hypot(q[0] - p[0], q[1] - p[1]);
       } else {
         const r = pts[(k + 1) % pts.length]!;
@@ -348,8 +355,21 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
     });
   }
   const choix = meilleur as { anneau: number; indice: number } | null;
+  const [ancienDebut, ancienBord] = [bordDebut, bord];
   effacerSelection();
-  if (choix) {
+  if (choix && mode === 'simplifier' && porteeSimplif === 'bord') {
+    // Premier toucher : début du bord ; deuxième : fin ; un toucher de plus recommence.
+    parcelleCourante = s.etat.anneaux[choix.anneau]!.parcelle;
+    if (ancienDebut && !ancienBord && ancienDebut.anneau === choix.anneau) {
+      if (ancienDebut.sommet !== choix.indice) {
+        bordDebut = ancienDebut;
+        bord = bordLePlusCourt(s.etat, choix.anneau, ancienDebut.sommet, choix.indice);
+      } else bordDebut = ancienDebut;
+    } else {
+      bordDebut = { anneau: choix.anneau, sommet: choix.indice };
+    }
+    onglet = 'modifier';
+  } else if (choix) {
     parcelleCourante = s.etat.anneaux[choix.anneau]!.parcelle;
     if (mode === 'limite') selLimite = { anneau: choix.anneau, debut: choix.indice };
     else if (mode === 'sommet') selSommet = { anneau: choix.anneau, sommet: choix.indice };
@@ -379,6 +399,8 @@ function pointDansPolygone(p: XY, pts: XY[]): boolean {
 
 function effacerSelection(): void {
   placerAuDoigt = false;
+  bordDebut = null;
+  bord = null;
   sensLimite = null;
   selLimite = null;
   selSommet = null;
@@ -501,6 +523,9 @@ function supprimer(): void {
 /** Aperçu de la simplification de la parcelle courante (rien n'est encore modifié). */
 function apercuSimplification(s: Session) {
   if (mode !== 'simplifier' || parcelleCourante === null) return null;
+  if (porteeSimplif === 'bord') {
+    return bord ? simplifierParcelle(s.etat, parcelleCourante, tolerance, bord) : null;
+  }
   return simplifierParcelle(s.etat, parcelleCourante, tolerance);
 }
 
@@ -520,11 +545,11 @@ function appliquer(): void {
     } else if (mode === 'sommet' && selSommet && limiteGlisse) {
       quoi = `Sommet de ${nomParcelle(s, selSommet.anneau)} déplacé de ${signeM(d)} m`;
       nouveau = glisserSommet(s.etat, selSommet, limiteGlisse, d);
-    } else if (mode === 'simplifier' && parcelleCourante !== null) {
+    } else if (mode === 'simplifier' && parcelleCourante !== null && apercuSimplification(s)) {
       const r = apercuSimplification(s)!;
       const avant = r.bilan.reduce((n, b) => n + b.avant, 0);
       const apres = r.bilan.reduce((n, b) => n + b.apres, 0);
-      quoi = `${s.td.parcelles[parcelleCourante]!.nom} simplifiée (tolérance ${enCm(tolerance)}) : ${avant} → ${apres} points`;
+      quoi = `${s.td.parcelles[parcelleCourante]!.nom}${porteeSimplif === 'bord' ? ' (un bord)' : ''} simplifiée (tolérance ${enCm(tolerance)}) : ${avant} → ${apres} points`;
       nouveau = r.etat;
     } else {
       return;
@@ -840,6 +865,19 @@ function dessin(s: Session): Dessin {
       epaisseur,
     });
   };
+  if (mode === 'simplifier' && (bord || bordDebut)) {
+    const ring = (bord ?? bordDebut)!.anneau;
+    const pts = anneaux[ring]!;
+    if (bord) {
+      const ids = sommetsDuBord(s.etat, bord);
+      for (let k = 1; k < ids.length; k++) {
+        d.traits.push({ a: pts[ids[k - 1]!]!, b: pts[ids[k]!]!, couleur: SEL, epaisseur: 6 });
+      }
+    }
+    const debut = bord ? bord.debut : bordDebut!.sommet;
+    d.points.push({ p: pts[debut]!, couleur: SEL, rayon: 8 });
+    if (bord) d.points.push({ p: pts[bord.fin]!, couleur: SEL, rayon: 8 });
+  }
   if (selLimite) {
     trait(selLimite, 7);
     const ref = selLimite;
@@ -886,8 +924,51 @@ function effetsLimite(s: Session, ref: RefLimite): { exterieur: string; interieu
 }
 
 function panneauSimplification(s: Session): HTMLElement {
+  const portee = el(
+    'div',
+    { class: 'rangee' },
+    ...(
+      [
+        ['parcelle', 'Toute la parcelle'],
+        ['bord', 'Un bord'],
+      ] as const
+    ).map(([v, t]) =>
+      el(
+        'button',
+        {
+          class: porteeSimplif === v ? 'actif' : '',
+          onclick: () => {
+            porteeSimplif = v;
+            bordDebut = null;
+            bord = null;
+            afficher();
+          },
+        },
+        t,
+      ),
+    ),
+  );
+  if (porteeSimplif === 'bord' && !bord) {
+    return el(
+      'div',
+      { class: 'info' },
+      portee,
+      el(
+        'div',
+        { class: 'sens' },
+        bordDebut
+          ? 'Touche maintenant le dernier sommet du bord.'
+          : 'Touche le premier sommet du bord à simplifier.',
+      ),
+    );
+  }
   if (parcelleCourante === null) {
-    return el('div', { class: 'info doux' }, 'Touche une parcelle sur la carte.');
+    return el(
+      'div',
+      { class: 'info' },
+      portee,
+      el('div', { class: 'doux' }, 'Touche une parcelle sur la carte.'),
+    );
   }
   const p = parcelleCourante;
   const r = apercuSimplification(s)!;
@@ -911,6 +992,23 @@ function panneauSimplification(s: Session): HTMLElement {
     'div',
     { class: 'info' },
     el('strong', {}, `Simplifier ${s.td.parcelles[p]!.nom}`),
+    portee,
+    bord &&
+      el(
+        'div',
+        { class: 'rangee' },
+        el('span', { class: 'doux' }, `Bord de ${sommetsDuBord(s.etat, bord).length} points.`),
+        el(
+          'button',
+          {
+            onclick: () => {
+              if (bord) bord = { ...bord, aRebours: !bord.aRebours };
+              afficher();
+            },
+          },
+          'L’autre partie du contour',
+        ),
+      ),
     el('div', { class: 'doux' }, 'Tolérance : écart maximal accepté avec le contour actuel.'),
     el(
       'div',
