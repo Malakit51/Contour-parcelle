@@ -103,10 +103,41 @@ body {
   flex: 1;
   min-height: 52px;
 }
-.barre-bas .affichage-distance {
-  flex: 1.2;
-  font-size: 1.4rem;
+/* Case de la distance : le clavier numérique du téléphone s'ouvre en la touchant. */
+.case-distance {
+  flex: 1.3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 1.3rem;
+  border: 1px solid var(--bord);
+  border-radius: 8px;
+  background: var(--carte);
+  padding: 0 8px;
+  min-width: 0;
+}
+.champ-distance {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  font: inherit;
   font-variant-numeric: tabular-nums;
+  text-align: right;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  padding: 8px 0;
+}
+.champ-distance:focus {
+  outline: none;
+}
+.case-distance:focus-within {
+  border-color: var(--vert);
+  box-shadow: 0 0 0 2px var(--vert);
+}
+.barre-bas button.signe {
+  flex: 0 0 52px;
+  font-size: 1.3rem;
 }
 h1 {
   font-size: 1.15rem;
@@ -192,16 +223,6 @@ select {
 .erreur {
   color: var(--rouge);
   font-weight: bold;
-}
-.pave {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-  max-width: 360px;
-}
-.pave button {
-  font-size: 1.3rem;
-  min-height: 52px;
 }
 .raccourcis {
   display: grid;

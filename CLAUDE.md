@@ -11,7 +11,7 @@ Utilisateur : un agriculteur (moi), pas un développeur. Les explications doiven
 - Appareil : téléphone ou tablette Android, navigateur Chrome.
 - Réseau mobile disponible au champ ; le hors-ligne n'est pas exigé.
 - Transfert des fichiers : clé USB branchée directement sur le téléphone (OTG). Console → clé → téléphone → clé → console. La console exporte un **dossier** (pas un zip) ; l'éditeur ouvre le `TASKDATA.XML` de ce dossier. Au retour, il faut un dossier **non zippé** nommé `TASKDATA` contenant `TASKDATA.XML` (13/10/2026 ; la console ne lit pas les zip). Un téléchargement ne peut pas créer de dossier : si Chrome le permet (API File System Access, `showDirectoryPicker`, non vérifié sur Android), l'éditeur écrit directement `TASKDATA/TASKDATA.XML` à l'endroit choisi ; sinon il télécharge `TASKDATA.XML` et je crée le dossier `TASKDATA` à la main sur la clé.
-- Saisie : les nombres se tapent sur un pavé numérique affiché à l'écran (chiffres 0-9, virgule, +, −, effacer). Les distances se saisissent en mètres, avec des raccourcis ±0,1 / ±0,5 / ±1 m (décision du 13/10/2026). Le clavier du téléphone n'est pas pratique au champ.
+- Saisie : distances en mètres. Depuis le 13/10/2026, plus de pavé numérique dans l'éditeur (il prenait trop de place, surtout sur tablette) : la case de distance de la barre du bas ouvre le clavier numérique du téléphone ; on garde les raccourcis ±0,1 / ±0,5 / ±1 m et un bouton ± pour le signe.
 - Cibles tactiles larges : une limite ou un sommet doit pouvoir se sélectionner au doigt.
 - Hébergement : GitHub Pages, dépôt dans mon espace personnel **Malakit51**. HTTPS est nécessaire pour la géolocalisation.
 

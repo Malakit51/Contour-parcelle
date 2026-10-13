@@ -1121,7 +1121,7 @@ function panneauSelection(s: Session): HTMLElement {
     el(
       'div',
       { class: 'doux' },
-      `Flèches en haut à gauche de la carte : ${enMetres(Math.abs(metres()))} m à chaque appui ; ☝ au centre : placer au doigt.`,
+      'Flèches en haut à gauche de la carte : la distance réglée à chaque appui ; ☝ au centre : placer au doigt.',
     ),
     el('div', { class: 'rangee' }, el('button', { onclick: supprimer }, 'Supprimer ce point')),
     el('div', { class: 'doux' }, 'Ou le faire glisser le long d’une limite (puis « Appliquer ») :'),
@@ -1130,58 +1130,55 @@ function panneauSelection(s: Session): HTMLElement {
   );
 }
 
-function pave(): HTMLElement {
-  const changer = (v: string) => {
-    saisie = v;
-    afficher();
-  };
-  const touche = (k: string) => {
-    let v = saisie;
-    if (k === '⌫') v = v.slice(0, -1);
-    else if (k === 'C') v = '';
-    else if (k === '+') v = v.replace(/^-/, '');
-    else if (k === '−') v = v.startsWith('-') ? v : '-' + v;
-    else if (k === ',') {
-      if (v.includes(',')) return;
-      v = (v === '' || v === '-' ? v + '0' : v) + ',';
-    } else {
-      if (v === '0') v = '';
-      if (v === '-0') v = '-';
-      const [entier = '', decimales] = v.replace('-', '').split(',');
-      // Au plus 4 chiffres avant la virgule et 3 après (le millimètre).
-      if (decimales !== undefined ? decimales.length >= 3 : entier.length >= 4) return;
-      v += k;
-    }
-    changer(v);
-  };
-  const touches = ['7', '8', '9', '⌫', '4', '5', '6', 'C', '1', '2', '3', '+', '−', '0', ','];
+/** Distances pré-remplies : elles s'ajoutent à la distance affichée en bas. */
+function raccourcis(): HTMLElement {
   return el(
     'div',
-    {},
-    el(
-      'div',
-      { class: 'raccourcis' },
-      ...[-1, -0.5, -0.1, 0.1, 0.5, 1].map((v) =>
-        el(
-          'button',
-          { onclick: () => changer(enMetres(metres() + v)) },
-          v > 0 ? `+${enMetres(v)}` : `−${enMetres(-v)}`,
-        ),
-      ),
-    ),
-    el(
-      'div',
-      { class: 'pave', style: 'margin-top:6px' },
-      ...touches.map((k) =>
-        el(
-          'button',
-          { onclick: () => touche(k), style: k === '0' ? 'grid-column: span 2' : '' },
-          k,
-        ),
+    { class: 'raccourcis' },
+    ...[-1, -0.5, -0.1, 0.1, 0.5, 1].map((v) =>
+      el(
+        'button',
+        {
+          onclick: () => {
+            saisie = enMetres(metres() + v);
+            afficher();
+          },
+        },
+        v > 0 ? `+${enMetres(v)}` : `−${enMetres(-v)}`,
       ),
     ),
   );
 }
+
+// Case de la distance (barre du bas) : un vrai champ, pour avoir le clavier numérique du téléphone.
+// Elle est créée une seule fois : la recréer pendant la saisie fermerait le clavier.
+const champDistance = el('input', {
+  type: 'text',
+  inputmode: 'decimal',
+  enterkeyhint: 'done',
+  autocomplete: 'off',
+  class: 'champ-distance',
+  'aria-label': 'Distance en mètres',
+});
+champDistance.addEventListener('input', () => {
+  // Chiffres, une virgule (le point est accepté et converti), un signe moins au début.
+  const propre = champDistance.value
+    .replace('.', ',')
+    .replace(/[^0-9,-]/g, '')
+    .replace(/(?!^)-/g, '')
+    .replace(/,(?=.*,)/g, '');
+  if (propre !== champDistance.value) champDistance.value = propre;
+  saisie = propre;
+});
+champDistance.addEventListener('change', () => {
+  // Pas de redessin ici : si on tape la distance puis « Appliquer », la case perd la main juste
+  // avant l'appui ; redessiner la barre à ce moment ferait perdre l'appui sur le bouton.
+  saisie = champDistance.value === '' ? '' : enMetres(metres());
+  champDistance.value = saisie;
+});
+champDistance.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') champDistance.blur();
+});
 
 function tableauSurfaces(s: Session): HTMLElement | null {
   const modifiees = parcellesModifiees(s.etat);
@@ -1468,7 +1465,7 @@ function afficher(): void {
           modeBouton('simplifier', 'Simplifier'),
         ),
         mode === 'simplifier' ? panneauSimplification(s) : panneauSelection(s),
-        pave(),
+        raccourcis(),
       ];
       break;
     case 'suivi':
@@ -1512,16 +1509,18 @@ function afficher(): void {
       (apercuSimplification(s)?.bilan.some((b) => b.apres !== b.avant || b.ecartMax > 0) ?? false));
   remplir(
     zones.bas,
+    el('label', { class: 'case-distance' }, champDistance, 'm'),
     el(
       'button',
       {
-        class: 'affichage-distance',
+        class: 'signe',
+        title: 'Changer le signe',
         onclick: () => {
-          onglet = 'modifier';
+          saisie = enMetres(-metres());
           afficher();
         },
       },
-      `${saisie === '' ? '0' : saisie} m`,
+      '±',
     ),
     el(
       'button',
@@ -1534,6 +1533,7 @@ function afficher(): void {
       'Annuler',
     ),
   );
+  if (document.activeElement !== champDistance) champDistance.value = saisie;
   carte.definirCommandes(mode === 'sommet' && selSommet ? commandesSommet() : null);
   carte.afficher(dessin(s));
   zones.panneau.scrollTop = defilement;
