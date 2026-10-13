@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { comparer } from '../src/isoxml/comparaison';
 import { exporterTaskData } from '../src/isoxml/ecriture';
 import { lireTaskData } from '../src/isoxml/lecture';
@@ -72,7 +72,10 @@ describe('fichier d’exemple', () => {
 const REEL = 'donnees_locales/TASKDATA.XML';
 
 describe.runIf(existsSync(REEL))('export réel de la console', () => {
-  const { octets, td } = charger(REEL);
+  // Lecture paresseuse : le corps du describe s'exécute même quand le fichier est absent.
+  let octets: Uint8Array;
+  let td: ReturnType<typeof lireTaskData>;
+  beforeAll(() => ({ octets, td } = charger(REEL)));
 
   it('import puis export sans modification = fichier identique octet pour octet', () => {
     expect(encoder(exporterTaskData(td, { retirerSegments: false }))).toEqual(octets);

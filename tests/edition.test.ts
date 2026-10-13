@@ -275,13 +275,18 @@ describe('export après modification', () => {
 const REEL = 'donnees_locales/TASKDATA.XML';
 
 describe.runIf(existsSync(REEL))('export réel : limite 130usag / 131usag', () => {
-  const td = lireTaskData(readFileSync(REEL, 'utf8'));
-  const etat = etatInitial(td);
-  const ia = etat.anneaux.findIndex((a) => td.parcelles[a.parcelle]!.nom === '130usag');
-  const ib = etat.anneaux.findIndex((a) => td.parcelles[a.parcelle]!.nom === '131usag');
+  // Lecture paresseuse : le corps du describe s'exécute même quand le fichier est absent.
+  const charger = () => {
+    const td = lireTaskData(readFileSync(REEL, 'utf8'));
+    const etat = etatInitial(td);
+    const ia = etat.anneaux.findIndex((a) => td.parcelles[a.parcelle]!.nom === '130usag');
+    const ib = etat.anneaux.findIndex((a) => td.parcelles[a.parcelle]!.nom === '131usag');
+    return { td, etat, ia, ib };
+  };
 
   for (const distance of [0.5, -0.5]) {
     it(`décalage ${distance} m vers 131usag : surface totale inchangée`, () => {
+      const { td, etat, ia, ib } = charger();
       // Dans 130usag, la limite partagée va du sommet 0 au sommet 1.
       const ref: RefLimite = { anneau: ia, debut: 0 };
       expect(limitesJumelles(etat, ref).map((j) => j.anneau)).toEqual([ib]);
