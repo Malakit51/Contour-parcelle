@@ -393,3 +393,48 @@ export function simplifierParcelle(
   });
   return { etat: { anneaux }, bilan };
 }
+
+/**
+ * Fait glisser un sommet le long d'une des deux limites qui y aboutissent, de `distance` mètres
+ * (valeur absolue) : vers l'autre extrémité de la limite (elle raccourcit) ou dans son
+ * prolongement (elle s'allonge). Le sommet bouge dans toutes les parcelles qui le contiennent.
+ */
+export function glisserSommetLeLong(
+  etat: Etat,
+  ref: RefSommet,
+  limite: RefLimite,
+  distance: number,
+  versAutreBout: boolean,
+): Etat {
+  const d = Math.abs(distance);
+  if (d === 0) return etat;
+  const fin = suivant(etat, limite.anneau, limite.debut);
+  if (limite.anneau !== ref.anneau || (limite.debut !== ref.sommet && fin !== ref.sommet)) {
+    throw new ErreurEdition('La limite choisie ne passe pas par ce sommet.');
+  }
+  const autre = limite.debut === ref.sommet ? fin : limite.debut;
+  const V = latLon(sommet(etat, ref));
+  const plan = planLocal(V);
+  const q = xy(etat, plan, ref.anneau, autre);
+  const l = Math.hypot(...q);
+  if (versAutreBout && d >= l) {
+    throw new ErreurEdition("Déplacement trop grand : il dépasse l'autre extrémité de la limite.");
+  }
+  const k = (versAutreBout ? d : -d) / l;
+  return placerSommet(etat, ref, plan.versLatLon([q[0] * k, q[1] * k]));
+}
+
+/** Point situé à 1 m du sommet le long de la limite, vers son autre extrémité ou à l'opposé. */
+export function repereLeLong(
+  etat: Etat,
+  ref: RefSommet,
+  limite: RefLimite,
+  versAutreBout: boolean,
+): LatLon {
+  const fin = suivant(etat, limite.anneau, limite.debut);
+  const autre = limite.debut === ref.sommet ? fin : limite.debut;
+  const plan = planLocal(latLon(sommet(etat, ref)));
+  const q = xy(etat, plan, ref.anneau, autre);
+  const k = (versAutreBout ? 1 : -1) / Math.hypot(...q);
+  return plan.versLatLon([q[0] * k, q[1] * k]);
+}

@@ -18,10 +18,10 @@ import {
   decalerLimite,
   decalerSommet,
   ErreurEdition,
-  glisserSommet,
+  glisserSommetLeLong,
   placerSommet,
   cotesLimite,
-  sensPositif,
+  repereLeLong,
   bordLePlusCourt,
   simplifierParcelle,
   sommetsDuBord,
@@ -149,6 +149,8 @@ let limiteGlisse: RefLimite | null = null;
 let placerAuDoigt = false;
 /** Sens choisi pour décaler la limite sélectionnée, avec les flèches posées sur la carte. */
 let sensLimite: 'exterieur' | 'interieur' | null = null;
+/** Sens choisi pour faire glisser le point le long du bord : vers l'autre extrémité ou à l'opposé. */
+let sensGlisse: 'vers' | 'oppose' | null = null;
 let parcelleCourante: number | null = null;
 /** Distance en mètres telle que tapée, avec une virgule décimale (« -0,35 »). */
 let saisie = '0,5';
@@ -333,6 +335,38 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
         Number(s.etat.anneaux[j]!.parcelle === parcelleCourante) -
         Number(s.etat.anneaux[i]!.parcelle === parcelleCourante),
     );
+  // Mode point, sommet déjà choisi : toucher un des deux bords qui y aboutissent choisit le bord
+  // le long duquel il glissera (sans désélectionner le sommet).
+  if (mode === 'sommet' && selSommet) {
+    const ref = selSommet;
+    const pts = anneaux[ref.anneau]!;
+    const v = pts[ref.sommet]!;
+    if (Math.hypot(v[0] - p[0], v[1] - p[1]) > rayon) {
+      const candidats = [ref.sommet, precedent(s.etat, ref.anneau, ref.sommet)].map((debut) => {
+        const a = pts[debut]!;
+        const b = pts[(debut + 1) % pts.length]!;
+        const pos = positionSurSegment(p, a, b);
+        // Un toucher près d'une extrémité vise un sommet, pas le bord.
+        const presDuBout = Math.min(
+          Math.hypot(a[0] - p[0], a[1] - p[1]),
+          Math.hypot(b[0] - p[0], b[1] - p[1]),
+        );
+        return {
+          debut,
+          d: pos.t >= 0 && pos.t <= 1 && presDuBout > rayon ? pos.ecart : Infinity,
+        };
+      });
+      const bordTouche = candidats.sort((x, y) => x.d - y.d)[0]!;
+      if (bordTouche.d <= rayon) {
+        limiteGlisse = { anneau: ref.anneau, debut: bordTouche.debut };
+        sensGlisse = null;
+        message = null;
+        onglet = 'modifier';
+        afficher();
+        return;
+      }
+    }
+  }
   let meilleur: { anneau: number; indice: number; d: number } | null = null;
   for (const i of ordre) {
     const pts = anneaux[i]!;
@@ -399,6 +433,7 @@ function pointDansPolygone(p: XY, pts: XY[]): boolean {
 
 function effacerSelection(): void {
   placerAuDoigt = false;
+  sensGlisse = null;
   bordDebut = null;
   bord = null;
   sensLimite = null;
@@ -542,9 +577,9 @@ function appliquer(): void {
       const ecart = Math.abs(d);
       quoi = `Limite ${coteLimite(s, selLimite)} de ${nomParcelle(s, selLimite.anneau)} décalée de ${enMetres(ecart)} m ${effetsLimite(s, selLimite)[sensLimite]}`;
       nouveau = decalerLimite(s.etat, selLimite, sensLimite === 'exterieur' ? ecart : -ecart);
-    } else if (mode === 'sommet' && selSommet && limiteGlisse) {
-      quoi = `Sommet de ${nomParcelle(s, selSommet.anneau)} déplacé de ${signeM(d)} m`;
-      nouveau = glisserSommet(s.etat, selSommet, limiteGlisse, d);
+    } else if (mode === 'sommet' && selSommet && limiteGlisse && sensGlisse) {
+      quoi = `Point de ${nomParcelle(s, selSommet.anneau)} glissé de ${enMetres(Math.abs(d))} m ${sensGlisse === 'vers' ? 'le long du bord (le bord raccourcit)' : 'dans le prolongement du bord'}`;
+      nouveau = glisserSommetLeLong(s.etat, selSommet, limiteGlisse, d, sensGlisse === 'vers');
     } else if (mode === 'simplifier' && parcelleCourante !== null && apercuSimplification(s)) {
       const r = apercuSimplification(s)!;
       const avant = r.bilan.reduce((n, b) => n + b.avant, 0);
@@ -570,7 +605,6 @@ function appliquer(): void {
 }
 
 const signe = (v: number) => (v > 0 ? `+${v}` : String(v));
-const signeM = (v: number) => (v > 0 ? `+${enMetres(v)}` : enMetres(v));
 
 function annuler(): void {
   const precedent = session?.historique.pop();
@@ -894,7 +928,20 @@ function dessin(s: Session): Dessin {
     }));
   }
   if (selSommet) {
-    if (limiteGlisse) trait(limiteGlisse, 5);
+    if (limiteGlisse) {
+      trait(limiteGlisse, 5);
+      const ref = selSommet;
+      const limite = limiteGlisse;
+      d.fleches = (['vers', 'oppose'] as const).map((sens) => ({
+        depuis: latLon(s.etat.anneaux[ref.anneau]!.sommets[ref.sommet]!),
+        vers: repereLeLong(s.etat, ref, limite, sens === 'vers'),
+        choisie: sensGlisse === sens,
+        action: () => {
+          sensGlisse = sens;
+          afficher();
+        },
+      }));
+    }
     d.points.push({ p: anneaux[selSommet.anneau]![selSommet.sommet]!, couleur: SEL, rayon: 9 });
   }
   return d;
@@ -1081,34 +1128,13 @@ function panneauSelection(s: Session): HTMLElement {
       .map((r) => nomParcelle(s, r.anneau))
       .filter((n) => n !== nomParcelle(s, ref.anneau)),
   );
-  const limites: RefLimite[] = [
-    { anneau: ref.anneau, debut: ref.sommet },
-    { anneau: ref.anneau, debut: precedent(s.etat, ref.anneau, ref.sommet) },
-  ];
-  const boutons = el(
-    'div',
-    { class: 'rangee' },
-    ...limites.map((l) =>
-      el(
-        'button',
-        {
-          class: limiteGlisse?.debut === l.debut ? 'actif' : '',
-          onclick: () => {
-            limiteGlisse = l;
-            afficher();
-          },
-        },
-        `Limite ${coteLimite(s, l)} (${Math.round(longueur(s, l))} m)`,
-      ),
-    ),
-  );
-  let sens: string | null = null;
-  if (limiteGlisse) {
-    sens =
-      sensPositif(s.etat, limiteGlisse) === 'Est'
-        ? '+ = vers l’Est · − = vers l’Ouest'
-        : '+ = vers le Nord · − = vers le Sud';
-  }
+  const glisse = !limiteGlisse
+    ? 'Pour le faire glisser le long d’un bord : touche ce bord sur la carte.'
+    : !sensGlisse
+      ? 'Touche une des deux flèches le long du bord pour le sens, puis « Appliquer ».'
+      : sensGlisse === 'vers'
+        ? 'Sens : le long du bord (le bord raccourcit).'
+        : 'Sens : dans le prolongement du bord (le bord s’allonge).';
   return el(
     'div',
     { class: 'info' },
@@ -1124,9 +1150,7 @@ function panneauSelection(s: Session): HTMLElement {
       'Flèches en haut à gauche de la carte : la distance réglée à chaque appui ; ☝ au centre : placer au doigt.',
     ),
     el('div', { class: 'rangee' }, el('button', { onclick: supprimer }, 'Supprimer ce point')),
-    el('div', { class: 'doux' }, 'Ou le faire glisser le long d’une limite (puis « Appliquer ») :'),
-    boutons,
-    sens && el('div', { class: 'sens' }, sens),
+    el('div', { class: 'sens' }, glisse),
   );
 }
 
@@ -1140,7 +1164,7 @@ function raccourcis(): HTMLElement {
         'button',
         {
           onclick: () => {
-            saisie = enMetres(metres() + v);
+            saisie = enMetres(Math.max(0, metres() + v));
             afficher();
           },
         },
@@ -1161,11 +1185,11 @@ const champDistance = el('input', {
   'aria-label': 'Distance en mètres',
 });
 champDistance.addEventListener('input', () => {
-  // Chiffres, une virgule (le point est accepté et converti), un signe moins au début.
+  // Chiffres et une virgule (le point est accepté et converti) ; pas de signe : ce sont les
+  // flèches sur la carte qui donnent le sens.
   const propre = champDistance.value
     .replace('.', ',')
-    .replace(/[^0-9,-]/g, '')
-    .replace(/(?!^)-/g, '')
+    .replace(/[^0-9,]/g, '')
     .replace(/,(?=.*,)/g, '');
   if (propre !== champDistance.value) champDistance.value = propre;
   saisie = propre;
@@ -1459,9 +1483,9 @@ function afficher(): void {
       contenu = [
         el(
           'div',
-          { class: 'rangee' },
-          modeBouton('limite', 'Décaler une limite'),
-          modeBouton('sommet', 'Déplacer un point'),
+          { class: 'modes' },
+          modeBouton('limite', 'Limite'),
+          modeBouton('sommet', 'Point'),
           modeBouton('simplifier', 'Simplifier'),
         ),
         mode === 'simplifier' ? panneauSimplification(s) : panneauSelection(s),
@@ -1504,24 +1528,12 @@ function afficher(): void {
 
   const peutAppliquer =
     (mode === 'limite' && selLimite !== null && sensLimite !== null) ||
-    (mode === 'sommet' && selSommet !== null && limiteGlisse !== null) ||
+    (mode === 'sommet' && selSommet !== null && limiteGlisse !== null && sensGlisse !== null) ||
     (mode === 'simplifier' &&
       (apercuSimplification(s)?.bilan.some((b) => b.apres !== b.avant || b.ecartMax > 0) ?? false));
   remplir(
     zones.bas,
     el('label', { class: 'case-distance' }, champDistance, 'm'),
-    el(
-      'button',
-      {
-        class: 'signe',
-        title: 'Changer le signe',
-        onclick: () => {
-          saisie = enMetres(-metres());
-          afficher();
-        },
-      },
-      '±',
-    ),
     el(
       'button',
       { class: 'principal', onclick: appliquer, ...(peutAppliquer ? {} : { disabled: '' }) },

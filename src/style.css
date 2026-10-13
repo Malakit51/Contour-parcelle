@@ -135,10 +135,6 @@ body {
   border-color: var(--vert);
   box-shadow: 0 0 0 2px var(--vert);
 }
-.barre-bas button.signe {
-  flex: 0 0 52px;
-  font-size: 1.3rem;
-}
 h1 {
   font-size: 1.15rem;
   margin: 4px 0 8px;
@@ -367,4 +363,13 @@ summary {
     grid-template-columns: 1fr;
     grid-template-areas: 'haut' 'onglets' 'panneau' 'bas';
   }
+}
+.modes {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+}
+.modes button {
+  flex: 1;
+  padding: 8px 4px;
 }

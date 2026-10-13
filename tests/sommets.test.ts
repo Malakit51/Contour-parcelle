@@ -4,6 +4,7 @@ import { exporterEtat, parcellesModifiees } from '../src/edition/export';
 import {
   decalerSommet,
   ErreurEdition,
+  glisserSommetLeLong,
   placerSommet,
   supprimerSommet,
 } from '../src/edition/operations';
@@ -93,5 +94,19 @@ describe('supprimer un sommet', () => {
       ],
     });
     expect(() => supprimerSommet(etat, { anneau: 0, sommet: 1 })).toThrow(ErreurEdition);
+  });
+});
+
+describe('faire glisser un point le long d’un bord', () => {
+  it('vers l’autre extrémité ou dans le prolongement, distance en valeur absolue', () => {
+    const { etat } = preparer(deuxCarres);
+    const ref = { anneau: 0, sommet: 2 }; // (100, 100), commun avec Y
+    const limiteNord = { anneau: 0, debut: 2 }; // de (100, 100) vers (0, 100)
+    const vers = glisserSommetLeLong(etat, ref, limiteNord, -0.5, true);
+    expect(enMetres(vers, 0)[2]).toEqual([99.5, 100]);
+    expect(enMetres(vers, 1)[3]).toEqual([99.5, 100]);
+    const oppose = glisserSommetLeLong(etat, ref, limiteNord, 0.5, false);
+    expect(enMetres(oppose, 0)[2]).toEqual([100.5, 100]);
+    expect(() => glisserSommetLeLong(etat, ref, limiteNord, 150, true)).toThrow(ErreurEdition);
   });
 });
