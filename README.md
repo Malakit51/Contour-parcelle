@@ -19,9 +19,9 @@ Page publiée : https://malakit51.github.io/Contour-parcelle/
 
 1. « Ouvrir TASKDATA.XML » : choisir le fichier exporté par la console.
 2. Choisir une parcelle dans la liste pour zoomer (ou pincer, glisser, boutons + et −).
-3. « Décaler une limite » : toucher la limite, taper les centimètres, « Appliquer ».
+3. « Décaler une limite » : toucher la limite, taper la distance en mètres, « Appliquer ».
    « Déplacer un point » : toucher le sommet, choisir la limite le long de laquelle il glisse, taper
-   les centimètres, « Appliquer ». Le sens du + est écrit en orange.
+   la distance en mètres, « Appliquer ». Le sens du + est écrit en orange.
 4. « Vérifier avant export », puis « Télécharger TASKDATA.XML ».
 
 ## Commandes

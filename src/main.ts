@@ -1,4 +1,4 @@
-// Page principale : charger TASKDATA.XML, toucher une limite ou un sommet, saisir les cm, exporter.
+// Page principale : charger TASKDATA.XML, toucher une limite ou un sommet, saisir la distance en mètres, exporter.
 
 import './style.css';
 import { controler, sommetsPresqueCommuns, type Alerte } from './edition/controles';
@@ -51,7 +51,8 @@ let selLimite: RefLimite | null = null;
 let selSommet: RefSommet | null = null;
 let limiteGlisse: RefLimite | null = null;
 let parcelleCourante: number | null = null;
-let saisie = '50';
+/** Distance en mètres telle que tapée, avec une virgule décimale (« -0,35 »). */
+let saisie = '0,5';
 let message: { texte: string; erreur: boolean } | null = null;
 let exportPrepare: { texte: string; alertes: Alerte[]; resume: string; details: string } | null =
   null;
@@ -217,23 +218,26 @@ function effacerSelection(): void {
 
 // ---------- Appliquer, annuler ----------
 
-function cm(): number {
-  const v = Number(saisie);
+function metres(): number {
+  const v = Number(saisie.replace(',', '.'));
   return Number.isFinite(v) ? v : 0;
 }
+
+/** Écrit un nombre de mètres à la française, au millimètre près : « 0,35 ». */
+const enMetres = (v: number) => String(Math.round(v * 1000) / 1000).replace('.', ',');
 
 function appliquer(): void {
   if (!session) return;
   const s = session;
-  const d = cm() / 100;
+  const d = metres();
   try {
     let nouveau: Etat;
     let quoi: string;
     if (mode === 'limite' && selLimite) {
-      quoi = `Limite ${coteLimite(s, selLimite)} de ${nomParcelle(s, selLimite.anneau)} décalée de ${signe(cm())} cm`;
+      quoi = `Limite ${coteLimite(s, selLimite)} de ${nomParcelle(s, selLimite.anneau)} décalée de ${signeM(d)} m`;
       nouveau = decalerLimite(s.etat, selLimite, d);
     } else if (mode === 'sommet' && selSommet && limiteGlisse) {
-      quoi = `Sommet de ${nomParcelle(s, selSommet.anneau)} déplacé de ${signe(cm())} cm`;
+      quoi = `Sommet de ${nomParcelle(s, selSommet.anneau)} déplacé de ${signeM(d)} m`;
       nouveau = glisserSommet(s.etat, selSommet, limiteGlisse, d);
     } else {
       return;
@@ -253,6 +257,7 @@ function appliquer(): void {
 }
 
 const signe = (v: number) => (v > 0 ? `+${v}` : String(v));
+const signeM = (v: number) => (v > 0 ? `+${enMetres(v)}` : enMetres(v));
 
 function annuler(): void {
   const precedentEtat = session?.historique.pop();
@@ -438,15 +443,20 @@ function pave(): HTMLElement {
     else if (k === 'C') v = '';
     else if (k === '+') v = v.replace(/^-/, '');
     else if (k === '−') v = v.startsWith('-') ? v : '-' + v;
-    else {
+    else if (k === ',') {
+      if (v.includes(',')) return;
+      v = (v === '' || v === '-' ? v + '0' : v) + ',';
+    } else {
       if (v === '0') v = '';
       if (v === '-0') v = '-';
-      if (v.replace('-', '').length >= 5) return;
+      const [entier = '', decimales] = v.replace('-', '').split(',');
+      // Au plus 4 chiffres avant la virgule et 3 après (le millimètre).
+      if (decimales !== undefined ? decimales.length >= 3 : entier.length >= 4) return;
       v += k;
     }
     changer(v);
   };
-  const touches = ['7', '8', '9', '⌫', '4', '5', '6', 'C', '1', '2', '3', '+', '−', '0'];
+  const touches = ['7', '8', '9', '⌫', '4', '5', '6', 'C', '1', '2', '3', '+', '−', '0', ','];
   return el(
     'div',
     {},
@@ -455,13 +465,17 @@ function pave(): HTMLElement {
       { class: 'rangee' },
       'Distance :',
       el('span', { class: 'affichage-cm' }, saisie === '' ? '0' : saisie),
-      'cm',
+      'm',
     ),
     el(
       'div',
       { class: 'raccourcis' },
-      ...[-100, -50, -10, 10, 50, 100].map((v) =>
-        el('button', { onclick: () => changer(String(cm() + v)) }, v > 0 ? `+${v}` : `−${-v}`),
+      ...[-1, -0.5, -0.1, 0.1, 0.5, 1].map((v) =>
+        el(
+          'button',
+          { onclick: () => changer(enMetres(metres() + v)) },
+          v > 0 ? `+${enMetres(v)}` : `−${enMetres(-v)}`,
+        ),
       ),
     ),
     el(
@@ -470,7 +484,7 @@ function pave(): HTMLElement {
       ...touches.map((k) =>
         el(
           'button',
-          { onclick: () => touche(k), style: k === '0' ? 'grid-column: span 3' : '' },
+          { onclick: () => touche(k), style: k === '0' ? 'grid-column: span 2' : '' },
           k,
         ),
       ),
