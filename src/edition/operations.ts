@@ -257,7 +257,7 @@ export function supprimerSommet(etat: Etat, ref: RefSommet): Etat {
   const autres = sommetsEn(etat, V).filter((r) => r.anneau !== ref.anneau);
   if (autres.length > 0) {
     throw new ErreurEdition(
-      'Ce point est commun avec une autre parcelle : le supprimer créerait un chevauchement. Déplacez-le plutôt.',
+      'Ce point est commun avec une autre parcelle : le supprimer créerait un chevauchement. Déplace-le plutôt.',
     );
   }
   if (anneau.sommets.length <= 3) {

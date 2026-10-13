@@ -26,13 +26,7 @@ import {
 import { planLocal, positionSurSegment, type LatLon, type Plan, type XY } from './geometrie/plan';
 import { comparer } from './isoxml/comparaison';
 import { lireTaskData, type TaskData } from './isoxml/lecture';
-import {
-  estUnZip,
-  ouvrirArchive,
-  refaireArchive,
-  taskdataDe,
-  type Archive,
-} from './isoxml/archive';
+import { NOM_DOSSIER, zipDossierTaskdata } from './isoxml/archive';
 import { decoder, encoder } from './isoxml/octets';
 import { Carte, type Dessin, type VersEcran } from './ui/carte';
 import { el } from './ui/dom';
@@ -63,8 +57,6 @@ const RAYON_TOUCHER_PX = 26;
 
 interface Session {
   td: TaskData;
-  /** Zip de la console quand on a ouvert un zip ; null pour un TASKDATA.XML seul. */
-  archive: Archive | null;
   nomFichier: string;
   plan: Plan;
   initial: Etat;
@@ -155,8 +147,7 @@ const carte = new Carte(toucher, (texte) => {
 async function charger(fichier: File): Promise<void> {
   try {
     const octets = new Uint8Array(await fichier.arrayBuffer());
-    const archive = estUnZip(octets) ? ouvrirArchive(octets) : null;
-    const td = lireTaskData(decoder(archive ? taskdataDe(archive) : octets));
+    const td = lireTaskData(decoder(octets));
     if (td.parcelles.length === 0) throw new Error('Aucune parcelle (PFD) dans ce fichier.');
     const initial = etatInitial(td);
     const tous = initial.anneaux.flatMap((a) => a.sommets.map(latLon));
@@ -181,7 +172,6 @@ async function charger(fichier: File): Promise<void> {
     }
     session = {
       td,
-      archive,
       nomFichier: fichier.name,
       plan: planLocal(centre),
       initial,
@@ -193,9 +183,7 @@ async function charger(fichier: File): Promise<void> {
     parcelleCourante = null;
     effacerSelection();
     message = {
-      texte: archive
-        ? `${fichier.name} chargé : ${td.parcelles.length} parcelles, ${Object.keys(archive.fichiers).length} fichiers dans le zip.`
-        : `${fichier.name} chargé : ${td.parcelles.length} parcelles.`,
+      texte: `${fichier.name} chargé : ${td.parcelles.length} parcelles.`,
       erreur: false,
     };
     afficher();
@@ -297,7 +285,7 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
     placerAuDoigt = false;
     modifier(
       () => placerSommet(s.etat, ref, position),
-      `Point de ${nomParcelle(s, ref.anneau)} placé au doigt : ajustez-le avec les flèches`,
+      `Point de ${nomParcelle(s, ref.anneau)} placé au doigt : ajuste-le avec les flèches`,
       true,
     );
     return;
@@ -397,7 +385,7 @@ function fleche(sens: 'Nord' | 'Sud' | 'Est' | 'Ouest'): void {
   const ref = selSommet;
   const d = Math.abs(metres());
   if (d === 0) {
-    message = { texte: 'Tapez d’abord une distance.', erreur: true };
+    message = { texte: 'Tape d’abord une distance.', erreur: true };
     afficher();
     return;
   }
@@ -512,7 +500,7 @@ function enregistrer(octets: Uint8Array, nom: string, type: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-function telecharger(quoi: 'zip' | 'xml'): void {
+function telecharger(quoi: 'dossier' | 'xml'): void {
   if (!exportPrepare || !session) return;
   if (
     exportPrepare.alertes.some((a) => a.grave) &&
@@ -521,10 +509,7 @@ function telecharger(quoi: 'zip' | 'xml'): void {
     return;
   }
   const xml = encoder(exportPrepare.texte);
-  const nomSortie =
-    quoi === 'zip' && session.archive
-      ? `${session.nomFichier.replace(/\.zip$/i, '')}-corrige.zip`
-      : 'TASKDATA.XML';
+  const nomSortie = quoi === 'dossier' ? `${NOM_DOSSIER}.zip` : 'TASKDATA.XML';
   const s = session;
   majSuivi({
     ...suivi,
@@ -540,11 +525,8 @@ function telecharger(quoi: 'zip' | 'xml'): void {
       })),
     ],
   });
-  if (quoi === 'zip' && session.archive) {
-    enregistrer(refaireArchive(session.archive, xml), nomSortie, 'application/zip');
-  } else {
-    enregistrer(xml, 'TASKDATA.XML', 'application/xml');
-  }
+  if (quoi === 'dossier') enregistrer(zipDossierTaskdata(xml), nomSortie, 'application/zip');
+  else enregistrer(xml, nomSortie, 'application/xml');
 }
 
 // ---------- Affichage ----------
@@ -726,7 +708,7 @@ function dessin(s: Session): Dessin {
 
 function panneauSelection(s: Session): HTMLElement {
   if (mode === 'limite') {
-    if (!selLimite) return el('div', { class: 'info doux' }, 'Touchez une limite sur la carte.');
+    if (!selLimite) return el('div', { class: 'info doux' }, 'Touche une limite sur la carte.');
     const ref = selLimite;
     const x = nomParcelle(s, ref.anneau);
     const jum = limitesJumelles(s.etat, ref);
@@ -752,7 +734,7 @@ function panneauSelection(s: Session): HTMLElement {
       el('div', { class: 'sens' }, sens),
     );
   }
-  if (!selSommet) return el('div', { class: 'info doux' }, 'Touchez un sommet sur la carte.');
+  if (!selSommet) return el('div', { class: 'info doux' }, 'Touche un sommet sur la carte.');
   const ref = selSommet;
   const autres = new Set(
     sommetsEn(s.etat, latLon(s.etat.anneaux[ref.anneau]!.sommets[ref.sommet]!))
@@ -815,7 +797,7 @@ function panneauSelection(s: Session): HTMLElement {
           onclick: () => {
             placerAuDoigt = !placerAuDoigt;
             message = placerAuDoigt
-              ? { texte: 'Touchez la carte à l’endroit où placer le point.', erreur: false }
+              ? { texte: 'Touche la carte à l’endroit où placer le point.', erreur: false }
               : null;
             afficher();
           },
@@ -970,27 +952,17 @@ function panneauExport(): HTMLElement {
         el(
           'div',
           { class: 'rangee' },
-          session?.archive &&
-            el(
-              'button',
-              { class: 'principal', onclick: () => telecharger('zip') },
-              graves.length > 0 ? 'Télécharger le zip malgré tout' : 'Télécharger le zip complet',
-            ),
           el(
             'button',
-            {
-              class: session?.archive ? '' : 'principal',
-              onclick: () => telecharger('xml'),
-            },
-            session?.archive ? 'TASKDATA.XML seul' : 'Télécharger TASKDATA.XML',
+            { class: 'principal', onclick: () => telecharger('dossier') },
+            graves.length > 0 ? 'Télécharger malgré tout' : `Télécharger ${NOM_DOSSIER}.zip`,
           ),
+          el('button', { onclick: () => telecharger('xml') }, 'TASKDATA.XML seul'),
         ),
         el(
           'div',
           { class: 'doux' },
-          session?.archive
-            ? 'Le zip arrive dans « Téléchargements ». Il contient tous les fichiers de la console, seul TASKDATA.XML change. Décompressez-le sur la clé.'
-            : 'Le fichier arrive dans « Téléchargements ». Copiez-le ensuite à la place de TASKDATA.XML dans une copie du dossier sur la clé.',
+          `${NOM_DOSSIER}.zip arrive dans « Téléchargements ». Décompresse-le sur la clé : ça doit donner un dossier ${NOM_DOSSIER} avec TASKDATA.XML dedans.`,
         ),
       ),
     );
@@ -1031,7 +1003,7 @@ function afficher(): void {
   const choixFichier = el(
     'label',
     { class: 'bouton-fichier' },
-    session ? 'Autre fichier' : 'Ouvrir le zip ou TASKDATA.XML',
+    session ? 'Autre fichier' : 'Ouvrir TASKDATA.XML',
   );
   const input = el('input', { type: 'file' });
   input.addEventListener('change', () => {
@@ -1061,7 +1033,7 @@ function afficher(): void {
       el(
         'div',
         { class: 'info' },
-        'Ouvrez le zip exporté par la console, ou son fichier TASKDATA.XML (depuis la clé USB ou les téléchargements). ',
+        'Ouvre le fichier TASKDATA.XML exporté par la console (sur la clé USB, dans le dossier TASKDATA). ',
         'Tout reste sur le téléphone : rien n’est envoyé sur Internet.',
       ),
     );
