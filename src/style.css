@@ -613,18 +613,18 @@ td.etats {
     justify-content: center;
     align-items: center;
     flex: none;
-    height: 26px;
-    margin: 0 -8px -6px;
+    height: 44px;
+    margin: 0 -8px -12px;
     touch-action: none;
     cursor: grab;
   }
   .avec-volet .poignee::before {
     content: '';
-    width: 44px;
-    height: 5px;
+    width: 64px;
+    height: 6px;
     border-radius: 3px;
     background: var(--doux);
-    opacity: 0.6;
+    opacity: 0.8;
   }
 }
 
@@ -642,5 +642,17 @@ td.etats {
   .avec-volet.volet-haut .leaflet-bottom,
   .avec-volet.volet-haut .gps-sur-carte {
     display: none;
+  }
+}
+
+/* Pas de « tirer pour rafraîchir » : un glissement vers le bas replie le volet, il ne doit pas
+   recharger la page. */
+html,
+body {
+  overscroll-behavior-y: none;
+}
+@media (orientation: portrait), (max-width: 699px) {
+  .avec-volet .onglets {
+    touch-action: none;
   }
 }

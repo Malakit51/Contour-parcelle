@@ -2540,13 +2540,13 @@ const voletVisible = () =>
 
 /** Hauteur (px) de chaque cran : replié = poignée, onglets et barre du bas ; plein = sous la barre du haut. */
 function hauteurs(): Record<Cran, number> {
-  // Poignée (marge −6) + onglets + barre du bas, deux espaces de 8 px et la marge du bas (zone
+  // Poignée (marge −12) + onglets + barre du bas, deux espaces de 8 px et la marge du bas (zone
   // des boutons d'Android comprise) : le panneau est alors masqué.
   const replie =
     poignee.offsetHeight +
     zones.onglets.offsetHeight +
     zones.bas.offsetHeight +
-    10 +
+    4 +
     parseFloat(getComputedStyle(volet).paddingBottom || '0');
   const plein = window.innerHeight - 72;
   return { replie, moitie: Math.max(replie, Math.round(window.innerHeight * 0.5)), plein };
@@ -2569,40 +2569,68 @@ function poserVolet(hauteur?: number): void {
   carte.margeHaut = 64;
 }
 
-// Glissement de la poignée : le volet suit le doigt, puis se cale sur le cran le plus proche.
-// Un simple appui passe au cran suivant.
-let depart: { y: number; h: number; bouge: boolean } | null = null;
-poignee.addEventListener('pointerdown', (e) => {
-  if (!voletVisible()) return;
-  poignee.setPointerCapture(e.pointerId);
-  depart = { y: e.clientY, h: hauteurs()[cran], bouge: false };
-  volet.classList.add('glisse');
-});
-poignee.addEventListener('pointermove', (e) => {
-  if (!depart) return;
-  const dy = depart.y - e.clientY;
-  if (Math.abs(dy) > 6) depart.bouge = true;
-  const { replie, plein } = hauteurs();
-  poserVolet(Math.min(plein, Math.max(replie, depart.h + dy)));
-});
-function lacher(e: PointerEvent): void {
-  if (!depart) return;
-  volet.classList.remove('glisse');
-  const crans = hauteurs();
-  if (!depart.bouge) {
-    cran = cran === 'replie' ? 'moitie' : cran === 'moitie' ? 'plein' : 'replie';
-  } else {
-    const h = depart.h + (depart.y - e.clientY);
-    cran = (Object.keys(crans) as Cran[]).reduce((m, c) =>
-      Math.abs(crans[c] - h) < Math.abs(crans[m] - h) ? c : m,
-    );
-  }
-  depart = null;
-  ecrireStockage(CLE_HAUTEUR_VOLET, cran);
-  poserVolet();
+// Glissement : le volet suit le doigt, puis se cale sur le cran le plus proche. On l'attrape par
+// la poignée (un simple appui y passe au cran suivant) ou par la barre des onglets (là, il faut
+// glisser franchement vers le haut ou le bas : un appui reste un changement d'onglet).
+function rendreGlissant(zone: HTMLElement, appuiChangeDeCran: boolean): void {
+  let depart: { y: number; x: number; h: number; glisse: boolean; id: number } | null = null;
+  const commencer = () => {
+    depart!.glisse = true;
+    zone.setPointerCapture(depart!.id);
+    volet.classList.add('glisse');
+  };
+  // Mouvements et lâcher suivis sur toute la fenêtre : le doigt sort vite de la poignée.
+  const bouger = (e: PointerEvent) => {
+    if (!depart || e.pointerId !== depart.id) return;
+    const dy = depart.y - e.clientY;
+    if (!depart.glisse) {
+      if (Math.abs(dy) < 10 || Math.abs(dy) < Math.abs(e.clientX - depart.x)) return;
+      commencer();
+    }
+    const { replie, plein } = hauteurs();
+    poserVolet(Math.min(plein, Math.max(replie, depart.h + dy)));
+  };
+  const lacher = (e: PointerEvent) => {
+    if (!depart || e.pointerId !== depart.id) return;
+    const d = depart;
+    depart = null;
+    window.removeEventListener('pointermove', bouger);
+    window.removeEventListener('pointerup', lacher);
+    window.removeEventListener('pointercancel', lacher);
+    if (!d.glisse) return; // simple appui sur un onglet : rien à faire ici
+    volet.classList.remove('glisse');
+    const crans = hauteurs();
+    const h = d.h + (d.y - e.clientY);
+    if (Math.abs(d.y - e.clientY) < 6) {
+      cran = cran === 'replie' ? 'moitie' : cran === 'moitie' ? 'plein' : 'replie';
+    } else {
+      cran = (Object.keys(crans) as Cran[]).reduce((m, c) =>
+        Math.abs(crans[c] - h) < Math.abs(crans[m] - h) ? c : m,
+      );
+      // Après un glissement depuis les onglets, le clic qui suit ne doit pas changer d'onglet.
+      window.addEventListener(
+        'click',
+        (c) => {
+          c.stopPropagation();
+          c.preventDefault();
+        },
+        { capture: true, once: true },
+      );
+    }
+    ecrireStockage(CLE_HAUTEUR_VOLET, cran);
+    poserVolet();
+  };
+  zone.addEventListener('pointerdown', (e) => {
+    if (!voletVisible()) return;
+    depart = { y: e.clientY, x: e.clientX, h: hauteurs()[cran], glisse: false, id: e.pointerId };
+    window.addEventListener('pointermove', bouger);
+    window.addEventListener('pointerup', lacher);
+    window.addEventListener('pointercancel', lacher);
+    if (appuiChangeDeCran) commencer();
+  });
 }
-poignee.addEventListener('pointerup', lacher);
-poignee.addEventListener('pointercancel', lacher);
+rendreGlissant(poignee, true);
+rendreGlissant(zones.onglets, false);
 window.addEventListener('resize', () => poserVolet());
 
 app.classList.add('mise-en-page');
