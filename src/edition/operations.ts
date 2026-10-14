@@ -371,7 +371,9 @@ export function simplifierParcelle(
     const pts = a.sommets.map((s) => plan.versXY(latLon(s)));
     const fixes = new Set(
       a.sommets.flatMap((s, i) =>
-        // Pour un bord seul, tout ce qui n'est pas à l'intérieur du bord est fixe.
+        // Le premier point du fichier ne bouge jamais (règle 5). Pour un bord seul, tout ce qui
+        // n'est pas à l'intérieur du bord est fixe.
+        i === 0 ||
         (interieurs && !interieurs.has(i)) ||
         sommetsEn(etat, latLon(s)).some((r) => r.anneau !== ia)
           ? [i]

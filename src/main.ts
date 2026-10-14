@@ -14,7 +14,12 @@ import {
   type RefLimite,
   type RefSommet,
 } from './edition/etat';
-import { exporterEtat, nouvelleSurface, parcellesModifiees } from './edition/export';
+import {
+  exporterEtat,
+  nouvelleSurface,
+  parcellesModifiees,
+  verifierRelecture,
+} from './edition/export';
 import { nettoyer } from './edition/nettoyage';
 import {
   decalerLimite,
@@ -58,7 +63,7 @@ import { decoder, encoder } from './isoxml/octets';
 import { Carte, type Dessin, type VersEcran } from './ui/carte';
 import { el } from './ui/dom';
 import { GOOGLE_CLIENT_ID } from './sauvegarde/config';
-import { Drive } from './sauvegarde/drive';
+import { ConflitDrive, Drive, type FichierDrive } from './sauvegarde/drive';
 import {
   enregistrerSession,
   garderSurAppareil,
@@ -408,20 +413,53 @@ function programmerSauvegardeDrive(): void {
   minuterieDrive = setTimeout(() => void sauverSurDrive(), 4000);
 }
 
-async function sauverSurDrive(): Promise<void> {
+/**
+ * Date de la sauvegarde en ligne lors de la dernière lecture ou écriture par cet appareil : on
+ * n'écrase jamais une sauvegarde modifiée depuis par un autre appareil (ConflitDrive).
+ */
+const CLE_DRIVE_VU = 'contour-parcelle/drive-vu';
+/** Sauvegarde en ligne plus récente que ce que cet appareil a vu : l'utilisateur doit choisir. */
+let driveConflit: FichierDrive | null = null;
+
+/** `forcer` : remplacer la sauvegarde en ligne même si un autre appareil l'a modifiée. */
+async function sauverSurDrive(forcer = false): Promise<void> {
   if (!session) return;
   clearTimeout(minuterieDrive);
+  const contenu = enregistrerSession(
+    session.td,
+    session.nomFichier,
+    session.etat,
+    nomAppareil(),
+    suivi,
+  );
   try {
     texteDrive.textContent = 'Envoi sur Google Drive…';
-    const f = await drive.ecrire(
-      enregistrerSession(session.td, session.nomFichier, session.etat, nomAppareil(), suivi),
-    );
+    let f: FichierDrive;
+    try {
+      f = await drive.ecrire(contenu, forcer ? undefined : lireStockage(CLE_DRIVE_VU));
+    } catch (e) {
+      // Première fois avec cette version de l'éditeur : si la sauvegarde en ligne vient de cet
+      // appareil, ce n'est pas un conflit.
+      if (!(e instanceof ConflitDrive) || lireStockage(CLE_DRIVE_VU) !== null) throw e;
+      const lu = await drive.lire();
+      if ((lu?.contenu as { appareil?: string } | undefined)?.appareil !== nomAppareil()) throw e;
+      f = await drive.ecrire(contenu, lu!.fichier.modifie);
+    }
+    ecrireStockage(CLE_DRIVE_VU, f.modifie);
+    driveConflit = null;
     texteDrive.textContent = `Enregistré sur Google Drive le ${quandFr(f.modifie)}.`;
     if (driveEnAttente()) {
       ecrireStockage(CLE_ATTENTE, null);
       afficher();
     }
   } catch (e) {
+    if (e instanceof ConflitDrive) {
+      driveConflit = e.fichier;
+      texteDrive.textContent = `Sauvegarde en ligne modifiée le ${quandFr(e.fichier.modifie)} depuis un autre appareil : rien n’est envoyé. « Reprendre » pour récupérer ce travail, ou « Envoyer quand même » pour le remplacer par celui de cet appareil.`;
+      if (lireStockage(CLE_COMPTE)) ecrireStockage(CLE_ATTENTE, '1');
+      afficher();
+      return;
+    }
     texteDrive.textContent = `Pas enregistré sur Google Drive : ${(e as Error).message}`;
     if (lireStockage(CLE_COMPTE)) ecrireStockage(CLE_ATTENTE, '1');
     afficher();
@@ -441,8 +479,13 @@ async function connecterDrive(): Promise<void> {
     }
     const lu = await drive.lire();
     const enLigne = lu?.contenu as { enregistreLe?: string; appareil?: string } | undefined;
+    const autre =
+      lu &&
+      lu.fichier.modifie !== lireStockage(CLE_DRIVE_VU) &&
+      enLigne?.appareil !== nomAppareil();
     texteDrive.textContent = lu
-      ? `Sauvegarde en ligne du ${quandFr(enLigne?.enregistreLe ?? lu.fichier.modifie)} (${enLigne?.appareil ?? '?'}).`
+      ? `Sauvegarde en ligne du ${quandFr(enLigne?.enregistreLe ?? lu.fichier.modifie)} (${enLigne?.appareil ?? '?'}).` +
+        (autre ? ' Elle vient d’un autre appareil : « Reprendre » pour récupérer son travail.' : '')
       : 'Aucune sauvegarde en ligne pour l’instant.';
   } catch (e) {
     texteDrive.textContent = (e as Error).message;
@@ -500,6 +543,10 @@ async function reprendreDepuisDrive(): Promise<void> {
       return;
     }
     const quand = reprendreSauvegarde(lu.contenu, 'en ligne');
+    if (quand) {
+      ecrireStockage(CLE_DRIVE_VU, lu.fichier.modifie);
+      driveConflit = null;
+    }
     texteDrive.textContent = quand
       ? `Repris depuis la sauvegarde en ligne du ${quand}.`
       : 'Reprise annulée.';
@@ -752,6 +799,20 @@ function panneauDrive(): HTMLElement {
           { class: 'rangee' },
           el('button', { onclick: () => void sauverSurDrive() }, 'Enregistrer maintenant'),
           el('button', { onclick: () => void reprendreDepuisDrive() }, 'Reprendre'),
+          driveConflit &&
+            el(
+              'button',
+              {
+                onclick: () => {
+                  if (
+                    confirm('Remplacer la sauvegarde en ligne par le travail de cet appareil ?')
+                  ) {
+                    void sauverSurDrive(true);
+                  }
+                },
+              },
+              'Envoyer quand même',
+            ),
         )
       : el(
           'div',
@@ -796,10 +857,22 @@ function reprendreSession(): void {
         (n > 0 ? `, ${n} parcelle(s) modifiée(s).` : ', sans modification.'),
       false,
     );
-  } catch {
+  } catch (e) {
+    // Ne jamais effacer le travail sans prévenir : on le met de côté, téléchargeable.
+    sessionIllisible = JSON.stringify(brut);
+    ecrireStockage(CLE_SESSION_ILLISIBLE, sessionIllisible);
     oublierSurAppareil(stockage);
+    message = {
+      texte: `Le travail enregistré sur cet appareil n’a pas pu être repris (${(e as Error).message}). Il est gardé de côté : onglet Fichier, « Télécharger le travail illisible ».`,
+      erreur: true,
+    };
+    afficher();
   }
 }
+
+/** Travail enregistré qui n'a pas pu être repris (gardé pour ne rien perdre). */
+const CLE_SESSION_ILLISIBLE = 'contour-parcelle/session-illisible';
+let sessionIllisible: string | null = lireStockage(CLE_SESSION_ILLISIBLE);
 
 function fermerFichier(): void {
   if (!session) return;
@@ -1038,18 +1111,16 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
     try {
       const r = ajouterPoint(s.etat, { anneau: limite.anneau, debut: limite.debut }, position);
       ajoutEnCours = false;
-      enregistrerModification(
+      const note = enregistrerModification(
         s,
         r.etat,
         `Point ajouté sur une limite de ${nomParcelle(s, limite.anneau)}`,
       );
       effacerSelection();
       parcelleCourante = s.etat.anneaux[limite.anneau]!.parcelle;
-      selSommet = r.sommet;
-      message = {
-        texte: 'Point ajouté.',
-        erreur: false,
-      };
+      // Si le nettoyage a retiré un point (ajout tout contre un sommet), l'indice n'est plus sûr.
+      if (!note) selSommet = r.sommet;
+      message = { texte: `Point ajouté${note}.`, erreur: false };
     } catch (e) {
       message = { texte: (e as Error).message, erreur: true };
     }
@@ -1372,13 +1443,17 @@ function annuler(): void {
   afficher();
 }
 
+/** Retour au fichier d'origine (contours et lignes de guidage). Annulable, comme une modification. */
 function reinitialiser(): void {
-  if (!session || session.historique.length === 0) return;
-  if (!confirm('Revenir au fichier d’origine ? Toutes les modifications seront perdues.')) return;
-  session.etat = session.initial;
-  retirerDuJournal(session.historique.flatMap((h) => h.journal));
-  session.historique = [];
-  garderSession();
+  if (!session || !travailEnCours(session.etat)) return;
+  if (
+    !confirm(
+      'Revenir au fichier d’origine ? Contours modifiés et lignes de guidage seront retirés (« Annuler » pour revenir).',
+    )
+  ) {
+    return;
+  }
+  enregistrerModification(session, session.initial, 'Retour au fichier d’origine');
   effacerSelection();
   message = { texte: 'Retour au fichier d’origine.', erreur: false };
   afficher();
@@ -1389,8 +1464,19 @@ function reinitialiser(): void {
 function preparerExport(): void {
   if (!session) return;
   const s = session;
-  const texte = exporterEtat(s.td, s.etat);
-  const alertes = controler(s.td, s.etat, parcellesModifiees(s.etat));
+  let texte: string;
+  try {
+    texte = exporterEtat(s.td, s.etat);
+  } catch (e) {
+    exportPrepare = null;
+    message = { texte: `Export impossible : ${(e as Error).message}`, erreur: true };
+    afficher();
+    return;
+  }
+  const alertes: Alerte[] = [
+    ...verifierRelecture(s.td, s.etat, texte).map((m) => ({ grave: true, message: m })),
+    ...controler(s.td, s.etat, parcellesModifiees(s.etat)),
+  ];
   const diffs = comparer(s.td.texte, texte);
   const modifiees = diffs.filter((d) => d.avant !== null && d.apres !== null).length;
   const ajoutees = diffs.filter((d) => d.avant === null).length;
@@ -2549,6 +2635,43 @@ function contenuFichier(s: Session | null): Node[] {
   const contenu: Node[] = [
     ...(s ? [] : [el('h1', {}, 'Contours parcelles')]),
     el('div', { class: 'rangee' }, boutonFichier()),
+    ...(sessionIllisible
+      ? [
+          el(
+            'div',
+            { class: 'info' },
+            el('strong', {}, 'Travail illisible mis de côté'),
+            el(
+              'div',
+              { class: 'rangee' },
+              el(
+                'button',
+                {
+                  onclick: () =>
+                    enregistrer(
+                      encoder(sessionIllisible!),
+                      `contour-parcelle-travail-illisible-${aujourdhui()}.json`,
+                      'application/json',
+                    ),
+                },
+                'Télécharger le travail illisible',
+              ),
+              el(
+                'button',
+                {
+                  onclick: () => {
+                    if (!confirm('Supprimer définitivement ce travail illisible ?')) return;
+                    sessionIllisible = null;
+                    ecrireStockage(CLE_SESSION_ILLISIBLE, null);
+                    afficher();
+                  },
+                },
+                'Supprimer',
+              ),
+            ),
+          ),
+        ]
+      : []),
     ...(s ? [panneauReference()] : []),
     panneauSauvegardeFichier(),
     panneauDrive(),
@@ -2560,7 +2683,7 @@ function contenuFichier(s: Session | null): Node[] {
         { class: 'rangee' },
         el(
           'button',
-          { onclick: reinitialiser, ...(s.historique.length > 0 ? {} : { disabled: '' }) },
+          { onclick: reinitialiser, ...(travailEnCours(s.etat) ? {} : { disabled: '' }) },
           'Réinitialiser',
         ),
         el('button', { onclick: fermerFichier }, 'Fermer le fichier'),

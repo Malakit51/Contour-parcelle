@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Drive, ErreurDrive, NOM_FICHIER_DRIVE } from '../src/sauvegarde/drive';
+import { ConflitDrive, Drive, ErreurDrive, NOM_FICHIER_DRIVE } from '../src/sauvegarde/drive';
 
 /** Faux Google Drive en mémoire, qui répond comme l'API v3 pour ce que l'éditeur utilise. */
 function fauxDrive() {
@@ -73,5 +73,26 @@ describe('sauvegarde Google Drive', () => {
     const drive = new Drive('client-test', fauxDrive().requete);
     drive.utiliserJeton('jeton');
     expect(await drive.compte()).toBe('essai@exemple.fr');
+  });
+
+  it('refuse d’écraser une sauvegarde modifiée depuis un autre appareil', async () => {
+    const faux = fauxDrive();
+    const telephone = new Drive('client-test', faux.requete);
+    const tablette = new Drive('client-test', faux.requete);
+    telephone.utiliserJeton('jeton');
+    tablette.utiliserJeton('jeton');
+    // La tablette n'a jamais vu la sauvegarde : elle ne l'écrase pas.
+    const tel = await telephone.ecrire({ appareil: 'téléphone' }, null);
+    await expect(tablette.ecrire({ appareil: 'tablette' }, null)).rejects.toBeInstanceOf(
+      ConflitDrive,
+    );
+    // Le téléphone, qui a vu la dernière version, peut écrire ; puis la tablette, si elle force.
+    const tel2 = await telephone.ecrire({ appareil: 'téléphone', n: 2 }, tel.modifie);
+    await expect(tablette.ecrire({ appareil: 'tablette' }, tel.modifie)).rejects.toBeInstanceOf(
+      ConflitDrive,
+    );
+    await tablette.ecrire({ appareil: 'tablette' });
+    expect((await telephone.lire())?.contenu).toEqual({ appareil: 'tablette' });
+    expect(tel2.modifie).not.toBe(tel.modifie);
   });
 });

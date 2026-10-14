@@ -130,7 +130,13 @@ export async function ecrireDossierTaskdata(
   if (!choisir) throw new Error('Ce navigateur ne permet pas d’écrire un dossier.');
   // D'abord l'emplacement mémorisé (sans sélecteur) ; s'il a disparu (clé débranchée…), on
   // retombe sur le sélecteur.
-  const memorise = await emplacementAutorise();
+  // Un dossier TASKDATA n'est pas un emplacement : on écrirait TASKDATA 0.12/TASKDATA 0.13/…, que
+  // la console ne lirait pas. (Un tel emplacement a pu être mémorisé par une version précédente.)
+  let memorise = await emplacementAutorise();
+  if (memorise && estDossierTaskdata(memorise.name)) {
+    await memoriser(null);
+    memorise = null;
+  }
   if (memorise) {
     try {
       return await ecrireDans(memorise, contenu, nomDossier, confirmerRemplacement);
@@ -145,10 +151,18 @@ export async function ecrireDossierTaskdata(
   } catch {
     return null; // choix annulé
   }
+  if (estDossierTaskdata(parent.name)) {
+    throw new Error(
+      `tu as choisi le dossier « ${parent.name} ». Choisis la clé USB elle-même (sa racine) : l’éditeur y crée le dossier « ${nomDossier} ».`,
+    );
+  }
   const chemin = await ecrireDans(parent, contenu, nomDossier, confirmerRemplacement);
   await memoriser(parent);
   return chemin;
 }
+
+/** Vrai pour un dossier « TASKDATA », « TASKDATA 0.12 »… */
+export const estDossierTaskdata = (nom: string) => /^taskdata/i.test(nom.trim());
 
 async function ecrireDans(
   parent: PoigneeDossier,

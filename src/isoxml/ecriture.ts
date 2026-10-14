@@ -36,10 +36,12 @@ export function texteGuidages(
       ({ nom, points }) =>
         `<LSG A="5" B="${echapper(nom)}">${finDeLigne}` +
         points
-          .map(
-            (p) =>
-              `<PNT A="2" C="${p.lat.toFixed(13)}" D="${p.lon.toFixed(13)}" E="0"/>${finDeLigne}`,
-          )
+          .map((p) => {
+            if (!Number.isFinite(p.lat) || !Number.isFinite(p.lon)) {
+              throw new Error(`Ligne « ${nom} » : coordonnée invalide (calcul impossible).`);
+            }
+            return `<PNT A="2" C="${p.lat.toFixed(13)}" D="${p.lon.toFixed(13)}" E="0"/>${finDeLigne}`;
+          })
           .join('') +
         `</LSG>${finDeLigne}`,
     )
@@ -53,8 +55,22 @@ interface Remplacement {
 
 /** Écrit `valeur` avec autant de décimales que la valeur d'origine. */
 export function formaterComme(valeur: number, origine: ValeurBrute): string {
+  if (!Number.isFinite(valeur)) throw new Error('Coordonnée invalide (calcul impossible).');
   const decimales = origine.texte.split('.')[1]?.length ?? 0;
   return valeur.toFixed(decimales);
+}
+
+/**
+ * La ligne entière (fin de ligne comprise) qui contient `balise`, si elle ne contient rien d'autre
+ * que des espaces ; sinon null.
+ */
+function ligneSeule(texte: string, balise: Plage): Plage | null {
+  const debut = texte.lastIndexOf('\n', balise.debut - 1) + 1;
+  const n = texte.indexOf('\n', balise.fin);
+  const fin = n < 0 ? texte.length : n + 1;
+  const autour = texte.slice(debut, balise.debut) + texte.slice(balise.fin, fin);
+  if (n < 0 || autour.trim() !== '') return null;
+  return { debut, fin };
 }
 
 export function remplacer(texte: string, remplacements: Remplacement[]): string {
@@ -88,11 +104,15 @@ export function exporterTaskData(td: TaskData, changements: Changements = {}): s
     remplacements.push({ plage: point.lonBrute.plage, texte: formaterComme(lon, point.lonBrute) });
   }
   for (const { apres, points } of changements.insertions ?? []) {
-    const debutLigne = td.texte.lastIndexOf('\n', apres.balise.debut - 1) + 1;
-    const finLigne = td.texte.indexOf('\n', apres.balise.fin);
-    if (finLigne < 0) throw new Error('Point en dernière ligne du fichier : insertion impossible.');
-    // Modèle : la ligne du point précédent, sans son attribut B (start / end).
-    const modele = td.texte.slice(debutLigne, finLigne + 1).replace(/\sB="[^"]*"/, '');
+    // Modèle : la ligne du point précédent (ou sa seule balise, si la ligne contient autre chose),
+    // sans son attribut B (start / end).
+    const ligne = ligneSeule(td.texte, apres.balise);
+    const modele = (
+      ligne
+        ? td.texte.slice(ligne.debut, ligne.fin)
+        : td.texte.slice(apres.balise.debut, apres.balise.fin)
+    ).replace(/\sB="[^"]*"/, '');
+    const position = ligne ? ligne.fin : apres.balise.fin;
     const texte = points
       .map(({ lat, lon }) =>
         modele
@@ -100,13 +120,11 @@ export function exporterTaskData(td: TaskData, changements: Changements = {}): s
           .replace(/(\sD=")[^"]*"/, `$1${formaterComme(lon, apres.lonBrute)}"`),
       )
       .join('');
-    remplacements.push({ plage: { debut: finLigne + 1, fin: finLigne + 1 }, texte });
+    remplacements.push({ plage: { debut: position, fin: position }, texte });
   }
   for (const point of changements.suppressions ?? []) {
-    const debutLigne = td.texte.lastIndexOf('\n', point.balise.debut - 1) + 1;
-    const finLigne = td.texte.indexOf('\n', point.balise.fin);
-    const fin = finLigne < 0 ? td.texte.length : finLigne + 1;
-    remplacements.push({ plage: { debut: debutLigne, fin }, texte: '' });
+    // La ligne entière si le point est seul dessus, sinon seulement sa balise.
+    remplacements.push({ plage: ligneSeule(td.texte, point.balise) ?? point.balise, texte: '' });
   }
   for (const { parcelle, m2 } of changements.surfaces ?? []) {
     if (!parcelle.surface) continue;

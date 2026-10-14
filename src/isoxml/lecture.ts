@@ -70,7 +70,7 @@ interface Balise {
 }
 
 const RE_BALISE =
-  /<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<!(?:[^>])*>|<(\/?)([A-Za-z_][\w.:-]*)([^>]*?)(\/?)>/g;
+  /<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<!(?:[^>])*>|<(\/?)([A-Za-z_][\w.:-]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g;
 const RE_ATTRIBUT = /([A-Za-z_][\w.:-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 
 function* balises(texte: string): Generator<Balise> {

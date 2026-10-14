@@ -170,3 +170,15 @@ describe('simplifier un seul bord', () => {
     ]);
   });
 });
+
+describe('premier point du fichier', () => {
+  it('ne bouge jamais, même s’il est un peu hors de la droite de son côté', () => {
+    // Carré bruité ; le coin de départ est décalé de 10 cm.
+    const bruite: XY[] = [[0.1, 0.1]];
+    for (let x = 10; x < 100; x += 10) bruite.push([x, x % 20 ? 0.05 : -0.05]);
+    bruite.push([100, 0], [100, 100], [0, 100]);
+    const { etat } = preparer({ X: bruite });
+    const r = simplifierParcelle(etat, 0, 0.25);
+    expect(r.etat.anneaux[0]!.sommets[0]).toEqual(etat.anneaux[0]!.sommets[0]);
+  });
+});

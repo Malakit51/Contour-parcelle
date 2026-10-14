@@ -1,8 +1,8 @@
 // Passage de l'état modifié aux changements à écrire dans le fichier.
 
 import { exporterTaskData, type Changements } from '../isoxml/ecriture';
-import type { Point, TaskData } from '../isoxml/lecture';
-import { etatInitial, surfaceEtat, type Etat } from './etat';
+import { lireTaskData, type Point, type TaskData } from '../isoxml/lecture';
+import { distanceM, etatInitial, latLon, surfaceEtat, type Etat } from './etat';
 
 /** Parcelles dont au moins un sommet a bougé, a été ajouté ou supprimé. */
 export function parcellesModifiees(etat: Etat): number[] {
@@ -48,7 +48,11 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
         if (s.lat !== s.origine.lat || s.lon !== s.origine.lon) {
           points.push({ point: s.origine, lat: s.lat, lon: s.lon });
           // Le premier point est répété à la fin de l'anneau dans le fichier.
-          if (i === 0) points.push({ point: anneau.points.at(-1)!, lat: s.lat, lon: s.lon });
+          // (seulement si l'anneau est bien fermé dans le fichier : sinon le dernier point est un
+          // vrai sommet, à ne pas écraser).
+          if (i === 0 && anneau.points.length > a.nbOrigine) {
+            points.push({ point: anneau.points.at(-1)!, lat: s.lat, lon: s.lon });
+          }
         }
         return;
       }
@@ -81,4 +85,45 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
 
 export function exporterEtat(td: TaskData, etat: Etat): string {
   return exporterTaskData(td, changementsDepuisEtat(td, etat));
+}
+
+/**
+ * Relit le fichier produit et le compare à l'état : chaque contour doit y être, point pour point
+ * (à l'arrondi près des décimales du fichier), fermé comme dans l'original, et chaque ligne de
+ * guidage présente. Renvoie la liste des problèmes (vide si tout va bien). Filet de sécurité
+ * contre un fichier mal écrit (XML cassé, point en double, anneau ouvert…).
+ */
+export function verifierRelecture(td: TaskData, etat: Etat, texte: string): string[] {
+  let relu: TaskData;
+  try {
+    relu = lireTaskData(texte);
+  } catch (e) {
+    return [`Le fichier produit est illisible : ${(e as Error).message}`];
+  }
+  const problemes: string[] = [];
+  if (relu.parcelles.length !== td.parcelles.length) {
+    problemes.push('Le fichier produit n’a pas le même nombre de parcelles.');
+    return problemes;
+  }
+  const reluEtat = etatInitial(relu);
+  for (const a of etat.anneaux) {
+    const nom = td.parcelles[a.parcelle]!.nom;
+    const r = reluEtat.anneaux.find((x) => x.parcelle === a.parcelle && x.anneau === a.anneau);
+    const ferme = (pts: readonly { lat: number; lon: number }[]) =>
+      pts.length > 1 && pts[0]!.lat === pts.at(-1)!.lat && pts[0]!.lon === pts.at(-1)!.lon;
+    if (!r || r.sommets.length !== a.sommets.length) {
+      problemes.push(`${nom} : le contour écrit n’a pas le bon nombre de points.`);
+    } else if (r.sommets.some((s, i) => distanceM(latLon(s), latLon(a.sommets[i]!)) > 0.02)) {
+      problemes.push(`${nom} : un point du contour écrit n’est pas à la bonne place.`);
+    } else if (
+      ferme(td.parcelles[a.parcelle]!.anneaux[a.anneau]!.points) !==
+      ferme(relu.parcelles[a.parcelle]!.anneaux[a.anneau]!.points)
+    ) {
+      problemes.push(`${nom} : le contour écrit n’est plus fermé comme dans l’original.`);
+    }
+  }
+  if (relu.segmentsIgnores.length !== (etat.guidages?.length ?? 0)) {
+    problemes.push('Les lignes de guidage écrites ne correspondent pas à celles de l’éditeur.');
+  }
+  return problemes;
 }

@@ -14,6 +14,14 @@ export class ErreurDrive extends Error {
   override name = 'ErreurDrive';
 }
 
+/** La sauvegarde en ligne a changé depuis la dernière fois que cet appareil l'a lue ou écrite. */
+export class ConflitDrive extends ErreurDrive {
+  override name = 'ConflitDrive';
+  constructor(readonly fichier: FichierDrive) {
+    super('La sauvegarde en ligne a été modifiée depuis un autre appareil.');
+  }
+}
+
 // Types minimaux de Google Identity Services (chargé à la demande depuis accounts.google.com).
 interface ReponseJeton {
   access_token?: string;
@@ -153,9 +161,16 @@ export class Drive {
     return { contenu: await r.json(), fichier };
   }
 
-  /** Crée ou remplace le fichier de sauvegarde. */
-  async ecrire(contenu: unknown): Promise<FichierDrive> {
+  /**
+   * Crée ou remplace le fichier de sauvegarde. Avec `versionVue` (date de modification du fichier
+   * en ligne lors de la dernière lecture ou écriture par cet appareil, null s'il n'en a jamais vu),
+   * refuse d'écraser un fichier modifié entre-temps par un autre appareil (ConflitDrive).
+   */
+  async ecrire(contenu: unknown, versionVue?: string | null): Promise<FichierDrive> {
     const existant = await this.trouver();
+    if (versionVue !== undefined && existant && existant.modifie !== versionVue) {
+      throw new ConflitDrive(existant);
+    }
     const limite = 'contour-parcelle-' + Math.random().toString(36).slice(2);
     const corps =
       `--${limite}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
