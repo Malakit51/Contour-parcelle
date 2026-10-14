@@ -1,6 +1,6 @@
 // Contrôles avant export, et repérage des sommets presque communs au chargement.
 
-import { planLocal, type Plan, type XY } from '../geometrie/plan';
+import { distancePointSegment, planLocal, type Plan, type XY } from '../geometrie/plan';
 import type { TaskData } from '../isoxml/lecture';
 import { distanceM, etatInitial, latLon, TOLERANCE_PARTAGE_M, type Etat } from './etat';
 import { DOUBLON_M } from './nettoyage';
@@ -249,7 +249,7 @@ function limitesDecollees(td: TaskData, etat: Etat, parcelles: readonly number[]
           prec = q;
         }
         if (longueur > 1.5 * Math.hypot(p2[0] - p1[0], p2[1] - p1[1])) return;
-        probleme += pts.filter((q) => distanceAuSegment(q, p1, p2) > 0.01).length;
+        probleme += pts.filter((q) => distancePointSegment(q, p1, p2) > 0.01).length;
       });
       if (probleme > 0) {
         messages.push(
@@ -259,12 +259,4 @@ function limitesDecollees(td: TaskData, etat: Etat, parcelles: readonly number[]
     }
   }
   return messages;
-}
-
-function distanceAuSegment(p: XY, a: XY, b: XY): number {
-  const dx = b[0] - a[0];
-  const dy = b[1] - a[1];
-  const l2 = dx * dx + dy * dy;
-  const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2));
-  return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
 }

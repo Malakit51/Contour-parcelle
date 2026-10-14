@@ -8,7 +8,7 @@
 //    à l'intersection des droites de ses deux côtés. Un sommet fixe ne bouge pas : les droites
 //    voisines passent par lui.
 
-import type { XY } from './plan';
+import { distancePointSegment, type XY } from './plan';
 
 export interface Simplification {
   /** Nouveaux sommets, dans l'ordre du contour. */
@@ -22,21 +22,12 @@ export interface Simplification {
 /** En dessous de cet angle entre deux côtés, leur intersection n'est pas fiable. */
 const ANGLE_MIN_RAD = (10 * Math.PI) / 180;
 
-function distanceSegment(p: XY, a: XY, b: XY): number {
-  const dx = b[0] - a[0];
-  const dy = b[1] - a[1];
-  const l2 = dx * dx + dy * dy;
-  if (l2 === 0) return Math.hypot(p[0] - a[0], p[1] - a[1]);
-  const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2));
-  return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
-}
-
 /** Douglas-Peucker sur la chaîne pts[debut..fin] : ajoute à `gardes` les indices intérieurs retenus. */
 function douglasPeucker(pts: XY[], debut: number, fin: number, tol: number, gardes: Set<number>) {
   let iMax = -1;
   let dMax = 0;
   for (let i = debut + 1; i < fin; i++) {
-    const d = distanceSegment(pts[i]!, pts[debut]!, pts[fin]!);
+    const d = distancePointSegment(pts[i]!, pts[debut]!, pts[fin]!);
     if (d > dMax) {
       dMax = d;
       iMax = i;
@@ -100,7 +91,7 @@ export function ecartMaximal(origine: XY[], contour: XY[]): number {
   for (const p of origine) {
     let d = Infinity;
     for (let j = 0; j < contour.length; j++) {
-      d = Math.min(d, distanceSegment(p, contour[j]!, contour[(j + 1) % contour.length]!));
+      d = Math.min(d, distancePointSegment(p, contour[j]!, contour[(j + 1) % contour.length]!));
     }
     max = Math.max(max, d);
   }

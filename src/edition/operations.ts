@@ -212,51 +212,6 @@ export function decalerLimite(etat: Etat, ref: RefLimite, distance: number): Eta
   return appliquer(etat, deplacements, ajouts);
 }
 
-/** Sens d'un déplacement positif le long d'une limite : vers l'Est si elle est plutôt orientée Est-Ouest, sinon vers le Nord. */
-export function sensPositif(etat: Etat, limite: RefLimite): 'Est' | 'Nord' {
-  const A = latLon(sommet(etat, { anneau: limite.anneau, sommet: limite.debut }));
-  const plan = planLocal(A);
-  const pb = xy(etat, plan, limite.anneau, suivant(etat, limite.anneau, limite.debut));
-  return Math.abs(pb[0]) >= Math.abs(pb[1]) ? 'Est' : 'Nord';
-}
-
-/**
- * Fait glisser un sommet le long d'une des deux limites qui y aboutissent.
- *
- * `distance` en mètres : positif = vers l'Est pour une limite orientée Est-Ouest, vers le Nord pour
- * une limite orientée Nord-Sud. Le sommet bouge dans toutes les parcelles qui le contiennent.
- */
-export function glisserSommet(
-  etat: Etat,
-  ref: RefSommet,
-  limite: RefLimite,
-  distance: number,
-): Etat {
-  if (distance === 0) return etat;
-  const fin = suivant(etat, limite.anneau, limite.debut);
-  if (limite.anneau !== ref.anneau || (limite.debut !== ref.sommet && fin !== ref.sommet)) {
-    throw new ErreurEdition('La limite choisie ne passe pas par ce sommet.');
-  }
-  const autre = limite.debut === ref.sommet ? fin : limite.debut;
-  const V = latLon(sommet(etat, ref));
-  const plan = planLocal(V);
-  const q = xy(etat, plan, ref.anneau, autre);
-  const l = Math.hypot(...q);
-  let u: XY = [q[0] / l, q[1] / l];
-  const versEst = Math.abs(u[0]) >= Math.abs(u[1]);
-  if ((versEst && u[0] < 0) || (!versEst && u[1] < 0)) u = [-u[0], -u[1]];
-  const nouveau: XY = [u[0] * distance, u[1] * distance];
-  if (positionSurSegment(nouveau, [0, 0], q).t >= 1) {
-    throw new ErreurEdition("Déplacement trop grand : il dépasse l'autre extrémité de la limite.");
-  }
-  const ll = plan.versLatLon(nouveau);
-  return appliquer(
-    etat,
-    sommetsEn(etat, V).map((r) => ({ anneau: r.anneau, sommet: r.sommet, ll })),
-    [],
-  );
-}
-
 /** Place un sommet à une position donnée, dans toutes les parcelles qui le contiennent. */
 export function placerSommet(etat: Etat, ref: RefSommet, position: LatLon): Etat {
   const V = latLon(sommet(etat, ref));

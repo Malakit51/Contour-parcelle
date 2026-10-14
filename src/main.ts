@@ -20,6 +20,14 @@ import {
   parcellesModifiees,
   verifierRelecture,
 } from './edition/export';
+import {
+  aControler,
+  ajouterGuidages,
+  COTE_MIN_M,
+  ligneSurBord,
+  lignesDeParcelle,
+  type ReglagesGuidage,
+} from './edition/guidages';
 import { nettoyer } from './edition/nettoyage';
 import {
   decalerLimite,
@@ -38,11 +46,10 @@ import {
   supprimerSommet,
   type Bord,
 } from './edition/operations';
-import { coins, cotesEntreCoins, courbeDecalee, estDroit, ligneAB } from './geometrie/guidage';
 import {
-  aireSignee,
   distanceExacte,
   planLocal,
+  pointDansPolygone,
   positionSurSegment,
   type LatLon,
   type Plan,
@@ -197,10 +204,6 @@ let porteeGuidage: 'bord' | 'parcelle' | 'toutes' = 'bord';
 /** Angle à partir duquel un sommet est un coin (lignes de toute la parcelle). */
 let seuilCoins = 30;
 const SEUILS_COINS = [20, 30, 45, 60];
-/** Côtés plus courts que ça : pas de ligne (décrochements, coins coupés). */
-const COTE_MIN_M = 20;
-/** Écart maximal (m) des points d'un côté à sa droite moyenne pour en faire une droite AB. */
-const TOLERANCE_DROIT_M = 0.5;
 /** Choix d'un bord, du premier au dernier sommet (simplification d'un bord, ligne de guidage). */
 const choixDeBord = () =>
   (mode === 'simplifier' && porteeSimplif === 'bord') ||
@@ -367,6 +370,10 @@ function changerNomAppareil(): boolean {
   return true;
 }
 
+/** Tout le travail à sauvegarder (Drive, fichier, partage) : fichier, contours, guidages, suivi. */
+const sauvegardeComplete = (s: Session) =>
+  enregistrerSession(s.td, s.nomFichier, s.etat, nomAppareil(), suivi);
+
 // ---------- Sauvegarde Google Drive ----------
 
 const drive = new Drive(GOOGLE_CLIENT_ID);
@@ -425,13 +432,7 @@ let driveConflit: FichierDrive | null = null;
 async function sauverSurDrive(forcer = false): Promise<void> {
   if (!session) return;
   clearTimeout(minuterieDrive);
-  const contenu = enregistrerSession(
-    session.td,
-    session.nomFichier,
-    session.etat,
-    nomAppareil(),
-    suivi,
-  );
+  const contenu = sauvegardeComplete(session);
   try {
     texteDrive.textContent = 'Envoi sur Google Drive…';
     let f: FichierDrive;
@@ -507,7 +508,6 @@ async function reconnecterDrive(): Promise<void> {
   afficher();
 }
 
-/** Remplace le travail de cet appareil par celui enregistré dans Drive ; le suivi est fusionné. */
 /**
  * Reprend une sauvegarde (Drive ou fichier) : remplace le travail de cet appareil, après
  * confirmation s'il était modifié, et fusionne le suivi. Renvoie la date et l'appareil, ou null
@@ -561,13 +561,7 @@ async function reprendreDepuisDrive(): Promise<void> {
 function enregistrerFichierSauvegarde(): void {
   if (!session) return;
   if (nomAppareil() === 'appareil') changerNomAppareil();
-  const contenu = enregistrerSession(
-    session.td,
-    session.nomFichier,
-    session.etat,
-    nomAppareil(),
-    suivi,
-  );
+  const contenu = sauvegardeComplete(session);
   const nom = `contour-parcelle-sauvegarde-${aujourdhui()}.json`;
   enregistrer(encoder(JSON.stringify(contenu)), nom, 'application/json');
   message = {
@@ -601,13 +595,7 @@ function partagePossible(): boolean {
 async function partagerSauvegarde(): Promise<void> {
   if (!session) return;
   if (nomAppareil() === 'appareil') changerNomAppareil();
-  const contenu = enregistrerSession(
-    session.td,
-    session.nomFichier,
-    session.etat,
-    nomAppareil(),
-    suivi,
-  );
+  const contenu = sauvegardeComplete(session);
   const nom = `contour-parcelle-sauvegarde-${aujourdhui()}.txt`;
   const fichier = new File([JSON.stringify(contenu)], nom, { type: 'text/plain' });
   try {
@@ -970,8 +958,6 @@ function longueur(s: Session, ref: RefLimite): number {
 const nomParcelle = (s: Session, anneau: number) =>
   s.td.parcelles[s.etat.anneaux[anneau]!.parcelle]!.nom;
 
-// ---------- Sélection au doigt ----------
-
 // ---------- Mesure ----------
 
 /** Points de la mesure en cours (null : outil de mesure fermé). */
@@ -1017,16 +1003,15 @@ function majMesure(): void {
   );
 }
 
-/** Point de mesure : le sommet (ou point de référence) le plus proche s'il est sous le doigt. */
-function pointDeMesure(
-  s: Session,
+/** Parmi `points`, le plus proche du doigt s'il est à moins de RAYON_TOUCHER_PX pixels, sinon null. */
+function pointSousLeDoigt(
+  points: readonly LatLon[],
   ecran: { x: number; y: number },
   versEcran: VersEcran,
-  position: LatLon,
-): LatLon {
-  let meilleur: LatLon = position;
+): LatLon | null {
+  let meilleur: LatLon | null = null;
   let dMin = RAYON_TOUCHER_PX;
-  for (const pt of [...anneauxLL(s).flat(), ...(reference?.anneaux.flat() ?? [])]) {
+  for (const pt of points) {
     const e = versEcran(pt);
     const d = Math.hypot(e.x - ecran.x, e.y - ecran.y);
     if (d <= dMin) {
@@ -1037,11 +1022,19 @@ function pointDeMesure(
   return meilleur;
 }
 
+// ---------- Sélection au doigt ----------
+
 function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position: LatLon): void {
   if (!session) return;
   const s = session;
   if (mesure !== null) {
-    mesure = [...mesure, pointDeMesure(s, ecran, versEcran, position)];
+    // Un sommet ou un point de référence sous le doigt attire le point de mesure.
+    const aimant = pointSousLeDoigt(
+      [...anneauxLL(s).flat(), ...(reference?.anneaux.flat() ?? [])],
+      ecran,
+      versEcran,
+    );
+    mesure = [...mesure, aimant ?? position];
     afficher();
     return;
   }
@@ -1049,16 +1042,7 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
     const ref = selSommet;
     placerAuDoigt = false;
     // Toucher près d'un point de l'ancien fichier : le point s'y colle exactement.
-    let aimant: LatLon | null = null;
-    let dMin = RAYON_TOUCHER_PX;
-    for (const pt of reference?.anneaux.flat() ?? []) {
-      const e = versEcran(pt);
-      const d = Math.hypot(e.x - ecran.x, e.y - ecran.y);
-      if (d <= dMin) {
-        dMin = d;
-        aimant = pt;
-      }
-    }
+    const aimant = pointSousLeDoigt(reference?.anneaux.flat() ?? [], ecran, versEcran);
     modifier(
       () => placerSommet(s.etat, ref, aimant ?? position),
       aimant
@@ -1209,18 +1193,6 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
   }
   message = null;
   afficher();
-}
-
-function pointDansPolygone(p: XY, pts: XY[]): boolean {
-  let dedans = false;
-  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-    const [xi, yi] = pts[i]!;
-    const [xj, yj] = pts[j]!;
-    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) {
-      dedans = !dedans;
-    }
-  }
-  return dedans;
 }
 
 function effacerSelection(): void {
@@ -1392,10 +1364,7 @@ function appliquer(): void {
             ? `${gs.length} lignes « ${base} » sur ${nom} (${cote})`
             : `${gs.length} lignes « ${base} » sur ${touchees.size} parcelles (${cote})`;
       // Toute une parcelle : le jeu de même nom déjà créé sur la parcelle est remplacé.
-      const gardees = (s.etat.guidages ?? []).filter(
-        (g) => porteeGuidage === 'bord' || !touchees.has(g.parcelle) || !duJeu(g, base),
-      );
-      nouveau = { ...s.etat, guidages: [...gardees, ...gs] };
+      nouveau = ajouterGuidages(s.etat, gs, porteeGuidage === 'bord' ? null : base);
     } else {
       return;
     }
@@ -1988,16 +1957,13 @@ champNomLignes.addEventListener('keydown', (e) => {
 const baseNomLignes = () => champNomLignes.value.trim() || 'Guidage';
 
 /** Vrai si la ligne fait partie du jeu « base » (« base 1 », « base 2 »…). */
-const duJeu = (g: Guidage, base: string) =>
-  g.nom.startsWith(`${base} `) && /^\d+$/.test(g.nom.slice(base.length + 1));
-
-/** Numéro suivant du jeu « base » sur la parcelle `p`. */
-function numeroSuivant(etat: Etat, p: number, base: string): number {
-  const numeros = (etat.guidages ?? [])
-    .filter((g) => g.parcelle === p && duJeu(g, base))
-    .map((g) => Number(g.nom.slice(base.length + 1)));
-  return Math.max(0, ...numeros) + 1;
-}
+/** Réglages des lignes de guidage tels que choisis dans le panneau. */
+const reglagesGuidage = (): ReglagesGuidage => ({
+  distance: Math.abs(metres()),
+  interieur: guidageInterieur,
+  seuil: seuilCoins,
+  base: baseNomLignes(),
+});
 
 /** Lignes que donnerait « Appliquer » : une sur le bord choisi, ou une par côté de la parcelle. */
 function apercuGuidages(s: Session): Guidage[] {
@@ -2014,7 +1980,7 @@ function apercuGuidages(s: Session): Guidage[] {
 function parcellesAControler(s: Session): number[] {
   return s.td.parcelles
     .map((_, p) => ({ p, r: lignesParcelle(s, p) }))
-    .filter(({ r }) => r && (r.coins.length !== 4 || r.ignores > 0))
+    .filter(({ r }) => r && aControler(r))
     .map(({ p }) => p)
     .sort((a, b) =>
       s.td.parcelles[a]!.nom.localeCompare(s.td.parcelles[b]!.nom, 'fr', { numeric: true }),
@@ -2030,67 +1996,12 @@ function coinsGuidage(s: Session): { coins: LatLon[]; lignes: Guidage[]; ignores
   return lignesParcelle(s, parcelleCourante);
 }
 
-function lignesParcelle(
-  s: Session,
-  p: number,
-): { coins: LatLon[]; lignes: Guidage[]; ignores: number } | null {
-  const a = s.etat.anneaux.find((x) => x.parcelle === p && x.type === 1);
-  if (!a) return null;
-  const plan = planLocal(latLon(a.sommets[0]!));
-  const pts = a.sommets.map((x) => plan.versXY(latLon(x)));
-  const trouves = coins(pts, seuilCoins);
-  // Décalage compté à gauche du sens de l'anneau : la gauche est l'intérieur s'il tourne dans le
-  // sens inverse des aiguilles d'une montre.
-  const sens = (aireSignee(pts) > 0 ? 1 : -1) * (guidageInterieur ? 1 : -1);
-  const decalage = Math.abs(metres()) * sens;
-  const lignes: Guidage[] = [];
-  let ignores = 0;
-  for (const ids of cotesEntreCoins(pts.length, trouves)) {
-    const cote = ids.map((i) => pts[i]!);
-    let longueur = 0;
-    for (let k = 1; k < cote.length; k++) {
-      longueur += Math.hypot(cote[k]![0] - cote[k - 1]![0], cote[k]![1] - cote[k - 1]![1]);
-    }
-    if (longueur < COTE_MIN_M) {
-      ignores++;
-      continue;
-    }
-    const type = estDroit(cote, TOLERANCE_DROIT_M) ? 'ab' : 'courbe';
-    const xy = type === 'ab' ? ligneAB(cote, decalage) : courbeDecalee(cote, decalage);
-    lignes.push({
-      parcelle: a.parcelle,
-      type,
-      nom: `${baseNomLignes()} ${lignes.length + 1}`,
-      points: xy.map((p) => plan.versLatLon(p)),
-    });
-  }
-  return { coins: trouves.map((c) => latLon(a.sommets[c.sommet]!)), lignes, ignores };
-}
+const lignesParcelle = (s: Session, p: number) => lignesDeParcelle(s.etat, p, reglagesGuidage());
 
 /** Ligne de guidage que donnerait « Appliquer » sur le bord choisi (rien n'est encore ajouté). */
 function apercuGuidage(s: Session): Guidage | null {
   if (mode !== 'guidage' || !bord) return null;
-  const a = s.etat.anneaux[bord.anneau]!;
-  const ids = sommetsDuBord(s.etat, bord);
-  const plan = planLocal(latLon(a.sommets[ids[0]!]!));
-  const pts = ids.map((i) => plan.versXY(latLon(a.sommets[i]!)));
-  // Côté intérieur : celui où un point décalé de 1 m depuis le milieu du bord tombe dans l'anneau
-  // (pour une zone exclue, l'intérieur de la parcelle est hors de l'anneau).
-  const [m1, m2] = ligneAB(pts.length > 1 ? pts : [pts[0]!, pts[0]!], 1);
-  const essai: XY = [(m1[0] + m2[0]) / 2, (m1[1] + m2[1]) / 2];
-  const dansAnneau = pointDansPolygone(
-    essai,
-    a.sommets.map((x) => plan.versXY(latLon(x))),
-  );
-  const gaucheInterieur = a.type === 1 ? dansAnneau : !dansAnneau;
-  const decalage = Math.abs(metres()) * (gaucheInterieur ? 1 : -1) * (guidageInterieur ? 1 : -1);
-  const xy = typeGuidage === 'ab' ? ligneAB(pts, decalage) : courbeDecalee(pts, decalage);
-  return {
-    parcelle: a.parcelle,
-    type: typeGuidage,
-    nom: `${baseNomLignes()} ${numeroSuivant(s.etat, a.parcelle, baseNomLignes())}`,
-    points: xy.map((p) => plan.versLatLon(p)),
-  };
+  return ligneSurBord(s.etat, bord, typeGuidage, reglagesGuidage());
 }
 
 /** Toutes les parcelles : nombre de lignes et parcelles à contrôler (un appui zoome dessus). */
@@ -2549,9 +2460,10 @@ function panneauExport(): HTMLElement {
   return bloc;
 }
 
+// ---------- Mise en page ----------
+//
 // Zones fixes de la page : on ne remplace que leur contenu, jamais la page entière, pour que
 // l'écran ne saute pas à chaque touche.
-// ---------- Mise en page ----------
 //
 // La page ne défile pas : barre du haut, carte, onglets et leur panneau (seul à défiler), puis une
 // barre du bas toujours visible (distance, Appliquer, Annuler).

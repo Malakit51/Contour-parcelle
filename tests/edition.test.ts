@@ -15,8 +15,7 @@ import {
   decalerLimite,
   retrouverLimite,
   ErreurEdition,
-  glisserSommet,
-  sensPositif,
+  glisserSommetLeLong,
 } from '../src/edition/operations';
 import { positionSurSegment, type XY } from '../src/geometrie/plan';
 import { comparer } from '../src/isoxml/comparaison';
@@ -224,19 +223,29 @@ describe('faire glisser un sommet', () => {
     ] as XY[],
   };
 
-  it('+ = vers l’Est le long d’une limite Est-Ouest, et le sommet partagé bouge partout', () => {
+  it('dans le prolongement d’une limite, et le sommet partagé bouge partout', () => {
     const { etat } = preparer(parcelles);
-    // Sommet (100, 100) de X, le long de la limite Nord de X, parcourue d'Est en Ouest.
-    expect(sensPositif(etat, { anneau: 0, debut: 2 })).toBe('Est');
-    const apres = glisserSommet(etat, { anneau: 0, sommet: 2 }, { anneau: 0, debut: 2 }, 0.5);
+    // Sommet (100, 100) de X, le long de la limite Nord de X (vers (0, 100)), à l'opposé.
+    const apres = glisserSommetLeLong(
+      etat,
+      { anneau: 0, sommet: 2 },
+      { anneau: 0, debut: 2 },
+      0.5,
+      false,
+    );
     expect(enMetres(apres, 0)[2]).toEqual([100.5, 100]);
     expect(enMetres(apres, 1)[3]).toEqual([100.5, 100]);
   });
 
-  it('+ = vers le Nord le long d’une limite Nord-Sud', () => {
+  it('vers l’autre extrémité d’une limite (elle raccourcit)', () => {
     const { etat } = preparer(parcelles);
-    expect(sensPositif(etat, { anneau: 0, debut: 1 })).toBe('Nord');
-    const apres = glisserSommet(etat, { anneau: 0, sommet: 2 }, { anneau: 0, debut: 1 }, -0.3);
+    const apres = glisserSommetLeLong(
+      etat,
+      { anneau: 0, sommet: 2 },
+      { anneau: 0, debut: 1 },
+      0.3,
+      true,
+    );
     expect(enMetres(apres, 0)[2]).toEqual([100, 99.7]);
   });
 });
