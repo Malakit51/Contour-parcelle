@@ -22,6 +22,7 @@
   /* Ce qui est choisi sur la carte (limite, point, flèche) : même violet que SEL (etat.ts). */
   --choix: #c026d3;
   --choix-texte: #a21caf;
+  --bleu-lignes: #2457c5;
   /* États des contours : mêmes couleurs que COULEURS_ETAT (etat.ts). */
   --etat-verifie: #22b04f;
   --etat-a-confirmer: #f5a524;
@@ -44,6 +45,7 @@
     --ombre: 0 1px 2px #0008;
     --choisi: #343d37;
     --choix-texte: #e879f9;
+    --bleu-lignes: #8fb0ff;
   }
 }
 * {
@@ -183,8 +185,8 @@ body {
   min-height: 0;
   padding: 0;
   font-size: 1.4rem;
-  background: #ffffff;
-  color: #16201a;
+  background: var(--surface);
+  color: var(--fg);
   border: none;
   border-radius: 14px;
   box-shadow: var(--ombre-flottante);
@@ -629,6 +631,16 @@ button.rond.alerte {
   border-radius: 24px;
   background-size: 22px;
 }
+/* Choix du fond comme les autres boutons ronds : sombre en thème sombre. */
+.carte .leaflet-control-layers {
+  background: var(--surface);
+  color: var(--fg);
+}
+@media (prefers-color-scheme: dark) {
+  .carte .leaflet-control-layers-toggle {
+    filter: invert(1);
+  }
+}
 .carte .leaflet-right .leaflet-control {
   margin-right: 12px;
 }
@@ -831,19 +843,19 @@ body {
 .commandes-droite .bouton-lignes {
   min-height: 44px;
   padding: 6px 14px;
-  background: #ffffff;
-  color: #16201a;
+  background: var(--surface);
+  color: var(--fg);
   border: none;
   border-radius: 22px;
   box-shadow: var(--ombre-flottante);
   font-size: 0.95rem;
 }
 .commandes-droite .bouton-lignes {
-  color: #2457c5;
+  color: var(--bleu-lignes);
   font-weight: 700;
 }
 .commandes-droite .bouton-lignes.masquees {
-  color: #666;
+  color: var(--doux);
 }
 .menu-lignes {
   display: flex;
@@ -857,6 +869,6 @@ body {
   text-align: left;
 }
 .menu-lignes button.coche {
-  color: #2962ff;
+  color: var(--bleu-lignes);
   font-weight: 600;
 }
