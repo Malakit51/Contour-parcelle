@@ -132,3 +132,13 @@ export function ajouterGuidages(
   );
   return { ...etat, guidages: [...gardees, ...lignes] };
 }
+
+/**
+ * Retire toutes les lignes de la parcelle `p`, ou de toutes les parcelles si `p` est null.
+ * Rend le même état s'il n'y a rien à retirer (pas de modification au journal).
+ */
+export function retirerGuidages(etat: Etat, p: number | null): Etat {
+  const avant = etat.guidages ?? [];
+  const gardees = p === null ? [] : avant.filter((g) => g.parcelle !== p);
+  return gardees.length === avant.length ? etat : { ...etat, guidages: gardees };
+}

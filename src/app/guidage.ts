@@ -7,6 +7,7 @@ import {
   jeux,
   lignesDeParcelle,
   ligneSurBord,
+  retirerGuidages,
   type ReglagesGuidage,
 } from '../edition/guidages';
 import { sommetsDuBord } from '../edition/operations';
@@ -154,6 +155,7 @@ export function panneauToutes(s: Session): HTMLElement {
   const lignes = apercuGuidages(s);
   const parcelles = new Set(lignes.map((g) => g.parcelle)).size;
   const aControler = parcellesAControler(s);
+  const toutes = s.etat.guidages ?? [];
   return el(
     'div',
     {},
@@ -162,6 +164,19 @@ export function panneauToutes(s: Session): HTMLElement {
       { class: 'doux' },
       `${lignes.length} lignes « ${baseNomLignes()} » sur ${parcelles} parcelles (celles de même nom sont remplacées).`,
     ),
+    toutes.length > 0 &&
+      el(
+        'button',
+        {
+          onclick: () =>
+            modifier(
+              () => retirerGuidages(s.etat, null),
+              `${toutes.length} lignes de guidage supprimées (toutes les parcelles)`,
+              true,
+            ),
+        },
+        `Supprimer toutes les lignes (${toutes.length})`,
+      ),
     aControler.length > 0 &&
       el(
         'div',
@@ -300,6 +315,19 @@ export function panneauGuidage(s: Session): HTMLElement {
                 'Autre côté',
               ),
             ),
+    lignes.length > 1 &&
+      el(
+        'button',
+        {
+          onclick: () =>
+            modifier(
+              () => retirerGuidages(s.etat, ui.parcelleCourante),
+              `${lignes.length} lignes de guidage de ${s.td.parcelles[ui.parcelleCourante!]!.nom} supprimées`,
+              true,
+            ),
+        },
+        `Supprimer les ${lignes.length} lignes de la parcelle`,
+      ),
     ...lignes.map((g) =>
       el(
         'div',

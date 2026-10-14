@@ -9,6 +9,7 @@ import {
   ligneSurBord,
   lignesDeParcelle,
   numeroSuivant,
+  retirerGuidages,
 } from '../src/edition/guidages';
 import { pointDansPolygone, type XY } from '../src/geometrie/plan';
 import { plan, preparer } from './outils';
@@ -92,6 +93,18 @@ describe('lignes de guidage d’une parcelle', () => {
     expect(e.guidages).toHaveLength(8);
     expect(duJeu(e.guidages![0]!, 'Pulvé 24 m')).toBe(true);
     expect(duJeu({ ...semoir[0]!, nom: 'Semoir 4 m bis' }, 'Semoir 4 m')).toBe(false);
+  });
+
+  it('tout supprimer : sur une parcelle ou sur toutes', () => {
+    const { etat } = preparer({ X: carre });
+    const lignes = lignesDeParcelle(etat, 0, reglages)!.lignes;
+    const autre = lignes.map((g) => ({ ...g, parcelle: 1 }));
+    const e = ajouterGuidages(etat, [...lignes, ...autre], null);
+    expect(retirerGuidages(e, 0).guidages).toEqual(autre);
+    expect(retirerGuidages(e, null).guidages).toEqual([]);
+    // Rien à retirer : même état (rien au journal).
+    expect(retirerGuidages(etat, null)).toBe(etat);
+    expect(retirerGuidages(e, 5)).toBe(e);
   });
 });
 

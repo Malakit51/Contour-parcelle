@@ -94,7 +94,6 @@ export function supprimer(): void {
   if (!ui.session || !ui.selSommet) return;
   const s = ui.session;
   const ref = ui.selSommet;
-  if (!confirm('Supprimer ce point ?')) return;
   modifier(
     () => supprimerSommet(s.etat, ref),
     `Point de ${nomParcelle(s, ref.anneau)} supprimé`,
