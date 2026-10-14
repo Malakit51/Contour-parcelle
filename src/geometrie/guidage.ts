@@ -68,3 +68,78 @@ export function courbeDecalee(pts: readonly XY[], decalage: number): XY[] {
     return [p[0] + m[0] * decalage * k, p[1] + m[1] * decalage * k];
   });
 }
+
+/** Angle (degrés, signé, positif à gauche) dont on tourne au sommet `b` en allant de `a` à `c`. */
+function virage(a: XY, b: XY, c: XY): number {
+  const v = Math.atan2(c[1] - b[1], c[0] - b[0]) - Math.atan2(b[1] - a[1], b[0] - a[0]);
+  return (((((v * 180) / Math.PI + 180) % 360) + 360) % 360) - 180;
+}
+
+/** Coin d'un anneau : le sommet qui le marque et tous les sommets proches qui le forment. */
+export interface Coin {
+  sommet: number;
+  /** Sommets du coin, dans l'ordre de l'anneau (un seul, sauf pour un coin coupé). */
+  groupe: number[];
+}
+
+/**
+ * Coins d'un anneau fermé : sommets où le contour tourne d'au moins `seuil` degrés. Des sommets
+ * reliés par des côtés de moins de `regroupement` mètres comptent comme un seul coin (coin coupé
+ * par deux points proches) : on additionne leurs virages, et le coin est marqué au sommet qui
+ * tourne le plus. Renvoie les coins dans l'ordre de l'anneau.
+ */
+export function coins(pts: readonly XY[], seuil: number, regroupement = 5): Coin[] {
+  const n = pts.length;
+  if (n < 3) return [];
+  const angles = pts.map((p, i) => virage(pts[(i - 1 + n) % n]!, p, pts[(i + 1) % n]!));
+  const court = (i: number) => {
+    const a = pts[i]!;
+    const b = pts[(i + 1) % n]!;
+    return Math.hypot(b[0] - a[0], b[1] - a[1]) < regroupement;
+  };
+  // Départ : un sommet qui ne termine pas un côté court (sinon, tout l'anneau est court).
+  const depart = pts.findIndex((_, i) => !court((i - 1 + n) % n));
+  if (depart < 0) return [];
+  const resultat: Coin[] = [];
+  for (let k = 0; k < n;) {
+    const groupe = [(depart + k) % n];
+    while (k + groupe.length < n && court(groupe[groupe.length - 1]!)) {
+      groupe.push((depart + k + groupe.length) % n);
+    }
+    k += groupe.length;
+    const total = groupe.reduce((s, i) => s + angles[i]!, 0);
+    if (Math.abs(total) >= seuil) {
+      const sommet = groupe.reduce((m, i) => (Math.abs(angles[i]!) > Math.abs(angles[m]!) ? i : m));
+      resultat.push({ sommet, groupe });
+    }
+  }
+  return resultat.sort((a, b) => a.sommet - b.sommet);
+}
+
+/**
+ * Côtés entre coins consécutifs : indices des sommets de chacun, du dernier sommet d'un coin au
+ * premier sommet du coin suivant (les points d'un coin coupé ne comptent pas dans le côté).
+ */
+export function cotesEntreCoins(n: number, lesCoins: readonly Coin[]): number[][] {
+  if (lesCoins.length === 0) return [[...Array(n).keys(), 0]];
+  return lesCoins.map((c, k) => {
+    const debut = c.groupe[c.groupe.length - 1]!;
+    const fin = lesCoins[(k + 1) % lesCoins.length]!.groupe[0]!;
+    const ids = [debut];
+    for (let i = (debut + 1) % n; i !== fin; i = (i + 1) % n) ids.push(i);
+    if (fin !== debut) ids.push(fin);
+    return ids;
+  });
+}
+
+/** Vrai si tous les points sont à moins de `tolerance` mètres de leur droite moyenne. */
+export function estDroit(pts: readonly XY[], tolerance: number): boolean {
+  if (pts.length <= 2) return true;
+  const [a, b] = ligneAB(pts, 0);
+  const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (l === 0) return true;
+  return pts.every(
+    (p) =>
+      Math.abs(((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])) / l) < tolerance,
+  );
+}

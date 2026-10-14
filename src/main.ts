@@ -33,8 +33,15 @@ import {
   supprimerSommet,
   type Bord,
 } from './edition/operations';
-import { courbeDecalee, ligneAB } from './geometrie/guidage';
-import { planLocal, positionSurSegment, type LatLon, type Plan, type XY } from './geometrie/plan';
+import { coins, cotesEntreCoins, courbeDecalee, estDroit, ligneAB } from './geometrie/guidage';
+import {
+  aireSignee,
+  planLocal,
+  positionSurSegment,
+  type LatLon,
+  type Plan,
+  type XY,
+} from './geometrie/plan';
 import { ecartMaximal } from './geometrie/simplification';
 import { comparer } from './isoxml/comparaison';
 import { lireTaskData, type TaskData } from './isoxml/lecture';
@@ -179,8 +186,19 @@ let mode: 'limite' | 'sommet' | 'simplifier' | 'guidage' = 'limite';
 /** Ligne de guidage en préparation : droite AB ou courbe, vers l'intérieur ou l'extérieur. */
 let typeGuidage: 'ab' | 'courbe' = 'ab';
 let guidageInterieur = true;
+/** Une ligne sur un bord choisi, ou une ligne par côté de toute la parcelle. */
+let porteeGuidage: 'bord' | 'parcelle' = 'bord';
+/** Angle à partir duquel un sommet est un coin (lignes de toute la parcelle). */
+let seuilCoins = 30;
+const SEUILS_COINS = [20, 30, 45, 60];
+/** Côtés plus courts que ça : pas de ligne (décrochements, coins coupés). */
+const COTE_MIN_M = 20;
+/** Écart maximal (m) des points d'un côté à sa droite moyenne pour en faire une droite AB. */
+const TOLERANCE_DROIT_M = 0.5;
 /** Choix d'un bord, du premier au dernier sommet (simplification d'un bord, ligne de guidage). */
-const choixDeBord = () => (mode === 'simplifier' && porteeSimplif === 'bord') || mode === 'guidage';
+const choixDeBord = () =>
+  (mode === 'simplifier' && porteeSimplif === 'bord') ||
+  (mode === 'guidage' && porteeGuidage === 'bord');
 /** Tolérance de simplification choisie (m). */
 let tolerance = 0.25;
 const TOLERANCES = [0.1, 0.25, 0.5, 1];
@@ -1219,10 +1237,15 @@ function appliquer(): void {
       const apres = r.bilan.reduce((n, b) => n + b.apres, 0);
       quoi = `${s.td.parcelles[parcelleCourante]!.nom}${porteeSimplif === 'bord' ? ' (un bord)' : ''} simplifiée (tolérance ${enCm(tolerance)}) : ${avant} → ${apres} points`;
       nouveau = r.etat;
-    } else if (mode === 'guidage' && apercuGuidage(s)) {
-      const g = apercuGuidage(s)!;
-      quoi = `Ligne ${g.type === 'ab' ? 'AB' : 'courbe'} « ${g.nom} » ajoutée à ${s.td.parcelles[g.parcelle]!.nom} (${enMetres(Math.abs(d))} m ${guidageInterieur ? 'à l’intérieur' : 'à l’extérieur'})`;
-      nouveau = { ...s.etat, guidages: [...(s.etat.guidages ?? []), g] };
+    } else if (mode === 'guidage' && apercuGuidages(s).length > 0) {
+      const gs = apercuGuidages(s);
+      const cote = `${enMetres(Math.abs(d))} m ${guidageInterieur ? 'à l’intérieur' : 'à l’extérieur'}`;
+      const nom = s.td.parcelles[gs[0]!.parcelle]!.nom;
+      quoi =
+        gs.length === 1
+          ? `Ligne ${gs[0]!.type === 'ab' ? 'AB' : 'courbe'} « ${gs[0]!.nom} » ajoutée à ${nom} (${cote})`
+          : `${gs.length} lignes de guidage ajoutées à ${nom} (${cote})`;
+      nouveau = { ...s.etat, guidages: [...(s.etat.guidages ?? []), ...gs] };
     } else {
       return;
     }
@@ -1589,11 +1612,11 @@ function dessin(s: Session): Dessin {
     d.points.push({ p: pts[debut]!, couleur: SEL, rayon: 8 });
     if (bord) d.points.push({ p: pts[bord.fin]!, couleur: SEL, rayon: 8 });
   }
-  const apercuG = apercuGuidage(s);
   d.guidages = [
     ...(s.etat.guidages ?? []).map((g) => ({ pts: [...g.points], apercu: false })),
-    ...(apercuG ? [{ pts: [...apercuG.points], apercu: true }] : []),
+    ...apercuGuidages(s).map((g) => ({ pts: [...g.points], apercu: true })),
   ];
+  for (const c of coinsGuidage(s)?.coins ?? []) d.points.push({ p: c, couleur: SEL, rayon: 7 });
   if (selLimite) {
     trait(selLimite, 7);
     const ref = selLimite;
@@ -1769,11 +1792,60 @@ function panneauSimplification(s: Session): HTMLElement {
 }
 
 /** Nom de la prochaine ligne, sur le modèle de la console : « A=B 2026.10.14_09:30_1 ». */
-function nomGuidage(etat: Etat, type: 'ab' | 'courbe'): string {
+function nomGuidage(etat: Etat, type: 'ab' | 'courbe', rang = 1): string {
   const d = new Date();
   const z = (n: number) => String(n).padStart(2, '0');
   const quand = `${d.getFullYear()}.${z(d.getMonth() + 1)}.${z(d.getDate())}_${z(d.getHours())}:${z(d.getMinutes())}`;
-  return `${type === 'ab' ? 'A=B' : 'Courbe'} ${quand}_${(etat.guidages?.length ?? 0) + 1}`;
+  return `${type === 'ab' ? 'A=B' : 'Courbe'} ${quand}_${(etat.guidages?.length ?? 0) + rang}`;
+}
+
+/** Lignes que donnerait « Appliquer » : une sur le bord choisi, ou une par côté de la parcelle. */
+function apercuGuidages(s: Session): Guidage[] {
+  if (mode !== 'guidage') return [];
+  if (porteeGuidage === 'bord') {
+    const g = apercuGuidage(s);
+    return g ? [g] : [];
+  }
+  return coinsGuidage(s)?.lignes ?? [];
+}
+
+/**
+ * Toute la parcelle courante : coins du contour extérieur (seuil réglé) et une ligne par côté
+ * d'au moins COTE_MIN_M mètres, droite AB si le côté est droit, sinon courbe.
+ */
+function coinsGuidage(s: Session): { coins: LatLon[]; lignes: Guidage[]; ignores: number } | null {
+  if (mode !== 'guidage' || porteeGuidage !== 'parcelle' || parcelleCourante === null) return null;
+  const a = s.etat.anneaux.find((x) => x.parcelle === parcelleCourante && x.type === 1);
+  if (!a) return null;
+  const plan = planLocal(latLon(a.sommets[0]!));
+  const pts = a.sommets.map((x) => plan.versXY(latLon(x)));
+  const trouves = coins(pts, seuilCoins);
+  // Décalage compté à gauche du sens de l'anneau : la gauche est l'intérieur s'il tourne dans le
+  // sens inverse des aiguilles d'une montre.
+  const sens = (aireSignee(pts) > 0 ? 1 : -1) * (guidageInterieur ? 1 : -1);
+  const decalage = Math.abs(metres()) * sens;
+  const lignes: Guidage[] = [];
+  let ignores = 0;
+  for (const ids of cotesEntreCoins(pts.length, trouves)) {
+    const cote = ids.map((i) => pts[i]!);
+    let longueur = 0;
+    for (let k = 1; k < cote.length; k++) {
+      longueur += Math.hypot(cote[k]![0] - cote[k - 1]![0], cote[k]![1] - cote[k - 1]![1]);
+    }
+    if (longueur < COTE_MIN_M) {
+      ignores++;
+      continue;
+    }
+    const type = estDroit(cote, TOLERANCE_DROIT_M) ? 'ab' : 'courbe';
+    const xy = type === 'ab' ? ligneAB(cote, decalage) : courbeDecalee(cote, decalage);
+    lignes.push({
+      parcelle: a.parcelle,
+      type,
+      nom: nomGuidage(s.etat, type, lignes.length + 1),
+      points: xy.map((p) => plan.versLatLon(p)),
+    });
+  }
+  return { coins: trouves.map((c) => latLon(a.sommets[c.sommet]!)), lignes, ignores };
 }
 
 /** Ligne de guidage que donnerait « Appliquer » sur le bord choisi (rien n'est encore ajouté). */
@@ -1822,17 +1894,31 @@ function panneauGuidage(s: Session): HTMLElement {
       ),
     );
   const lignes = (s.etat.guidages ?? []).filter((g) => g.parcelle === parcelleCourante);
+  const parcelle = porteeGuidage === 'parcelle' ? coinsGuidage(s) : null;
   return el(
     'div',
     { class: 'info' },
     choix(
       [
-        ['ab', 'Droite AB'],
-        ['courbe', 'Courbe'],
+        ['bord', 'Un bord'],
+        ['parcelle', 'Toute la parcelle'],
       ],
-      typeGuidage,
-      (v) => (typeGuidage = v),
+      porteeGuidage,
+      (v) => {
+        porteeGuidage = v;
+        bordDebut = null;
+        bord = null;
+      },
     ),
+    porteeGuidage === 'bord' &&
+      choix(
+        [
+          ['ab', 'Droite AB'],
+          ['courbe', 'Courbe'],
+        ],
+        typeGuidage,
+        (v) => (typeGuidage = v),
+      ),
     choix(
       [
         ['int', 'Vers l’intérieur'],
@@ -1841,31 +1927,61 @@ function panneauGuidage(s: Session): HTMLElement {
       guidageInterieur ? 'int' : 'ext',
       (v) => (guidageInterieur = v === 'int'),
     ),
-    !bord
-      ? el(
-          'div',
-          { class: 'sens' },
-          bordDebut ? 'Touche le dernier sommet du bord.' : 'Touche le premier sommet du bord.',
-        )
-      : el(
-          'div',
-          { class: 'rangee' },
-          el(
-            'span',
-            { class: 'doux', style: 'flex:1' },
-            `Bord : ${sommetsDuBord(s.etat, bord).length} points`,
-          ),
+    porteeGuidage === 'parcelle' &&
+      el(
+        'div',
+        { class: 'rangee' },
+        el('span', { class: 'doux' }, 'Coins dès'),
+        ...SEUILS_COINS.map((v) =>
           el(
             'button',
             {
+              class: `petit${v === seuilCoins ? ' actif' : ''}`,
               onclick: () => {
-                if (bord) bord = { ...bord, aRebours: !bord.aRebours };
+                seuilCoins = v;
                 afficher();
               },
             },
-            'Autre côté',
+            `${v}°`,
           ),
         ),
+      ),
+    porteeGuidage === 'parcelle'
+      ? !parcelle
+        ? el('div', { class: 'sens' }, 'Touche une parcelle.')
+        : el(
+            'div',
+            { class: 'doux' },
+            `${parcelle.coins.length} coins · ${parcelle.lignes.filter((g) => g.type === 'ab').length} droites AB, ${parcelle.lignes.filter((g) => g.type === 'courbe').length} courbes` +
+              (parcelle.ignores > 0
+                ? ` · ${parcelle.ignores} côté(s) de moins de ${COTE_MIN_M} m sans ligne`
+                : ''),
+          )
+      : !bord
+        ? el(
+            'div',
+            { class: 'sens' },
+            bordDebut ? 'Touche le dernier sommet du bord.' : 'Touche le premier sommet du bord.',
+          )
+        : el(
+            'div',
+            { class: 'rangee' },
+            el(
+              'span',
+              { class: 'doux', style: 'flex:1' },
+              `Bord : ${sommetsDuBord(s.etat, bord).length} points`,
+            ),
+            el(
+              'button',
+              {
+                onclick: () => {
+                  if (bord) bord = { ...bord, aRebours: !bord.aRebours };
+                  afficher();
+                },
+              },
+              'Autre côté',
+            ),
+          ),
     ...lignes.map((g) =>
       el(
         'div',
@@ -2423,7 +2539,7 @@ function afficher(): void {
   const peutAppliquer =
     (mode === 'limite' && selLimite !== null && sensLimite !== null) ||
     (mode === 'sommet' && selSommet !== null && limiteGlisse !== null && sensGlisse !== null) ||
-    (mode === 'guidage' && bord !== null) ||
+    (mode === 'guidage' && apercuGuidages(s).length > 0) ||
     (mode === 'simplifier' &&
       (apercuSimplification(s)?.bilan.some((b) => b.apres !== b.avant || b.ecartMax > 0) ?? false));
   remplir(
