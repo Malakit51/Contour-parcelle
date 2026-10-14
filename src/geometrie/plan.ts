@@ -29,6 +29,18 @@ export function planLocal(origine: LatLon): Plan {
   };
 }
 
+/**
+ * Distance (m) entre deux points, mesurée dans un plan local centré entre les deux : précise au
+ * millimètre sur quelques kilomètres. (`distanceM` de l'état est une approximation plus rapide,
+ * faite pour les tolérances de quelques centimètres.)
+ */
+export function distanceExacte(a: LatLon, b: LatLon): number {
+  const plan = planLocal([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+  const [xa, ya] = plan.versXY(a);
+  const [xb, yb] = plan.versXY(b);
+  return Math.hypot(xb - xa, yb - ya);
+}
+
 /** Aire signée (m²) d'un anneau ouvert ou fermé : positive si les points tournent dans le sens inverse des aiguilles d'une montre. */
 export function aireSignee(anneau: readonly XY[]): number {
   let s = 0;

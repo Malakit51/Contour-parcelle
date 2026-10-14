@@ -520,3 +520,30 @@ td.etats {
   background: var(--surface);
   color: var(--fg);
 }
+
+/* Résultat de la mesure, en haut de la carte. */
+.boite-mesure {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 130px);
+  padding: 4px 4px 4px 12px;
+  border-radius: 12px;
+  background: #fffffff2;
+  color: #222;
+  font-weight: 600;
+  box-shadow: 0 1px 4px #0006;
+}
+.boite-mesure[hidden] {
+  display: none;
+}
+.boite-mesure button {
+  min-height: 36px;
+  padding: 4px 10px;
+  box-shadow: none;
+}

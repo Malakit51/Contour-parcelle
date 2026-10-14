@@ -36,6 +36,7 @@ import {
 import { coins, cotesEntreCoins, courbeDecalee, estDroit, ligneAB } from './geometrie/guidage';
 import {
   aireSignee,
+  distanceExacte,
   planLocal,
   positionSurSegment,
   type LatLon,
@@ -898,9 +899,79 @@ const nomParcelle = (s: Session, anneau: number) =>
 
 // ---------- Sélection au doigt ----------
 
+// ---------- Mesure ----------
+
+/** Points de la mesure en cours (null : outil de mesure fermé). */
+let mesure: LatLon[] | null = null;
+/** Résultat de la mesure, posé en haut de la carte (élément fixe, rempli à chaque affichage). */
+const boiteMesure = el('div', { class: 'boite-mesure', hidden: '' });
+
+const enM = (m: number) =>
+  m >= 1000
+    ? `${(m / 1000).toFixed(3).replace('.', ',')} km`
+    : `${m.toFixed(1).replace('.', ',')} m`;
+
+function majMesure(): void {
+  boiteMesure.hidden = mesure === null;
+  if (mesure === null) return;
+  const pts = mesure;
+  const longueurSegment = distanceExacte;
+  let total = 0;
+  for (let k = 1; k < pts.length; k++) total += longueurSegment(pts[k - 1]!, pts[k]!);
+  const dernier = pts.length > 1 ? longueurSegment(pts[pts.length - 2]!, pts[pts.length - 1]!) : 0;
+  remplir(
+    boiteMesure,
+    el(
+      'span',
+      {},
+      pts.length < 2
+        ? 'Touche deux points (un sommet attire le doigt).'
+        : pts.length === 2
+          ? enM(total)
+          : `${enM(total)} (dernier : ${enM(dernier)})`,
+    ),
+    pts.length > 0 &&
+      el(
+        'button',
+        {
+          onclick: () => {
+            mesure = [];
+            afficher();
+          },
+        },
+        'Effacer',
+      ),
+  );
+}
+
+/** Point de mesure : le sommet (ou point de référence) le plus proche s'il est sous le doigt. */
+function pointDeMesure(
+  s: Session,
+  ecran: { x: number; y: number },
+  versEcran: VersEcran,
+  position: LatLon,
+): LatLon {
+  let meilleur: LatLon = position;
+  let dMin = RAYON_TOUCHER_PX;
+  for (const pt of [...anneauxLL(s).flat(), ...(reference?.anneaux.flat() ?? [])]) {
+    const e = versEcran(pt);
+    const d = Math.hypot(e.x - ecran.x, e.y - ecran.y);
+    if (d <= dMin) {
+      dMin = d;
+      meilleur = pt;
+    }
+  }
+  return meilleur;
+}
+
 function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position: LatLon): void {
   if (!session) return;
   const s = session;
+  if (mesure !== null) {
+    mesure = [...mesure, pointDeMesure(s, ecran, versEcran, position)];
+    afficher();
+    return;
+  }
   if (mode === 'sommet' && selSommet && placerAuDoigt) {
     const ref = selSommet;
     placerAuDoigt = false;
@@ -1660,6 +1731,12 @@ function dessin(s: Session): Dessin {
     }
     d.points.push({ p: anneaux[selSommet.anneau]![selSommet.sommet]!, couleur: SEL, rayon: 9 });
   }
+  // Mesure en cours : trait orange entre les points touchés.
+  const MESURE = '#ff6d00';
+  (mesure ?? []).forEach((p, k, pts) => {
+    if (k > 0) d.traits.push({ a: pts[k - 1]!, b: p, couleur: MESURE, epaisseur: 4 });
+    d.points.push({ p, couleur: MESURE, rayon: 6 });
+  });
   return d;
 }
 
@@ -2413,7 +2490,12 @@ function majBulle(): void {
   );
 }
 
-zones.carte.append(carte.element, el('div', { class: 'gps-sur-carte' }, texteGps), bulle);
+zones.carte.append(
+  carte.element,
+  el('div', { class: 'gps-sur-carte' }, texteGps),
+  bulle,
+  boiteMesure,
+);
 app.classList.add('mise-en-page');
 app.replaceChildren(...Object.values(zones));
 
@@ -2535,6 +2617,18 @@ function afficher(): void {
       'GPS',
     ),
     carte.gpsActif() && el('button', { onclick: () => carte.centrerSurGps() }, '⌖'),
+    el(
+      'button',
+      {
+        class: mesure !== null ? 'actif' : '',
+        title: 'Mesurer',
+        onclick: () => {
+          mesure = mesure === null ? [] : null;
+          afficher();
+        },
+      },
+      '📏',
+    ),
     driveEnAttente() &&
       !drive.connecte() &&
       el(
@@ -2652,9 +2746,17 @@ function afficher(): void {
   );
   if (document.activeElement !== champDistance) champDistance.value = saisie;
   carte.definirCommandes(mode === 'sommet' && selSommet ? commandesSommet() : null);
+  majMesure();
   carte.afficher(dessin(s));
   zones.panneau.scrollTop = defilement;
 }
 
 afficher();
 reprendreSession();
+
+// Installation comme une application (icône sur l'écran d'accueil, plein écran).
+if ('serviceWorker' in navigator) {
+  void navigator.serviceWorker.register('./sw.js').catch(() => {
+    // sans service worker, l'éditeur marche quand même
+  });
+}

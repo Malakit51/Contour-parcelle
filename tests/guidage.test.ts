@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { coins, cotesEntreCoins, courbeDecalee, estDroit, ligneAB } from '../src/geometrie/guidage';
-import type { XY } from '../src/geometrie/plan';
+import { distanceExacte, type XY } from '../src/geometrie/plan';
 import { etatInitial, latLon, type Guidage } from '../src/edition/etat';
 import { exporterEtat } from '../src/edition/export';
 import { lireTaskData } from '../src/isoxml/lecture';
@@ -178,5 +178,12 @@ describe('coins et côtés d’une parcelle', () => {
         0.5,
       ),
     ).toBe(false);
+  });
+});
+
+describe('distance exacte', () => {
+  it('redonne la longueur mesurée dans le plan local (à quelques centimètres sur 800 m)', () => {
+    const d = distanceExacte(plan.versLatLon([0, 0]), plan.versLatLon([600, 500]));
+    expect(Math.abs(d - Math.hypot(600, 500))).toBeLessThan(0.05);
   });
 });

@@ -1,0 +1,16 @@
+{
+  "name": "Contours parcelles",
+  "short_name": "Contours",
+  "description": "Corriger les contours des parcelles et préparer le TASKDATA de la console.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eef0ea",
+  "theme_color": "#2e7d32",
+  "icons": [
+    { "src": "icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
