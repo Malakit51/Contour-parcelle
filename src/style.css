@@ -1,30 +1,41 @@
+/* Direction « Plein champ » (choisie le 14/10/2026) : fond crème, vert forêt, ambre pour ce qui
+   est choisi sur la carte, police Atkinson Hyperlegible (très lisible en plein soleil). */
 :root {
   color-scheme: light dark;
-  --fg: #1c211c;
-  --bg: #eef0ea;
+  --fg: #16201a;
+  --bg: #f4f2ec;
   --surface: #ffffff;
-  --seg: #dfe3d9;
-  --ligne: #d3d8ce;
-  --vert: #2e7d32;
-  --vert-clair: #e4f0e3;
-  --sel: #e65100;
-  --rouge: #c62828;
-  --doux: #5f665d;
-  --ombre: 0 1px 2px #0000001a, 0 1px 1px #0000000d;
+  --seg: #e3e0d6;
+  --ligne: #c9c5b8;
+  --ligne-douce: #ddd9cd;
+  --vert: #1e5631;
+  --vert-fond: #1e5631;
+  --vert-clair: #e2eee4;
+  --sel: #f5a524;
+  --sel-texte: #8a5a00;
+  --rouge: #a3341f;
+  --doux: #4a554d;
+  --ombre: 0 1px 2px #0000001f;
+  --ombre-flottante: 0 2px 10px #00000040;
   --choisi: #ffffff;
+  --rayon: 14px;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --fg: #e8ebe5;
-    --bg: #111411;
-    --surface: #1c211c;
-    --seg: #262c25;
-    --ligne: #363d35;
-    --vert-clair: #1f3320;
-    --sel: #ff8a3d;
-    --doux: #9ba496;
-    --ombre: 0 1px 2px #0006;
-    --choisi: #3a4339;
+    --fg: #e8ece9;
+    --bg: #121614;
+    --surface: #1c211e;
+    --seg: #262c28;
+    --ligne: #3a443d;
+    --ligne-douce: #2e3631;
+    --vert: #7cc48f;
+    --vert-fond: #2f7a47;
+    --vert-clair: #1f3a28;
+    --sel-texte: #f5b84a;
+    --rouge: #ef7a62;
+    --doux: #9aa59d;
+    --ombre: 0 1px 2px #0008;
+    --choisi: #343d37;
   }
 }
 * {
@@ -33,7 +44,7 @@
 body {
   margin: 0;
   padding: 0;
-  font-family: system-ui, sans-serif;
+  font-family: 'Atkinson Hyperlegible', system-ui, sans-serif;
   font-size: 16px;
   line-height: 1.35;
   background: var(--bg);
@@ -199,10 +210,10 @@ button,
 select,
 .bouton-fichier {
   font: inherit;
-  font-weight: 500;
+  font-weight: 400;
   min-height: 46px;
   padding: 8px 14px;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid var(--ligne);
   background: var(--surface);
   color: var(--fg);
@@ -219,14 +230,17 @@ button:active:not(:disabled),
 }
 button.principal,
 .bouton-fichier {
-  background: var(--vert);
-  border-color: var(--vert);
+  background: var(--vert-fond);
+  border-color: var(--vert-fond);
   color: #fff;
+  font-weight: 700;
 }
+/* Option choisie : fond vert pâle, bord vert (le vert plein est réservé à l'action principale). */
 button.actif {
-  background: var(--sel);
-  border-color: var(--sel);
-  color: #fff;
+  background: var(--vert-clair);
+  border: 2px solid var(--vert);
+  color: var(--vert);
+  font-weight: 700;
 }
 button:disabled {
   background: var(--seg);
@@ -245,6 +259,7 @@ select {
   background: var(--surface);
   border-color: var(--ligne);
   color: var(--fg);
+  font-weight: 400;
 }
 .bouton-fichier input {
   display: none;
@@ -252,40 +267,74 @@ select {
 button.petit {
   min-height: 40px;
   min-width: 44px;
-  padding: 4px 8px;
+  padding: 4px 12px;
   margin: 2px;
   font-size: 1.05rem;
+  border-radius: 20px;
+  box-shadow: none;
 }
 
 /* Onglets et modes : boutons groupés dans une barre (un seul choisi). */
-.onglets,
 .modes {
   background: var(--seg);
-  padding: 3px;
-  border-radius: 12px;
-  gap: 3px;
+  padding: 4px;
+  border-radius: var(--rayon);
+  gap: 4px;
 }
 .modes {
   display: flex;
   margin: 0 0 8px;
 }
-.onglets button,
 .modes button {
   flex: 1;
   min-height: 40px;
   padding: 6px 2px;
   border: none;
-  border-radius: 9px;
+  border-radius: 10px;
   background: transparent;
   box-shadow: none;
   color: var(--doux);
+  font-weight: 400;
 }
-.onglets button.choisi,
 .modes button.principal {
   background: var(--choisi);
   color: var(--vert);
   font-weight: 700;
   box-shadow: var(--ombre);
+}
+/* Onglets : barre du bas, une icône et un mot. */
+.onglets {
+  margin: 0 -8px calc(-8px - env(safe-area-inset-bottom));
+  padding: 0 0 env(safe-area-inset-bottom);
+  background: var(--surface);
+  border-top: 1px solid var(--ligne-douce);
+  gap: 0;
+}
+.onglets button {
+  flex: 1;
+  min-height: 60px;
+  padding: 4px 2px;
+  flex-direction: column;
+  gap: 2px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--doux);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+.onglets button.choisi {
+  color: var(--vert);
+  font-weight: 700;
+}
+.icone {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
 }
 
 /* ---------- Panneau ---------- */
@@ -309,18 +358,18 @@ h1 {
 }
 .info {
   background: var(--surface);
-  border-radius: 12px;
-  padding: 12px;
-  margin: 0 0 8px;
-  box-shadow: var(--ombre);
+  border: 1px solid var(--ligne-douce);
+  border-radius: var(--rayon);
+  padding: 12px 14px;
+  margin: 0 0 10px;
 }
 .info > strong:first-child {
   display: block;
   margin-bottom: 2px;
 }
 .sens {
-  font-weight: 600;
-  color: var(--sel);
+  font-weight: 700;
+  color: var(--sel-texte);
   margin-top: 4px;
 }
 .doux {
@@ -416,31 +465,43 @@ td.etats {
 }
 
 /* ---------- Barre du bas ---------- */
+.barre-bas {
+  gap: 8px;
+}
 .barre-bas button {
   flex: 1;
-  min-height: 52px;
-  font-size: 1.05rem;
+  min-height: 56px;
+  border-radius: 16px;
+  font-size: 1.1rem;
+}
+.barre-bas button.annuler {
+  flex: none;
+  width: 56px;
+  padding: 0;
 }
 /* Case de la distance : le clavier numérique du téléphone s'ouvre en la touchant. */
 .case-distance {
-  flex: 1.3;
+  flex: 1.2;
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 1.3rem;
-  border: 1px solid var(--ligne);
-  border-radius: 10px;
+  gap: 6px;
+  font-size: 1.5rem;
+  border: 2px solid var(--fg);
+  border-radius: 16px;
   background: var(--surface);
-  box-shadow: var(--ombre);
-  padding: 0 10px;
+  padding: 0 12px;
   min-width: 0;
+}
+.case-distance > span {
+  font-size: 1.1rem;
+  color: var(--doux);
 }
 .champ-distance {
   flex: 1;
   min-width: 0;
   width: 100%;
   font: inherit;
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   text-align: right;
   border: none;
@@ -456,18 +517,122 @@ td.etats {
   box-shadow: 0 0 0 2px var(--vert);
 }
 
+/* ---------- Barre du haut : pilule de la parcelle et zoom ---------- */
+.barre-haut {
+  align-items: center;
+  gap: 8px;
+}
+.pilule {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-radius: 26px;
+  background: var(--surface);
+  box-shadow: var(--ombre-flottante);
+}
+.pastille {
+  width: 12px;
+  height: 12px;
+  border-radius: 6px;
+  flex: none;
+}
+.pilule-texte {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.pilule-nom {
+  font-size: 1.05rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pilule-detail {
+  font-size: 0.8rem;
+  color: var(--doux);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* La liste des parcelles couvre toute la pilule, invisible : un appui n'importe où l'ouvre. */
+.pilule select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.zoom {
+  display: flex;
+  gap: 6px;
+}
+button.rond {
+  width: 48px;
+  height: 48px;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 24px;
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: var(--ombre-flottante);
+}
+button.rond.actif {
+  background: var(--vert-fond);
+  color: #fff;
+  border: none;
+}
+button.rond.alerte {
+  background: var(--sel);
+  color: #16201a;
+}
+
+/* Boutons ronds sur la carte (GPS, mesure, Drive, lignes), à droite sous le choix du fond. */
+.boutons-ronds {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+.carte .leaflet-control-layers.leaflet-control {
+  border: none;
+  border-radius: 24px;
+  box-shadow: var(--ombre-flottante);
+}
+.carte .leaflet-control-layers-toggle {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  background-size: 22px;
+}
+.carte .leaflet-right .leaflet-control {
+  margin-right: 12px;
+}
+.carte .leaflet-top .leaflet-control {
+  margin-top: 12px;
+}
+
 /* Tablette (ou téléphone) en paysage : carte sur toute la hauteur à gauche, commandes à droite. */
 @media (orientation: landscape) and (min-width: 700px) {
   #app.mise-en-page {
     max-width: none;
     display: grid;
     grid-template-columns: 1fr minmax(340px, 34%);
-    grid-template-rows: auto auto 1fr auto;
+    grid-template-rows: auto 1fr auto auto;
     grid-template-areas:
       'carte haut'
-      'carte onglets'
       'carte panneau'
-      'carte bas';
+      'carte bas'
+      'carte onglets';
   }
   .mise-en-page > .barre-haut {
     grid-area: haut;
@@ -488,7 +653,7 @@ td.etats {
   /* Sans fichier ouvert, pas de carte : le panneau prend toute la largeur. */
   .mise-en-page:has(> .zone-carte[hidden]) {
     grid-template-columns: 1fr;
-    grid-template-areas: 'haut' 'onglets' 'panneau' 'bas';
+    grid-template-areas: 'haut' 'panneau' 'bas' 'onglets';
   }
 }
 .info > .rangee:first-child {
@@ -496,17 +661,6 @@ td.etats {
 }
 .panneau > .rangee {
   margin: 0 0 8px;
-}
-.carte .leaflet-control-layers.leaflet-control {
-  border: none;
-  border-radius: 10px;
-  box-shadow: 0 1px 4px #0006;
-}
-
-/* Bouton ☁ : modifications à envoyer sur Google Drive, connexion expirée. */
-.barre-haut button.nuage {
-  font-size: 1.5rem;
-  padding: 4px 10px;
 }
 
 /* Nom des lignes de guidage. */
@@ -601,7 +755,7 @@ td.etats {
     gap: 8px;
     padding: 0 8px calc(8px + env(safe-area-inset-bottom));
     background: var(--bg);
-    border-radius: 16px 16px 0 0;
+    border-radius: 22px 22px 0 0;
     box-shadow: 0 -2px 12px #0004;
     transition: height 0.2s ease-out;
   }
@@ -658,18 +812,19 @@ body {
 }
 
 /* Lignes de guidage : bouton et menu des jeux, en haut à droite de la carte. */
-.commandes-droite button {
-  min-height: 40px;
-  padding: 6px 12px;
-  background: #fffffff2;
-  color: #222;
+.commandes-droite .menu-lignes button,
+.commandes-droite .bouton-lignes {
+  min-height: 44px;
+  padding: 6px 14px;
+  background: #ffffff;
+  color: #16201a;
   border: none;
-  border-radius: 10px;
-  box-shadow: 0 1px 4px #0006;
+  border-radius: 22px;
+  box-shadow: var(--ombre-flottante);
   font-size: 0.95rem;
 }
 .commandes-droite .bouton-lignes {
-  color: #2962ff;
+  color: #2457c5;
   font-weight: 700;
 }
 .commandes-droite .bouton-lignes.masquees {

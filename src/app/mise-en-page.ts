@@ -1,9 +1,12 @@
 // Mise en page : zones fixes, bulle, volet, affichage de toute la page.
 
+import { nouvelleSurface } from '../edition/export';
+import { fiche, LIBELLES } from '../suivi/suivi';
 import { el } from '../ui/dom';
+import { icone, type Icone } from '../ui/icones';
 import { dessin } from './dessin';
 import { drive, driveEnAttente, reconnecterDrive } from './drive';
-import { CLE_HAUTEUR_VOLET, type Cran, type Onglet, ONGLETS, ui } from './etat';
+import { CLE_HAUTEUR_VOLET, COULEURS_ETAT, type Cran, type Onglet, ONGLETS, ui } from './etat';
 import { panneauExport, tableauVersion } from './exporter';
 import { contenuFichier } from './fichier';
 import { apercuGuidages, commandesLignes, panneauGuidage } from './guidage';
@@ -105,9 +108,9 @@ export const volet = el(
   'div',
   { class: 'volet' },
   poignee,
-  zones.onglets,
   zones.panneau,
   zones.bas,
+  zones.onglets,
 );
 
 export const voletVisible = () =>
@@ -243,7 +246,8 @@ export function afficher(): void {
   const s = ui.session;
   zones.carte.hidden = false;
 
-  const choixParcelle = el('select', {});
+  // Barre du haut : la parcelle (nom, surface, état du contour) dans une pilule qui ouvre la liste.
+  const choixParcelle = el('select', { 'aria-label': 'Choisir la parcelle' });
   choixParcelle.append(el('option', { value: '' }, 'Toutes les parcelles'));
   s.td.parcelles
     .map((p, i) => ({ nom: p.nom, i }))
@@ -260,49 +264,90 @@ export function afficher(): void {
     if (ui.parcelleCourante === null) cadrerTout();
     else cadrerParcelle(ui.parcelleCourante);
   });
+  const courante = ui.parcelleCourante === null ? null : s.td.parcelles[ui.parcelleCourante]!;
+  const etatCourant = courante ? fiche(ui.suivi, courante).etat : null;
+  const surface =
+    ui.parcelleCourante === null ? null : nouvelleSurface(s.td, s.etat, ui.parcelleCourante);
+  const pilule = el(
+    'label',
+    { class: 'pilule' },
+    el('span', {
+      class: 'pastille',
+      style: `background:${etatCourant ? COULEURS_ETAT[etatCourant] : 'var(--vert)'}`,
+    }),
+    el(
+      'span',
+      { class: 'pilule-texte' },
+      el('span', { class: 'pilule-nom' }, courante?.nom ?? 'Toutes les parcelles'),
+      el(
+        'span',
+        { class: 'pilule-detail' },
+        courante
+          ? [
+              surface !== null ? `${(surface / 10000).toFixed(2).replace('.', ',')} ha` : null,
+              LIBELLES[etatCourant!].toLowerCase(),
+            ]
+              .filter(Boolean)
+              .join(' · ')
+          : `${s.td.parcelles.length} parcelles`,
+      ),
+    ),
+    icone('chevron', 20),
+    choixParcelle,
+  );
+  const rond = (nom: Icone, titre: string, action: () => void, classe = '') =>
+    el(
+      'button',
+      { class: `rond ${classe}`, title: titre, 'aria-label': titre, onclick: action },
+      icone(nom),
+    );
 
   remplir(
     zones.haut,
-    choixParcelle,
-    el('button', { onclick: () => carte.zoomer(1) }, '+'),
-    el('button', { onclick: () => carte.zoomer(-1) }, '−'),
+    pilule,
     el(
-      'button',
-      {
-        class: carte.gpsActif() ? 'actif' : '',
-        onclick: () => {
-          carte.basculerGps();
-          afficher();
-        },
-      },
-      'GPS',
+      'div',
+      { class: 'zoom' },
+      rond('plus', 'Zoomer', () => carte.zoomer(1)),
+      rond('moins', 'Dézoomer', () => carte.zoomer(-1)),
     ),
-    carte.gpsActif() && el('button', { onclick: () => carte.centrerSurGps() }, '⌖'),
-    el(
-      'button',
-      {
-        class: ui.mesure !== null ? 'actif' : '',
-        title: 'Mesurer',
-        onclick: () => {
-          ui.mesure = ui.mesure === null ? [] : null;
-          afficher();
-        },
+  );
+
+  // Boutons ronds posés sur la carte, à droite sous le choix du fond.
+  const boutonsCarte = el(
+    'div',
+    { class: 'boutons-ronds' },
+    rond(
+      'gps',
+      carte.gpsActif() ? 'Arrêter le GPS' : 'Ma position (GPS)',
+      () => {
+        carte.basculerGps();
+        afficher();
       },
-      '📏',
+      carte.gpsActif() ? 'actif' : '',
+    ),
+    carte.gpsActif() && rond('centrer', 'Centrer sur ma position', () => carte.centrerSurGps()),
+    rond(
+      'mesure',
+      'Mesurer',
+      () => {
+        ui.mesure = ui.mesure === null ? [] : null;
+        afficher();
+      },
+      ui.mesure !== null ? 'actif' : '',
     ),
     driveEnAttente() &&
       !drive.connecte() &&
-      el(
-        'button',
-        {
-          class: 'actif nuage',
-          title: 'Reconnecter Google Drive',
-          onclick: () => void reconnecterDrive(),
-        },
-        '☁',
-      ),
+      rond('nuage', 'Reconnecter Google Drive', () => void reconnecterDrive(), 'alerte'),
+    commandesLignes(s),
   );
 
+  const ICONES_ONGLETS: Record<Onglet, Icone> = {
+    modifier: 'modifier',
+    suivi: 'suivi',
+    export: 'export',
+    fichier: 'fichier',
+  };
   remplir(
     zones.onglets,
     ...(Object.keys(ONGLETS) as Onglet[]).map((o) =>
@@ -316,6 +361,7 @@ export function afficher(): void {
             afficher();
           },
         },
+        icone(ICONES_ONGLETS[o], 24),
         ONGLETS[o],
       ),
     ),
@@ -396,21 +442,27 @@ export function afficher(): void {
       (apercuSimplification(s)?.bilan.some((b) => b.apres !== b.avant || b.ecartMax > 0) ?? false));
   remplir(
     zones.bas,
-    el('label', { class: 'case-distance' }, champDistance, 'm'),
+    el(
+      'button',
+      {
+        class: 'annuler',
+        title: 'Annuler la dernière modification',
+        'aria-label': 'Annuler',
+        onclick: annuler,
+        ...(s.historique.length > 0 ? {} : { disabled: '' }),
+      },
+      icone('annuler', 24),
+    ),
+    el('label', { class: 'case-distance' }, champDistance, el('span', {}, 'm')),
     el(
       'button',
       { class: 'principal', onclick: appliquer, ...(peutAppliquer ? {} : { disabled: '' }) },
       'Appliquer',
     ),
-    el(
-      'button',
-      { onclick: annuler, ...(s.historique.length > 0 ? {} : { disabled: '' }) },
-      'Annuler',
-    ),
   );
   if (document.activeElement !== champDistance) champDistance.value = ui.saisie;
   carte.definirCommandes(ui.mode === 'sommet' && ui.selSommet ? commandesSommet() : null);
-  carte.definirCommandesDroite(commandesLignes(s));
+  carte.definirCommandesDroite(boutonsCarte);
   majMesure();
   poserVolet();
   carte.afficher(dessin(s));
