@@ -14,6 +14,7 @@ import {
   type RefSommet,
 } from './edition/etat';
 import { exporterEtat, nouvelleSurface, parcellesModifiees } from './edition/export';
+import { nettoyer } from './edition/nettoyage';
 import {
   decalerLimite,
   decalerSommet,
@@ -134,8 +135,14 @@ function parcellesChangees(a: Etat, b: Etat): number[] {
   return [...changees];
 }
 
-/** Passe à un nouvel état (annulable) et note la modification au journal. */
-function enregistrerModification(s: Session, nouveau: Etat, quoi: string): void {
+/**
+ * Passe à un nouvel état (annulable) et note la modification au journal. L'état est d'abord
+ * nettoyé (points en double, sommets communs décollés) ; si des points ont été retirés, la
+ * sélection est effacée (ses indices ne sont plus sûrs). Renvoie une remarque à ajouter au message.
+ */
+function enregistrerModification(s: Session, brut: Etat, quoi: string): string {
+  const net = nettoyer(brut);
+  const nouveau = net.etat;
   const entrees: EntreeJournal[] = parcellesChangees(s.etat, nouveau).map((p) => ({
     quand: new Date().toISOString(),
     cle: cleParcelle(s.td.parcelles[p]!),
@@ -148,6 +155,9 @@ function enregistrerModification(s: Session, nouveau: Etat, quoi: string): void 
   s.etat = nouveau;
   garderSession();
   majSuivi({ ...suivi, journal: [...suivi.journal, ...entrees] });
+  if (net.doublons.size === 0) return '';
+  effacerSelection();
+  return ` (${[...net.doublons.values()].reduce((a, b) => a + b, 0)} point(s) en double retiré(s))`;
 }
 
 function retirerDuJournal(entrees: EntreeJournal[]): void {
@@ -249,6 +259,16 @@ function ouvrir(
   effacerSelection();
   message = { texte: texteMessage, erreur: false };
   garderSession(nouveau);
+  // Travail fait avant le nettoyage automatique (14/10/2026) : points en double à retirer.
+  const s = session;
+  if (nettoyer(s.etat).etat !== s.etat) {
+    const note = enregistrerModification(
+      s,
+      s.etat,
+      'Points en double retirés, sommets communs recollés',
+    );
+    message = { texte: `${texteMessage} Contours nettoyés${note}.`, erreur: false };
+  }
   afficher();
   cadrerTout();
 }
@@ -1059,10 +1079,10 @@ function modifier(operation: () => Etat, quoi: string, garderSelection: boolean)
   const s = session;
   try {
     const nouveau = operation();
-    if (nouveau !== s.etat) enregistrerModification(s, nouveau, quoi);
+    const note = nouveau !== s.etat ? enregistrerModification(s, nouveau, quoi) : '';
     if (garderSelection) exportPrepare = null;
     else effacerSelection();
-    message = { texte: `${quoi}.`, erreur: false };
+    message = { texte: `${quoi}${note}.`, erreur: false };
   } catch (e) {
     message = {
       texte: e instanceof ErreurEdition ? e.message : `Erreur : ${(e as Error).message}`,
@@ -1188,10 +1208,10 @@ function appliquer(): void {
     }
     if (nouveau === s.etat) return;
     const avant = s.etat;
-    enregistrerModification(s, nouveau, quoi);
+    const note = enregistrerModification(s, nouveau, quoi);
     if (mode === 'limite' && selLimite) {
       // La limite reste sélectionnée (avec son sens) pour pouvoir appliquer plusieurs fois.
-      const retrouvee = retrouverLimite(avant, nouveau, selLimite);
+      const retrouvee = retrouverLimite(avant, s.etat, selLimite);
       const sens = sensLimite;
       effacerSelection();
       if (retrouvee) {
@@ -1206,7 +1226,7 @@ function appliquer(): void {
       // Une simplification se fait une fois : on revient au décalage de limite pour les retouches.
       if (mode === 'simplifier') mode = 'limite';
     }
-    message = { texte: `${quoi}.`, erreur: false };
+    message = { texte: `${quoi}${note}.`, erreur: false };
   } catch (e) {
     message = {
       texte: e instanceof ErreurEdition ? e.message : `Erreur : ${(e as Error).message}`,

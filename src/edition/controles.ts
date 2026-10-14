@@ -3,6 +3,7 @@
 import { planLocal, type Plan, type XY } from '../geometrie/plan';
 import type { TaskData } from '../isoxml/lecture';
 import { distanceM, etatInitial, latLon, TOLERANCE_PARTAGE_M, type Etat } from './etat';
+import { DOUBLON_M } from './nettoyage';
 
 export interface Alerte {
   grave: boolean;
@@ -61,6 +62,14 @@ export function controler(td: TaskData, etat: Etat, parcelles: readonly number[]
     if (n < 3) {
       alertes.push({ grave: true, message: `${a.nom} : contour de moins de 3 points.` });
       continue;
+    }
+    // Deux points au même endroit : limite de longueur nulle, la console ne voit plus le coin.
+    const sommets = etat.anneaux[i]!.sommets;
+    if (sommets.some((u, k) => distanceM(latLon(u), latLon(sommets[(k + 1) % n]!)) < DOUBLON_M)) {
+      alertes.push({
+        grave: true,
+        message: `${a.nom} : deux points au même endroit (la console ne reconnaîtrait pas ce coin).`,
+      });
     }
     for (let k = 0; k < n; k++) {
       for (let m = k + 2; m < n; m++) {
