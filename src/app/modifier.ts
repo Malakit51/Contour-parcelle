@@ -16,6 +16,7 @@ import {
 import { planLocal } from '../geometrie/plan';
 import { ecartMaximal } from '../geometrie/simplification';
 import { el } from '../ui/dom';
+import { icone } from '../ui/icones';
 import { type Session, TOLERANCES, ui } from './etat';
 import { apercuGuidages, baseNomLignes } from './guidage';
 import { afficher } from './mise-en-page';
@@ -73,6 +74,7 @@ export function commandesSommet(): HTMLElement {
       {
         class: ui.placerAuDoigt ? 'actif' : '',
         title: 'Placer au doigt',
+        'aria-label': 'Placer au doigt',
         onclick: () => {
           ui.placerAuDoigt = !ui.placerAuDoigt;
           ui.message = ui.placerAuDoigt
@@ -81,7 +83,7 @@ export function commandesSommet(): HTMLElement {
           afficher();
         },
       },
-      '☝',
+      icone('doigt', 24),
     ),
     bouton('E'),
     bouton('SO'),

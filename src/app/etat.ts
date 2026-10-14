@@ -168,13 +168,15 @@ export const ui: EtatInterface = {
   cran: (lireStockage(CLE_HAUTEUR_VOLET) as Cran | null) ?? 'moitie',
 };
 
-// Couleurs lisibles sur le fond blanc comme sur la photo ; le violet est réservé à la sélection.
+// Couleurs lisibles sur le fond blanc comme sur la photo ; le violet est réservé à ce qui est
+// choisi sur la carte (même violet que --choix dans style.css).
 export const COULEURS = ['#00b8d4', '#ff4081', '#64dd17', '#ffab00', '#2962ff', '#ff6e40'];
-export const SEL = '#d500f9';
+export const SEL = '#c026d3';
+/** Couleur de chaque état de contour : carte, pastille de la barre du haut, boutons du suivi. */
 export const COULEURS_ETAT: Record<EtatContour, string> = {
-  verifie: '#00c853',
-  'a-confirmer': '#ffab00',
-  'a-refaire': '#d50000',
+  verifie: '#22b04f',
+  'a-confirmer': '#f5a524',
+  'a-refaire': '#e0362c',
 };
 /** Rayon de toucher, en pixels à l'écran. */
 export const RAYON_TOUCHER_PX = 26;

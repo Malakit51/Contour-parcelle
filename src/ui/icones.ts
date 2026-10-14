@@ -17,6 +17,8 @@ const TRACES = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   moins: '<path d="M5 12h14"/>',
   chevron: '<path d="M6 9l6 6 6-6"/>',
+  doigt:
+    '<path d="M9 11V5a1.5 1.5 0 013 0v5M12 10V4a1.5 1.5 0 013 0v6M15 10V6a1.5 1.5 0 013 0v7c0 4-2.5 7-6 7s-5-2-6.5-4.5L4 12.5a1.5 1.5 0 012.5-1.5L9 13"/>',
 } as const;
 
 export type Icone = keyof typeof TRACES;

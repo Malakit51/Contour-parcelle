@@ -19,6 +19,13 @@
   --ombre-flottante: 0 2px 10px #00000040;
   --choisi: #ffffff;
   --rayon: 14px;
+  /* Ce qui est choisi sur la carte (limite, point, flèche) : même violet que SEL (etat.ts). */
+  --choix: #c026d3;
+  --choix-texte: #a21caf;
+  /* États des contours : mêmes couleurs que COULEURS_ETAT (etat.ts). */
+  --etat-verifie: #22b04f;
+  --etat-a-confirmer: #f5a524;
+  --etat-a-refaire: #e0362c;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -36,6 +43,7 @@
     --doux: #9aa59d;
     --ombre: 0 1px 2px #0008;
     --choisi: #343d37;
+    --choix-texte: #e879f9;
   }
 }
 * {
@@ -167,42 +175,46 @@ body {
 }
 .commandes-carte .croix {
   display: grid;
-  grid-template-columns: repeat(3, 44px);
-  grid-template-rows: repeat(3, 44px);
-  gap: 4px;
+  grid-template-columns: repeat(3, 48px);
+  grid-template-rows: repeat(3, 48px);
+  gap: 6px;
 }
 .commandes-carte .croix button {
   min-height: 0;
   padding: 0;
   font-size: 1.4rem;
-  background: #fffffff2;
-  color: #222;
+  background: #ffffff;
+  color: #16201a;
   border: none;
-  border-radius: 10px;
-  box-shadow: 0 1px 4px #0006;
+  border-radius: 14px;
+  box-shadow: var(--ombre-flottante);
 }
 .commandes-carte .croix button.actif {
-  background: var(--sel);
+  background: var(--choix);
   color: #fff;
 }
+/* Flèches du sens, posées sur la carte : blanches, violettes une fois choisies. */
 .fleche-limite {
   position: absolute;
-  font-size: 30px;
+  font-size: 28px;
+  font-weight: 700;
   line-height: 1;
-  color: #fff;
-  background: #555c;
-  border: 2px solid #fff;
+  color: #16201a;
+  background: #ffffff;
+  border: 2px solid #16201a;
   border-radius: 50%;
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 4px #0008;
+  box-shadow: var(--ombre-flottante);
   cursor: pointer;
 }
 .fleche-limite.choisie {
-  background: #d500f9;
+  background: var(--choix);
+  border-color: #ffffff;
+  color: #ffffff;
 }
 
 /* ---------- Boutons ---------- */
@@ -369,7 +381,7 @@ h1 {
 }
 .sens {
   font-weight: 700;
-  color: var(--sel-texte);
+  color: var(--choix-texte);
   margin-top: 4px;
 }
 .doux {
@@ -432,26 +444,29 @@ details > summary {
   padding: 4px 0;
 }
 .etat-verifie.choisi {
-  background: #00a152;
-  border-color: #00a152;
+  background: var(--etat-verifie);
+  border-color: var(--etat-verifie);
   color: #fff;
+  font-weight: 700;
 }
 .etat-a-confirmer.choisi {
-  background: #ffc400;
-  border-color: #ffc400;
-  color: #222;
+  background: var(--etat-a-confirmer);
+  border-color: var(--etat-a-confirmer);
+  color: #16201a;
+  font-weight: 700;
 }
 .etat-a-refaire.choisi {
-  background: #d50000;
-  border-color: #d50000;
+  background: var(--etat-a-refaire);
+  border-color: var(--etat-a-refaire);
   color: #fff;
+  font-weight: 700;
 }
 .texte-verifie {
-  color: #00a152;
+  color: var(--vert);
   font-weight: bold;
 }
 .texte-a-refaire {
-  color: #d50000;
+  color: var(--rouge);
   font-weight: bold;
 }
 td.cliquable {
