@@ -1399,7 +1399,9 @@ function appliquer(): void {
   afficher();
 }
 
-const signe = (v: number) => (v > 0 ? `+${v}` : String(v));
+/** Écart de surface en hectares, signé, à 4 décimales : « +0,0395 ». */
+const haSigne = (m2: number) =>
+  `${m2 > 0 ? '+' : m2 < 0 ? '−' : ''}${(Math.abs(m2) / 10_000).toFixed(4).replace('.', ',')}`;
 
 function annuler(): void {
   const precedent = session?.historique.pop();
@@ -2343,7 +2345,7 @@ function tableauVersion(s: Session): HTMLElement {
         {},
         el('th', {}, 'Parcelle'),
         el('th', {}, 'surface (ha)'),
-        el('th', {}, 'écart (m²)'),
+        el('th', {}, 'écart (ha)'),
         el('th', {}, 'lignes'),
       ),
       ...parcelles.map((p) => {
@@ -2355,7 +2357,7 @@ function tableauVersion(s: Session): HTMLElement {
           {},
           el('td', {}, s.td.parcelles[p]!.nom),
           el('td', {}, ha(Math.round(apres))),
-          el('td', {}, modifiees.has(p) ? signe(Math.round(apres) - avant) : '—'),
+          el('td', {}, modifiees.has(p) ? haSigne(Math.round(apres) - avant) : '—'),
           el('td', {}, n > 0 ? String(n) : '—'),
         );
       }),
