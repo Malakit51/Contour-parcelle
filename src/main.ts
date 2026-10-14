@@ -187,7 +187,7 @@ let mode: 'limite' | 'sommet' | 'simplifier' | 'guidage' = 'limite';
 let typeGuidage: 'ab' | 'courbe' = 'ab';
 let guidageInterieur = true;
 /** Une ligne sur un bord choisi, ou une ligne par côté de toute la parcelle. */
-let porteeGuidage: 'bord' | 'parcelle' = 'bord';
+let porteeGuidage: 'bord' | 'parcelle' | 'toutes' = 'bord';
 /** Angle à partir duquel un sommet est un coin (lignes de toute la parcelle). */
 let seuilCoins = 30;
 const SEUILS_COINS = [20, 30, 45, 60];
@@ -1240,12 +1240,20 @@ function appliquer(): void {
     } else if (mode === 'guidage' && apercuGuidages(s).length > 0) {
       const gs = apercuGuidages(s);
       const cote = `${enMetres(Math.abs(d))} m ${guidageInterieur ? 'à l’intérieur' : 'à l’extérieur'}`;
+      const base = baseNomLignes();
+      const touchees = new Set(gs.map((g) => g.parcelle));
       const nom = s.td.parcelles[gs[0]!.parcelle]!.nom;
       quoi =
-        gs.length === 1
+        porteeGuidage === 'bord'
           ? `Ligne ${gs[0]!.type === 'ab' ? 'AB' : 'courbe'} « ${gs[0]!.nom} » ajoutée à ${nom} (${cote})`
-          : `${gs.length} lignes de guidage ajoutées à ${nom} (${cote})`;
-      nouveau = { ...s.etat, guidages: [...(s.etat.guidages ?? []), ...gs] };
+          : porteeGuidage === 'parcelle'
+            ? `${gs.length} lignes « ${base} » sur ${nom} (${cote})`
+            : `${gs.length} lignes « ${base} » sur ${touchees.size} parcelles (${cote})`;
+      // Toute une parcelle : le jeu de même nom déjà créé sur la parcelle est remplacé.
+      const gardees = (s.etat.guidages ?? []).filter(
+        (g) => porteeGuidage === 'bord' || !touchees.has(g.parcelle) || !duJeu(g, base),
+      );
+      nouveau = { ...s.etat, guidages: [...gardees, ...gs] };
     } else {
       return;
     }
@@ -1614,7 +1622,10 @@ function dessin(s: Session): Dessin {
   }
   d.guidages = [
     ...(s.etat.guidages ?? []).map((g) => ({ pts: [...g.points], apercu: false })),
-    ...apercuGuidages(s).map((g) => ({ pts: [...g.points], apercu: true })),
+    ...(porteeGuidage === 'toutes' ? [] : apercuGuidages(s)).map((g) => ({
+      pts: [...g.points],
+      apercu: true,
+    })),
   ];
   for (const c of coinsGuidage(s)?.coins ?? []) d.points.push({ p: c, couleur: SEL, rayon: 7 });
   if (selLimite) {
@@ -1791,12 +1802,35 @@ function panneauSimplification(s: Session): HTMLElement {
   );
 }
 
-/** Nom de la prochaine ligne, sur le modèle de la console : « A=B 2026.10.14_09:30_1 ». */
-function nomGuidage(etat: Etat, type: 'ab' | 'courbe', rang = 1): string {
-  const d = new Date();
-  const z = (n: number) => String(n).padStart(2, '0');
-  const quand = `${d.getFullYear()}.${z(d.getMonth() + 1)}.${z(d.getDate())}_${z(d.getHours())}:${z(d.getMinutes())}`;
-  return `${type === 'ab' ? 'A=B' : 'Courbe'} ${quand}_${(etat.guidages?.length ?? 0) + rang}`;
+// Nom des lignes (outil, largeur…) : « Semoir 4 m » donne « Semoir 4 m 1 », « Semoir 4 m 2 »…
+// Retenu sur l'appareil. Case créée une seule fois (la recréer fermerait le clavier).
+const CLE_NOM_LIGNES = 'contour-parcelle/nom-guidage';
+const champNomLignes = el('input', {
+  type: 'text',
+  class: 'champ-nom',
+  enterkeyhint: 'done',
+  autocomplete: 'off',
+  'aria-label': 'Nom des lignes',
+});
+champNomLignes.value = lireStockage(CLE_NOM_LIGNES) ?? 'Guidage';
+champNomLignes.addEventListener('change', () => {
+  ecrireStockage(CLE_NOM_LIGNES, champNomLignes.value.trim() || null);
+});
+champNomLignes.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') champNomLignes.blur();
+});
+const baseNomLignes = () => champNomLignes.value.trim() || 'Guidage';
+
+/** Vrai si la ligne fait partie du jeu « base » (« base 1 », « base 2 »…). */
+const duJeu = (g: Guidage, base: string) =>
+  g.nom.startsWith(`${base} `) && /^\d+$/.test(g.nom.slice(base.length + 1));
+
+/** Numéro suivant du jeu « base » sur la parcelle `p`. */
+function numeroSuivant(etat: Etat, p: number, base: string): number {
+  const numeros = (etat.guidages ?? [])
+    .filter((g) => g.parcelle === p && duJeu(g, base))
+    .map((g) => Number(g.nom.slice(base.length + 1)));
+  return Math.max(0, ...numeros) + 1;
 }
 
 /** Lignes que donnerait « Appliquer » : une sur le bord choisi, ou une par côté de la parcelle. */
@@ -1806,7 +1840,19 @@ function apercuGuidages(s: Session): Guidage[] {
     const g = apercuGuidage(s);
     return g ? [g] : [];
   }
-  return coinsGuidage(s)?.lignes ?? [];
+  if (porteeGuidage === 'parcelle') return coinsGuidage(s)?.lignes ?? [];
+  return s.td.parcelles.flatMap((_, p) => lignesParcelle(s, p)?.lignes ?? []);
+}
+
+/** Parcelles à contrôler après « Toutes les parcelles » : pas exactement 4 coins, ou un petit côté sans ligne. */
+function parcellesAControler(s: Session): number[] {
+  return s.td.parcelles
+    .map((_, p) => ({ p, r: lignesParcelle(s, p) }))
+    .filter(({ r }) => r && (r.coins.length !== 4 || r.ignores > 0))
+    .map(({ p }) => p)
+    .sort((a, b) =>
+      s.td.parcelles[a]!.nom.localeCompare(s.td.parcelles[b]!.nom, 'fr', { numeric: true }),
+    );
 }
 
 /**
@@ -1815,7 +1861,14 @@ function apercuGuidages(s: Session): Guidage[] {
  */
 function coinsGuidage(s: Session): { coins: LatLon[]; lignes: Guidage[]; ignores: number } | null {
   if (mode !== 'guidage' || porteeGuidage !== 'parcelle' || parcelleCourante === null) return null;
-  const a = s.etat.anneaux.find((x) => x.parcelle === parcelleCourante && x.type === 1);
+  return lignesParcelle(s, parcelleCourante);
+}
+
+function lignesParcelle(
+  s: Session,
+  p: number,
+): { coins: LatLon[]; lignes: Guidage[]; ignores: number } | null {
+  const a = s.etat.anneaux.find((x) => x.parcelle === p && x.type === 1);
   if (!a) return null;
   const plan = planLocal(latLon(a.sommets[0]!));
   const pts = a.sommets.map((x) => plan.versXY(latLon(x)));
@@ -1841,7 +1894,7 @@ function coinsGuidage(s: Session): { coins: LatLon[]; lignes: Guidage[]; ignores
     lignes.push({
       parcelle: a.parcelle,
       type,
-      nom: nomGuidage(s.etat, type, lignes.length + 1),
+      nom: `${baseNomLignes()} ${lignes.length + 1}`,
       points: xy.map((p) => plan.versLatLon(p)),
     });
   }
@@ -1869,9 +1922,46 @@ function apercuGuidage(s: Session): Guidage | null {
   return {
     parcelle: a.parcelle,
     type: typeGuidage,
-    nom: nomGuidage(s.etat, typeGuidage),
+    nom: `${baseNomLignes()} ${numeroSuivant(s.etat, a.parcelle, baseNomLignes())}`,
     points: xy.map((p) => plan.versLatLon(p)),
   };
+}
+
+/** Toutes les parcelles : nombre de lignes et parcelles à contrôler (un appui zoome dessus). */
+function panneauToutes(s: Session): HTMLElement {
+  const lignes = apercuGuidages(s);
+  const parcelles = new Set(lignes.map((g) => g.parcelle)).size;
+  const aControler = parcellesAControler(s);
+  return el(
+    'div',
+    {},
+    el(
+      'div',
+      { class: 'doux' },
+      `${lignes.length} lignes « ${baseNomLignes()} » sur ${parcelles} parcelles (celles de même nom sont remplacées).`,
+    ),
+    aControler.length > 0 &&
+      el(
+        'div',
+        { class: 'rangee' },
+        el('span', { class: 'sens' }, 'À contrôler :'),
+        ...aControler.map((p) =>
+          el(
+            'button',
+            {
+              class: 'petit',
+              onclick: () => {
+                porteeGuidage = 'parcelle';
+                parcelleCourante = p;
+                afficher();
+                cadrerParcelle(p);
+              },
+            },
+            s.td.parcelles[p]!.nom,
+          ),
+        ),
+      ),
+  );
 }
 
 function panneauGuidage(s: Session): HTMLElement {
@@ -1901,7 +1991,8 @@ function panneauGuidage(s: Session): HTMLElement {
     choix(
       [
         ['bord', 'Un bord'],
-        ['parcelle', 'Toute la parcelle'],
+        ['parcelle', 'Parcelle'],
+        ['toutes', 'Toutes'],
       ],
       porteeGuidage,
       (v) => {
@@ -1910,6 +2001,7 @@ function panneauGuidage(s: Session): HTMLElement {
         bord = null;
       },
     ),
+    el('label', { class: 'rangee' }, el('span', { class: 'doux' }, 'Nom'), champNomLignes),
     porteeGuidage === 'bord' &&
       choix(
         [
@@ -1927,7 +2019,7 @@ function panneauGuidage(s: Session): HTMLElement {
       guidageInterieur ? 'int' : 'ext',
       (v) => (guidageInterieur = v === 'int'),
     ),
-    porteeGuidage === 'parcelle' &&
+    porteeGuidage !== 'bord' &&
       el(
         'div',
         { class: 'rangee' },
@@ -1946,42 +2038,44 @@ function panneauGuidage(s: Session): HTMLElement {
           ),
         ),
       ),
-    porteeGuidage === 'parcelle'
-      ? !parcelle
-        ? el('div', { class: 'sens' }, 'Touche une parcelle.')
-        : el(
-            'div',
-            { class: 'doux' },
-            `${parcelle.coins.length} coins · ${parcelle.lignes.filter((g) => g.type === 'ab').length} droites AB, ${parcelle.lignes.filter((g) => g.type === 'courbe').length} courbes` +
-              (parcelle.ignores > 0
-                ? ` · ${parcelle.ignores} côté(s) de moins de ${COTE_MIN_M} m sans ligne`
-                : ''),
-          )
-      : !bord
-        ? el(
-            'div',
-            { class: 'sens' },
-            bordDebut ? 'Touche le dernier sommet du bord.' : 'Touche le premier sommet du bord.',
-          )
-        : el(
-            'div',
-            { class: 'rangee' },
-            el(
-              'span',
-              { class: 'doux', style: 'flex:1' },
-              `Bord : ${sommetsDuBord(s.etat, bord).length} points`,
-            ),
-            el(
-              'button',
-              {
-                onclick: () => {
-                  if (bord) bord = { ...bord, aRebours: !bord.aRebours };
-                  afficher();
+    porteeGuidage === 'toutes'
+      ? panneauToutes(s)
+      : porteeGuidage === 'parcelle'
+        ? !parcelle
+          ? el('div', { class: 'sens' }, 'Touche une parcelle.')
+          : el(
+              'div',
+              { class: 'doux' },
+              `${parcelle.coins.length} coins · ${parcelle.lignes.filter((g) => g.type === 'ab').length} droites AB, ${parcelle.lignes.filter((g) => g.type === 'courbe').length} courbes` +
+                (parcelle.ignores > 0
+                  ? ` · ${parcelle.ignores} côté(s) de moins de ${COTE_MIN_M} m sans ligne`
+                  : ''),
+            )
+        : !bord
+          ? el(
+              'div',
+              { class: 'sens' },
+              bordDebut ? 'Touche le dernier sommet du bord.' : 'Touche le premier sommet du bord.',
+            )
+          : el(
+              'div',
+              { class: 'rangee' },
+              el(
+                'span',
+                { class: 'doux', style: 'flex:1' },
+                `Bord : ${sommetsDuBord(s.etat, bord).length} points`,
+              ),
+              el(
+                'button',
+                {
+                  onclick: () => {
+                    if (bord) bord = { ...bord, aRebours: !bord.aRebours };
+                    afficher();
+                  },
                 },
-              },
-              'Autre côté',
+                'Autre côté',
+              ),
             ),
-          ),
     ...lignes.map((g) =>
       el(
         'div',

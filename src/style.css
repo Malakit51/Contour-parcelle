@@ -508,3 +508,15 @@ td.etats {
   font-size: 1.5rem;
   padding: 4px 10px;
 }
+
+/* Nom des lignes de guidage. */
+.champ-nom {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--ligne);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--fg);
+}
