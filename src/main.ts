@@ -2520,8 +2520,93 @@ zones.carte.append(
   bulle,
   boiteMesure,
 );
+// ---------- Volet à la Google Maps (option, en portrait) ----------
+//
+// La carte prend tout l'écran ; onglets, panneau et barre du bas sont dans un volet posé en bas,
+// qu'on fait glisser par sa poignée : replié (onglets et barre du bas), à moitié, presque plein.
+// En mise en page classique, le volet est transparent (display: contents).
+
+const CLE_MISE_EN_PAGE = 'contour-parcelle/mise-en-page';
+const CLE_HAUTEUR_VOLET = 'contour-parcelle/hauteur-volet';
+let voletActif = lireStockage(CLE_MISE_EN_PAGE) === 'volet';
+type Cran = 'replie' | 'moitie' | 'plein';
+let cran: Cran = (lireStockage(CLE_HAUTEUR_VOLET) as Cran | null) ?? 'moitie';
+
+const poignee = el('div', { class: 'poignee', title: 'Glisser pour agrandir ou réduire' });
+const volet = el('div', { class: 'volet' }, poignee, zones.onglets, zones.panneau, zones.bas);
+
+const voletVisible = () =>
+  voletActif && app.classList.contains('avec-volet') && poignee.offsetHeight > 0;
+
+/** Hauteur (px) de chaque cran : replié = poignée, onglets et barre du bas ; plein = sous la barre du haut. */
+function hauteurs(): Record<Cran, number> {
+  // Poignée (marge −6) + onglets + barre du bas, deux espaces de 8 px et la marge du bas (zone
+  // des boutons d'Android comprise) : le panneau est alors masqué.
+  const replie =
+    poignee.offsetHeight +
+    zones.onglets.offsetHeight +
+    zones.bas.offsetHeight +
+    10 +
+    parseFloat(getComputedStyle(volet).paddingBottom || '0');
+  const plein = window.innerHeight - 72;
+  return { replie, moitie: Math.max(replie, Math.round(window.innerHeight * 0.5)), plein };
+}
+
+function poserVolet(hauteur?: number): void {
+  if (!voletVisible()) {
+    app.style.removeProperty('--volet');
+    carte.margeBas = 0;
+    carte.margeHaut = 0;
+    return;
+  }
+  const crans = hauteurs();
+  const h = hauteur ?? crans[cran];
+  volet.classList.toggle('replie', h <= crans.replie + 4);
+  // Volet haut : plus de place sous la carte pour la bulle et l'échelle, on les remonte / masque.
+  app.classList.toggle('volet-haut', h > window.innerHeight * 0.6);
+  app.style.setProperty('--volet', `${h}px`);
+  carte.margeBas = h;
+  carte.margeHaut = 64;
+}
+
+// Glissement de la poignée : le volet suit le doigt, puis se cale sur le cran le plus proche.
+// Un simple appui passe au cran suivant.
+let depart: { y: number; h: number; bouge: boolean } | null = null;
+poignee.addEventListener('pointerdown', (e) => {
+  if (!voletVisible()) return;
+  poignee.setPointerCapture(e.pointerId);
+  depart = { y: e.clientY, h: hauteurs()[cran], bouge: false };
+  volet.classList.add('glisse');
+});
+poignee.addEventListener('pointermove', (e) => {
+  if (!depart) return;
+  const dy = depart.y - e.clientY;
+  if (Math.abs(dy) > 6) depart.bouge = true;
+  const { replie, plein } = hauteurs();
+  poserVolet(Math.min(plein, Math.max(replie, depart.h + dy)));
+});
+function lacher(e: PointerEvent): void {
+  if (!depart) return;
+  volet.classList.remove('glisse');
+  const crans = hauteurs();
+  if (!depart.bouge) {
+    cran = cran === 'replie' ? 'moitie' : cran === 'moitie' ? 'plein' : 'replie';
+  } else {
+    const h = depart.h + (depart.y - e.clientY);
+    cran = (Object.keys(crans) as Cran[]).reduce((m, c) =>
+      Math.abs(crans[c] - h) < Math.abs(crans[m] - h) ? c : m,
+    );
+  }
+  depart = null;
+  ecrireStockage(CLE_HAUTEUR_VOLET, cran);
+  poserVolet();
+}
+poignee.addEventListener('pointerup', lacher);
+poignee.addEventListener('pointercancel', lacher);
+window.addEventListener('resize', () => poserVolet());
+
 app.classList.add('mise-en-page');
-app.replaceChildren(...Object.values(zones));
+app.replaceChildren(zones.haut, zones.carte, volet);
 
 function remplir(
   zone: HTMLElement,
@@ -2589,6 +2674,34 @@ function contenuFichier(s: Session | null): Node[] {
     ...(s ? [panneauReference()] : []),
     panneauSauvegardeFichier(),
     panneauDrive(),
+    el(
+      'div',
+      { class: 'info' },
+      el('strong', {}, 'Mise en page (en portrait)'),
+      el(
+        'div',
+        { class: 'rangee' },
+        ...(
+          [
+            [false, 'Classique'],
+            [true, 'Volet'],
+          ] as const
+        ).map(([v, t]) =>
+          el(
+            'button',
+            {
+              class: voletActif === v ? 'actif' : '',
+              onclick: () => {
+                voletActif = v;
+                ecrireStockage(CLE_MISE_EN_PAGE, v ? 'volet' : null);
+                afficher();
+              },
+            },
+            t,
+          ),
+        ),
+      ),
+    ),
   ];
   if (s) {
     contenu.push(
@@ -2621,6 +2734,7 @@ function contenuFichier(s: Session | null): Node[] {
 }
 
 function afficher(): void {
+  app.classList.toggle('avec-volet', voletActif && session !== null);
   gpsAffiche = carte.gpsActif();
   const defilement = zones.panneau.scrollTop;
   // Sans fichier ouvert (pas de carte), le message reste en tête du panneau.
@@ -2808,6 +2922,7 @@ function afficher(): void {
   if (document.activeElement !== champDistance) champDistance.value = saisie;
   carte.definirCommandes(mode === 'sommet' && selSommet ? commandesSommet() : null);
   majMesure();
+  poserVolet();
   carte.afficher(dessin(s));
   zones.panneau.scrollTop = defilement;
 }

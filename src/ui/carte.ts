@@ -99,11 +99,16 @@ export class Carte {
     new ResizeObserver(() => this.carte.invalidateSize()).observe(this.element);
   }
 
+  /** Hauteur (px) cachée en haut et en bas de la carte (barre du haut, volet posés dessus). */
+  margeHaut = 0;
+  margeBas = 0;
+
   cadrer(points: LatLon[]): void {
     if (points.length === 0) return;
     this.carte.invalidateSize();
     this.carte.fitBounds(L.latLngBounds(points.map(ll)), {
-      padding: [20, 20],
+      paddingTopLeft: [20, 20 + this.margeHaut],
+      paddingBottomRight: [20, 20 + this.margeBas],
       maxZoom: 19,
     });
   }

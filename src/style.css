@@ -476,13 +476,13 @@ td.etats {
     grid-area: carte;
     min-height: 0;
   }
-  .mise-en-page > .onglets {
+  .mise-en-page .onglets {
     grid-area: onglets;
   }
-  .mise-en-page > .panneau {
+  .mise-en-page .panneau {
     grid-area: panneau;
   }
-  .mise-en-page > .barre-bas {
+  .mise-en-page .barre-bas {
     grid-area: bas;
   }
   /* Sans fichier ouvert, pas de carte : le panneau prend toute la largeur. */
@@ -546,4 +546,101 @@ td.etats {
   min-height: 36px;
   padding: 4px 10px;
   box-shadow: none;
+}
+
+/* ---------- Volet à la Google Maps (option, en portrait) ---------- */
+/* Mise en page classique : le volet n'existe pas, ses enfants sont posés comme avant. */
+.volet {
+  display: contents;
+}
+.poignee {
+  display: none;
+}
+@media (orientation: portrait), (max-width: 699px) {
+  #app.avec-volet {
+    position: relative;
+    padding: 0;
+  }
+  /* La carte prend tout l'écran ; la barre du haut et le volet sont posés dessus. */
+  .avec-volet > .zone-carte {
+    position: absolute;
+    inset: 0;
+  }
+  .avec-volet > .zone-carte .carte {
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .avec-volet > .barre-haut {
+    position: absolute;
+    top: calc(8px + env(safe-area-inset-top));
+    left: 8px;
+    right: 8px;
+    z-index: 1002;
+  }
+  .avec-volet .leaflet-top {
+    top: 62px;
+  }
+  .avec-volet .leaflet-bottom {
+    bottom: var(--volet, 160px);
+  }
+  .avec-volet .bulle {
+    bottom: calc(var(--volet, 160px) + 12px);
+  }
+  .avec-volet .gps-sur-carte {
+    bottom: calc(var(--volet, 160px) + 24px);
+  }
+  .avec-volet .volet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1002;
+    height: var(--volet, 160px);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 8px calc(8px + env(safe-area-inset-bottom));
+    background: var(--bg);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -2px 12px #0004;
+    transition: height 0.2s ease-out;
+  }
+  .avec-volet .volet.glisse {
+    transition: none;
+  }
+  .avec-volet .poignee {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex: none;
+    height: 26px;
+    margin: 0 -8px -6px;
+    touch-action: none;
+    cursor: grab;
+  }
+  .avec-volet .poignee::before {
+    content: '';
+    width: 44px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--doux);
+    opacity: 0.6;
+  }
+}
+
+@media (orientation: portrait), (max-width: 699px) {
+  .avec-volet .volet.replie .panneau {
+    display: none;
+  }
+}
+
+@media (orientation: portrait), (max-width: 699px) {
+  .avec-volet.volet-haut .bulle {
+    top: calc(70px + env(safe-area-inset-top));
+    bottom: auto;
+  }
+  .avec-volet.volet-haut .leaflet-bottom,
+  .avec-volet.volet-haut .gps-sur-carte {
+    display: none;
+  }
 }
