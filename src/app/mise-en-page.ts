@@ -38,6 +38,20 @@ export const champDistance = el('input', {
   placeholder: '0',
   'aria-label': 'Distance en mètres',
 });
+// Bouton principal de la barre du bas : son texte dit ce qu'il va faire (« Décaler 0,5 m »).
+let boutonAppliquer: HTMLButtonElement | null = null;
+function texteAppliquer(): string {
+  const d = metres() > 0 ? ` ${enMetres(metres())} m` : '';
+  if (ui.mode === 'limite' && ui.selLimite) return `Décaler${d}`;
+  if (ui.mode === 'sommet' && ui.limiteGlisse) return `Déplacer${d}`;
+  if (ui.mode === 'guidage' && ui.session) {
+    const n = apercuGuidages(ui.session).length;
+    return n > 1 ? `Créer ${n} lignes` : 'Créer la ligne';
+  }
+  if (ui.mode === 'simplifier') return 'Simplifier';
+  return 'Appliquer';
+}
+
 champDistance.addEventListener('input', () => {
   // Chiffres et une virgule (le point est accepté et converti) ; pas de signe : ce sont les
   // flèches sur la carte qui donnent le sens.
@@ -47,6 +61,7 @@ champDistance.addEventListener('input', () => {
     .replace(/,(?=.*,)/g, '');
   if (propre !== champDistance.value) champDistance.value = propre;
   ui.saisie = propre;
+  if (boutonAppliquer) boutonAppliquer.textContent = texteAppliquer();
 });
 champDistance.addEventListener('change', () => {
   // Pas de redessin ici : si on tape la distance puis « Appliquer », la case perd la main juste
@@ -454,11 +469,11 @@ export function afficher(): void {
       icone('annuler', 24),
     ),
     el('label', { class: 'case-distance' }, champDistance, el('span', {}, 'm')),
-    el(
+    (boutonAppliquer = el(
       'button',
       { class: 'principal', onclick: appliquer, ...(peutAppliquer ? {} : { disabled: '' }) },
-      'Appliquer',
-    ),
+      texteAppliquer(),
+    )),
   );
   if (document.activeElement !== champDistance) champDistance.value = ui.saisie;
   carte.definirCommandes(ui.mode === 'sommet' && ui.selSommet ? commandesSommet() : null);

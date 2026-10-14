@@ -326,14 +326,34 @@ export function panneauSelection(s: Session): HTMLElement {
         : type === 1
           ? `Limite ${coteLimite(s, ref)} de ${x}`
           : `Bord de la zone exclue de ${x}`;
+    // Les deux sens, en clair, sur deux cartes (les flèches de la carte font la même chose).
+    const effets = effetsLimite(s, ref);
+    const carteSens = (sens: 'exterieur' | 'interieur') => {
+      const m = /^(.*) \((.*)\)$/.exec(effets[sens]);
+      const titreSens = m ? m[1]! : effets[sens];
+      return el(
+        'button',
+        {
+          class: `carte-sens${ui.sensLimite === sens ? ' choisie' : ''}`,
+          onclick: () => {
+            ui.sensLimite = sens;
+            afficher();
+          },
+        },
+        el('span', { class: 'carte-sens-titre' }, titreSens[0]!.toUpperCase() + titreSens.slice(1)),
+        m && el('span', { class: 'carte-sens-effet' }, m[2]!),
+      );
+    };
     return el(
       'div',
-      { class: 'info' },
-      el('div', {}, el('strong', {}, titre)),
-      el('div', { class: 'doux' }, `${longueur(s, ref).toFixed(1).replace('.', ',')} m`),
-      ui.sensLimite
-        ? el('div', { class: 'sens' }, effetsLimite(s, ref)[ui.sensLimite])
-        : el('div', { class: 'sens' }, 'Choisis une flèche.'),
+      { class: 'selection-limite' },
+      el(
+        'div',
+        { class: 'entete-selection' },
+        el('strong', {}, titre),
+        el('span', { class: 'doux' }, `${longueur(s, ref).toFixed(1).replace('.', ',')} m`),
+      ),
+      el('div', { class: 'cartes-sens' }, carteSens('exterieur'), carteSens('interieur')),
     );
   }
   const boutonAjout = el(

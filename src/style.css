@@ -491,6 +491,12 @@ td.etats {
   border-radius: 16px;
   font-size: 1.1rem;
 }
+.barre-bas button.principal {
+  padding: 8px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .barre-bas button.annuler {
   flex: none;
   width: 56px;
@@ -532,6 +538,54 @@ td.etats {
 .case-distance:focus-within {
   border-color: var(--vert);
   box-shadow: 0 0 0 2px var(--vert);
+}
+
+/* ---------- Limite choisie : titre et deux cartes de sens ---------- */
+.selection-limite {
+  margin: 0 0 10px;
+}
+.entete-selection {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 2px 2px 8px;
+  font-size: 1.1rem;
+}
+.entete-selection .doux {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.cartes-sens {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+button.carte-sens {
+  min-height: 64px;
+  padding: 8px 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  text-align: left;
+  border-radius: var(--rayon);
+  box-shadow: none;
+}
+.carte-sens-titre {
+  font-weight: 700;
+}
+.carte-sens-effet {
+  font-size: 0.85rem;
+  color: var(--doux);
+}
+button.carte-sens.choisie {
+  border: 2px solid var(--choix);
+  background: color-mix(in srgb, var(--choix) 12%, var(--surface));
+}
+button.carte-sens.choisie .carte-sens-effet {
+  color: var(--choix-texte);
+  font-weight: 700;
 }
 
 /* ---------- Barre du haut : pilule de la parcelle et zoom ---------- */
