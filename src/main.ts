@@ -4,9 +4,12 @@
 import './style.css';
 import { afficher } from './app/mise-en-page';
 import { reprendreSession } from './app/travail';
+import { annoncerMiseAJour } from './app/version';
 
 afficher();
 reprendreSession();
+annoncerMiseAJour();
+afficher();
 
 // Installation comme une application (icône sur l'écran d'accueil, plein écran).
 if ('serviceWorker' in navigator) {

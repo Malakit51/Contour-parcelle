@@ -9,6 +9,7 @@ import { enregistrer } from './exporter';
 import { afficher } from './mise-en-page';
 import { panneauReference } from './reference';
 import { changerNomAppareil, ecrireStockage, nomAppareil } from './stockage';
+import { TEXTE_VERSION } from './version';
 import {
   charger,
   fermerFichier,
@@ -221,5 +222,6 @@ export function contenuFichier(s: Session | null): Node[] {
       );
     }
   }
+  contenu.push(el('div', { class: 'doux' }, TEXTE_VERSION));
   return contenu;
 }
