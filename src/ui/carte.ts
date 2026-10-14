@@ -51,6 +51,8 @@ export class Carte {
   private suiviGps: number | null = null;
   /** Boutons posés sur la carte, en haut à gauche (flèches de déplacement d'un point). */
   private readonly commandes = L.DomUtil.create('div', 'commandes-carte');
+  /** Boutons posés sur la carte, en haut à droite sous le choix du fond (lignes de guidage). */
+  private readonly commandesDroite = L.DomUtil.create('div', 'commandes-carte commandes-droite');
   private dernierePosition: GeolocationPosition | null = null;
 
   constructor(
@@ -82,6 +84,11 @@ export class Carte {
     L.DomEvent.disableClickPropagation(this.commandes);
     L.DomEvent.disableScrollPropagation(this.commandes);
     new (L.Control.extend({ onAdd: () => this.commandes }))({ position: 'topleft' }).addTo(
+      this.carte,
+    );
+    L.DomEvent.disableClickPropagation(this.commandesDroite);
+    L.DomEvent.disableScrollPropagation(this.commandesDroite);
+    new (L.Control.extend({ onAdd: () => this.commandesDroite }))({ position: 'topright' }).addTo(
       this.carte,
     );
     this.calque.addTo(this.carte);
@@ -244,6 +251,15 @@ export class Carte {
     }
     this.commandes.replaceChildren(...(contenu ? [contenu] : []));
     this.commandes.style.display = contenu ? '' : 'none';
+  }
+
+  definirCommandesDroite(contenu: HTMLElement | null): void {
+    if (contenu) {
+      L.DomEvent.disableClickPropagation(contenu);
+      L.DomEvent.disableScrollPropagation(contenu);
+    }
+    this.commandesDroite.replaceChildren(...(contenu ? [contenu] : []));
+    this.commandesDroite.style.display = contenu ? '' : 'none';
   }
 
   private majNoms(): void {

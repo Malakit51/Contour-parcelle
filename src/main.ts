@@ -23,6 +23,8 @@ import {
 import {
   aControler,
   ajouterGuidages,
+  jeuDe,
+  jeux,
   COTE_MIN_M,
   ligneSurBord,
   lignesDeParcelle,
@@ -235,7 +237,7 @@ let sensLimite: 'exterieur' | 'interieur' | null = null;
 let sensGlisse: 'vers' | 'oppose' | null = null;
 let parcelleCourante: number | null = null;
 /** Distance en mètres telle que tapée, avec une virgule décimale (« -0,35 »). */
-let saisie = '0,5';
+let saisie = '';
 let message: { texte: string; erreur: boolean } | null = null;
 let exportPrepare: { texte: string; alertes: Alerte[]; resume: string; details: string } | null =
   null;
@@ -1271,6 +1273,77 @@ function fleche(direction: keyof typeof DIRECTIONS): void {
   );
 }
 
+// ---------- Lignes de guidage : masquer ou afficher un jeu ----------
+//
+// Seulement à l'écran : une ligne masquée reste dans le travail et dans l'export.
+const CLE_JEUX_MASQUES = 'contour-parcelle/jeux-masques';
+let jeuxMasques = new Set<string>(
+  (() => {
+    try {
+      return JSON.parse(lireStockage(CLE_JEUX_MASQUES) ?? '[]') as string[];
+    } catch {
+      return [];
+    }
+  })(),
+);
+let menuLignesOuvert = false;
+
+function changerMasques(masques: Set<string>): void {
+  jeuxMasques = masques;
+  ecrireStockage(CLE_JEUX_MASQUES, masques.size ? JSON.stringify([...masques]) : null);
+  afficher();
+}
+
+/** Bouton « Lignes » en haut à droite de la carte, avec la liste des jeux à cocher. */
+function commandesLignes(s: Session): HTMLElement | null {
+  const noms = jeux(s.etat.guidages ?? []);
+  if (noms.length === 0) return null;
+  const visibles = noms.filter((n) => !jeuxMasques.has(n)).length;
+  const bouton = el(
+    'button',
+    {
+      class: `bouton-lignes${visibles < noms.length ? ' masquees' : ''}`,
+      onclick: () => {
+        menuLignesOuvert = !menuLignesOuvert;
+        afficher();
+      },
+    },
+    `Lignes ${visibles}/${noms.length}`,
+  );
+  if (!menuLignesOuvert) return el('div', {}, bouton);
+  return el(
+    'div',
+    {},
+    bouton,
+    el(
+      'div',
+      { class: 'menu-lignes' },
+      ...noms.map((n) =>
+        el(
+          'button',
+          {
+            class: jeuxMasques.has(n) ? '' : 'coche',
+            onclick: () => {
+              const m = new Set(jeuxMasques);
+              if (m.has(n)) m.delete(n);
+              else m.add(n);
+              changerMasques(m);
+            },
+          },
+          `${jeuxMasques.has(n) ? '☐' : '☑'} ${n}`,
+        ),
+      ),
+      el(
+        'button',
+        {
+          onclick: () => changerMasques(visibles > 0 ? new Set(noms) : new Set()),
+        },
+        visibles > 0 ? 'Tout masquer' : 'Tout afficher',
+      ),
+    ),
+  );
+}
+
 /** Croix de 8 flèches posée sur la carte, avec « au doigt » au centre. */
 function commandesSommet(): HTMLElement {
   const bouton = (direction: keyof typeof DIRECTIONS) =>
@@ -1335,6 +1408,11 @@ function appliquer(): void {
   if (!session) return;
   const s = session;
   const d = metres();
+  if (d === 0 && (mode === 'limite' || mode === 'sommet')) {
+    message = { texte: 'Tape d’abord une distance.', erreur: true };
+    afficher();
+    return;
+  }
   try {
     let nouveau: Etat;
     let quoi: string;
@@ -1752,7 +1830,9 @@ function dessin(s: Session): Dessin {
     if (bord) d.points.push({ p: pts[bord.fin]!, couleur: SEL, rayon: 8 });
   }
   d.guidages = [
-    ...(s.etat.guidages ?? []).map((g) => ({ pts: [...g.points], apercu: false })),
+    ...(s.etat.guidages ?? [])
+      .filter((g) => !jeuxMasques.has(jeuDe(g.nom)))
+      .map((g) => ({ pts: [...g.points], apercu: false })),
     ...(porteeGuidage === 'toutes' ? [] : apercuGuidages(s)).map((g) => ({
       pts: [...g.points],
       apercu: true,
@@ -2286,6 +2366,7 @@ const champDistance = el('input', {
   enterkeyhint: 'done',
   autocomplete: 'off',
   class: 'champ-distance',
+  placeholder: '0',
   'aria-label': 'Distance en mètres',
 });
 champDistance.addEventListener('input', () => {
@@ -2780,6 +2861,7 @@ function afficher(): void {
     remplir(zones.bas);
     remplir(zones.panneau, msg, ...contenuFichier(null));
     carte.definirCommandes(null);
+    carte.definirCommandesDroite(null);
     return;
   }
   const s = session;
@@ -2949,6 +3031,7 @@ function afficher(): void {
   );
   if (document.activeElement !== champDistance) champDistance.value = saisie;
   carte.definirCommandes(mode === 'sommet' && selSommet ? commandesSommet() : null);
+  carte.definirCommandesDroite(commandesLignes(s));
   majMesure();
   poserVolet();
   carte.afficher(dessin(s));

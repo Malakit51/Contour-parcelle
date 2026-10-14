@@ -29,6 +29,12 @@ export interface LignesParcelle {
   ignores: number;
 }
 
+/** Nom du jeu d'une ligne : « Semoir 4 m 3 » → « Semoir 4 m » (le nom entier s'il n'est pas numéroté). */
+export const jeuDe = (nom: string) => /^(.*\S) \d+$/.exec(nom)?.[1] ?? nom;
+
+/** Noms des jeux de lignes présents, dans l'ordre de leur première ligne. */
+export const jeux = (lignes: readonly Guidage[]) => [...new Set(lignes.map((g) => jeuDe(g.nom)))];
+
 /** Vrai si la ligne fait partie du jeu « base » (« base 1 », « base 2 »…). */
 export const duJeu = (g: Guidage, base: string) =>
   g.nom.startsWith(`${base} `) && /^\d+$/.test(g.nom.slice(base.length + 1));

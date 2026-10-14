@@ -4,6 +4,8 @@ import {
   aControler,
   ajouterGuidages,
   duJeu,
+  jeuDe,
+  jeux,
   ligneSurBord,
   lignesDeParcelle,
   numeroSuivant,
@@ -97,5 +99,17 @@ describe('point dans un polygone', () => {
   it('dedans, dehors', () => {
     expect(pointDansPolygone([50, 50], carre)).toBe(true);
     expect(pointDansPolygone([150, 50], carre)).toBe(false);
+  });
+});
+
+describe('jeux de lignes', () => {
+  it('le nom du jeu est le nom sans son numéro', () => {
+    expect(jeuDe('Semoir 4 m 3')).toBe('Semoir 4 m');
+    expect(jeuDe('Pulvé 38 m 12')).toBe('Pulvé 38 m');
+    expect(jeuDe('A=B 2026.10.13_11:36_4')).toBe('A=B 2026.10.13_11:36_4');
+    const { etat } = preparer({ X: carre });
+    const semoir = lignesDeParcelle(etat, 0, reglages)!.lignes;
+    const pulve = lignesDeParcelle(etat, 0, { ...reglages, base: 'Pulvé 38 m' })!.lignes;
+    expect(jeux([...semoir, ...pulve, ...semoir])).toEqual(['Semoir 4 m', 'Pulvé 38 m']);
   });
 });
