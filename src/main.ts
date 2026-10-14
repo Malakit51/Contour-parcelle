@@ -1465,7 +1465,10 @@ async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
   const s = session;
   const quand = new Date().toISOString();
   const modifiees = parcellesModifiees(s.etat);
-  const action = `Exporté : version ${version} (${destination})`;
+  const nbLignes = s.etat.guidages?.length ?? 0;
+  const action =
+    `Exporté : version ${version} (${destination})` +
+    ` — ${modifiees.length} contour(s) modifié(s), ${nbLignes} ligne(s) de guidage`;
   majSuivi({
     ...suivi,
     derniereVersion: version,
@@ -2306,14 +2309,35 @@ champDistance.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') champDistance.blur();
 });
 
-function tableauSurfaces(s: Session): HTMLElement | null {
-  const modifiees = parcellesModifiees(s.etat);
-  if (modifiees.length === 0) return null;
+/**
+ * Récapitulatif de la version qui sera exportée : ce qui change par rapport au fichier ouvert
+ * (contours modifiés avec leur surface, lignes de guidage créées).
+ */
+function tableauVersion(s: Session): HTMLElement {
+  const modifiees = new Set(parcellesModifiees(s.etat));
+  const guidages = s.etat.guidages ?? [];
+  const parcelles = [...new Set([...modifiees, ...guidages.map((g) => g.parcelle)])].sort((a, b) =>
+    s.td.parcelles[a]!.nom.localeCompare(s.td.parcelles[b]!.nom, 'fr', { numeric: true }),
+  );
+  const titre = el('strong', {}, `Version ${prochaineVersion()}`);
+  if (parcelles.length === 0) {
+    return el(
+      'div',
+      { class: 'info' },
+      titre,
+      el('div', { class: 'doux' }, `Aucun changement par rapport à ${s.nomFichier}.`),
+    );
+  }
   const ha = (m2: number) => (m2 / 10_000).toFixed(4).replace('.', ',');
   return el(
     'div',
     { class: 'info' },
-    el('strong', {}, 'Surfaces'),
+    titre,
+    el(
+      'div',
+      { class: 'doux' },
+      `Par rapport à ${s.nomFichier} : ${modifiees.size} contour(s) modifié(s), ${guidages.length} ligne(s) de guidage.`,
+    ),
     el(
       'table',
       {},
@@ -2321,21 +2345,21 @@ function tableauSurfaces(s: Session): HTMLElement | null {
         'tr',
         {},
         el('th', {}, 'Parcelle'),
-        el('th', {}, 'avant (ha)'),
-        el('th', {}, 'après (ha)'),
+        el('th', {}, 'surface (ha)'),
         el('th', {}, 'écart (m²)'),
+        el('th', {}, 'lignes'),
       ),
-      ...modifiees.map((p) => {
+      ...parcelles.map((p) => {
         const avant = Number(s.td.parcelles[p]!.surface?.texte ?? NaN);
         const apres = nouvelleSurface(s.td, s.etat, p) ?? NaN;
-        const ecart = Math.round(apres) - avant;
+        const n = guidages.filter((g) => g.parcelle === p).length;
         return el(
           'tr',
           {},
           el('td', {}, s.td.parcelles[p]!.nom),
-          el('td', {}, ha(avant)),
           el('td', {}, ha(Math.round(apres))),
-          el('td', {}, signe(ecart)),
+          el('td', {}, modifiees.has(p) ? signe(Math.round(apres) - avant) : '—'),
+          el('td', {}, n > 0 ? String(n) : '—'),
         );
       }),
     ),
@@ -2349,7 +2373,7 @@ function panneauExport(): HTMLElement {
     el(
       'div',
       { class: 'rangee' },
-      el('strong', { style: 'flex:1' }, `Version ${prochaineVersion()}`),
+      el('span', { class: 'doux', style: 'flex:1' }, `Numéro de version : ${prochaineVersion()}`),
       el(
         'button',
         {
@@ -2716,7 +2740,7 @@ function afficher(): void {
       ];
       break;
     case 'export':
-      contenu = [tableauSurfaces(s), panneauExport()];
+      contenu = [tableauVersion(s), panneauExport()];
       break;
     case 'fichier':
       contenu = contenuFichier(s);
