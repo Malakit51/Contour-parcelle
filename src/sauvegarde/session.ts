@@ -1,7 +1,7 @@
 // Session de travail : le fichier ouvert et les contours modifiés, sous une forme qu'on peut
 // enregistrer (sur le téléphone, ou dans Google Drive) puis recharger à l'identique.
 
-import type { AnneauEdite, Etat, Sommet } from '../edition/etat';
+import type { AnneauEdite, Etat, Guidage, Sommet } from '../edition/etat';
 import { lireTaskData, type TaskData } from '../isoxml/lecture';
 import type { Suivi } from '../suivi/suivi';
 
@@ -19,6 +19,8 @@ export interface SessionEnregistree {
   anneaux: { parcelle: number; anneau: number; sommets: [number, number, number | null][] }[];
   /** Suivi et journal au moment de l'enregistrement (pour la sauvegarde en ligne). */
   suivi?: Suivi;
+  /** Lignes de guidage créées dans l'éditeur. */
+  guidages?: Guidage[];
 }
 
 export class ErreurSession extends Error {
@@ -50,6 +52,7 @@ export function enregistrerSession(
         ]),
       };
     }),
+    ...(etat.guidages?.length ? { guidages: [...etat.guidages] } : {}),
     ...(suivi ? { suivi } : {}),
   };
 }
@@ -84,7 +87,13 @@ export function relireSession(sauvegarde: unknown): {
       }),
     };
   });
-  return { td, nom: s.fichier.nom, etat: { anneaux }, session: s };
+  const guidages = (s.guidages ?? []).filter((g) => td.parcelles[g.parcelle]);
+  return {
+    td,
+    nom: s.fichier.nom,
+    etat: guidages.length ? { anneaux, guidages } : { anneaux },
+    session: s,
+  };
 }
 
 // ---------- Sur le téléphone ----------

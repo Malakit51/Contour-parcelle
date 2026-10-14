@@ -1,0 +1,124 @@
+import { describe, expect, it } from 'vitest';
+import { courbeDecalee, ligneAB } from '../src/geometrie/guidage';
+import type { XY } from '../src/geometrie/plan';
+import { etatInitial, latLon, type Guidage } from '../src/edition/etat';
+import { exporterEtat } from '../src/edition/export';
+import { lireTaskData } from '../src/isoxml/lecture';
+import { plan, preparer } from './outils';
+
+const carre: XY[] = [
+  [0, 0],
+  [100, 0],
+  [100, 100],
+  [0, 100],
+];
+
+const arrondi = (pts: readonly XY[]) =>
+  pts.map((p) => p.map((v) => Math.round(v * 1000) / 1000 + 0));
+
+describe('lignes de guidage', () => {
+  it('AB sur un bord droit : même ligne, décalée vers la gauche', () => {
+    expect(
+      arrondi(
+        ligneAB(
+          [
+            [0, 0],
+            [100, 0],
+          ],
+          0,
+        ),
+      ),
+    ).toEqual([
+      [0, 0],
+      [100, 0],
+    ]);
+    expect(
+      arrondi(
+        ligneAB(
+          [
+            [0, 0],
+            [100, 0],
+          ],
+          3,
+        ),
+      ),
+    ).toEqual([
+      [0, 3],
+      [100, 3],
+    ]);
+    expect(
+      arrondi(
+        ligneAB(
+          [
+            [100, 0],
+            [0, 0],
+          ],
+          3,
+        ),
+      ),
+    ).toEqual([
+      [100, -3],
+      [0, -3],
+    ]);
+  });
+
+  it('AB sur un bord tracé au tracteur : droite moyenne des points', () => {
+    const bord: XY[] = [
+      [0, 0.2],
+      [25, -0.2],
+      [50, 0.2],
+      [75, -0.2],
+      [100, 0.2],
+      [125, -0.2],
+    ];
+    const [a, b] = ligneAB(bord, 0);
+    expect(Math.abs(a[1])).toBeLessThan(0.1);
+    expect(Math.abs(b[1])).toBeLessThan(0.1);
+    expect(a[0]).toBeCloseTo(0, 0);
+    expect(b[0]).toBeCloseTo(125, 0);
+  });
+
+  it('courbe : chaque côté reste à la distance demandée', () => {
+    const bord: XY[] = [
+      [0, 0],
+      [100, 0],
+      [100, 100],
+    ];
+    // À gauche en allant vers l'Est puis vers le Nord : à l'intérieur du virage.
+    expect(arrondi(courbeDecalee(bord, 5))).toEqual([
+      [0, 5],
+      [95, 5],
+      [95, 100],
+    ]);
+    expect(arrondi(courbeDecalee(bord, -5))).toEqual([
+      [0, -5],
+      [105, -5],
+      [105, 100],
+    ]);
+  });
+});
+
+describe('écriture des lignes de guidage', () => {
+  it('écrit un LSG A="5" juste avant le contour de la parcelle, au format de la console', () => {
+    const { td, etat } = preparer({ X: carre, Y: carre });
+    const g: Guidage = {
+      parcelle: 1,
+      type: 'ab',
+      nom: 'A=B essai_1',
+      points: [plan.versLatLon([0, 3]), plan.versLatLon([100, 3])],
+    };
+    const texte = exporterEtat(td, { ...etat, guidages: [g] });
+    const lignes = texte.split('\r\n');
+    const debut = lignes.indexOf('<LSG A="5" B="A=B essai_1">');
+    expect(lignes[debut - 1]).toMatch(/^<PFD A="PFD2"/);
+    expect(lignes[debut + 1]).toMatch(/^<PNT A="2" C="\d+\.\d{13}" D="\d+\.\d{13}" E="0"\/>$/);
+    expect(lignes[debut + 3]).toBe('</LSG>');
+    expect(lignes[debut + 4]).toBe('<PLN A="1">');
+    // Relu : la ligne est reconnue comme segment A="5", les contours sont inchangés.
+    const relu = lireTaskData(texte);
+    expect(relu.segmentsIgnores).toHaveLength(1);
+    expect(etatInitial(relu).anneaux.map((a) => a.sommets.map(latLon))).toEqual(
+      etat.anneaux.map((a) => a.sommets.map(latLon)),
+    );
+  });
+});

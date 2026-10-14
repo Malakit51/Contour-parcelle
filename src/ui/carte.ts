@@ -25,6 +25,8 @@ export interface Dessin {
   fantomes?: LatLon[][];
   /** Contours d'un ancien fichier affichés en référence (gris pointillé, avec leurs points). */
   reference?: LatLon[][];
+  /** Lignes de guidage (en pointillés pour l'aperçu de celle en cours). */
+  guidages?: { pts: LatLon[]; apercu: boolean }[];
   /** Flèches à toucher, posées en `depuis` et pointant vers `vers` (choix du sens d'un décalage). */
   fleches?: { depuis: LatLon; vers: LatLon; choisie: boolean; action: () => void }[];
 }
@@ -179,6 +181,20 @@ export class Carte {
         weight: t.epaisseur,
         interactive: false,
       }).addTo(this.calque);
+    }
+    for (const g of dessin.guidages ?? []) {
+      // Liseré blanc puis trait bleu : lisible sur la photo comme sur le fond blanc.
+      for (const [couleur, epaisseur] of [
+        ['#fff', 6],
+        ['#2962ff', 3],
+      ] as const) {
+        L.polyline(g.pts.map(ll), {
+          color: couleur,
+          weight: epaisseur,
+          dashArray: g.apercu ? '8 8' : undefined,
+          interactive: false,
+        }).addTo(this.calque);
+      }
     }
     for (const p of dessin.points) {
       L.circleMarker(ll(p.p), {

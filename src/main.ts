@@ -10,6 +10,7 @@ import {
   suivant,
   precedent,
   type Etat,
+  type Guidage,
   type RefLimite,
   type RefSommet,
 } from './edition/etat';
@@ -32,6 +33,7 @@ import {
   supprimerSommet,
   type Bord,
 } from './edition/operations';
+import { courbeDecalee, ligneAB } from './geometrie/guidage';
 import { planLocal, positionSurSegment, type LatLon, type Plan, type XY } from './geometrie/plan';
 import { ecartMaximal } from './geometrie/simplification';
 import { comparer } from './isoxml/comparaison';
@@ -132,8 +134,17 @@ function parcellesChangees(a: Etat, b: Etat): number[] {
       changees.add(r.parcelle);
     }
   });
+  const ga = a.guidages ?? [];
+  const gb = b.guidages ?? [];
+  for (const g of [...ga.filter((x) => !gb.includes(x)), ...gb.filter((x) => !ga.includes(x))]) {
+    changees.add(g.parcelle);
+  }
   return [...changees];
 }
+
+/** Travail qui serait perdu en ouvrant un autre fichier : contours modifiés ou lignes de guidage. */
+const travailEnCours = (etat: Etat) =>
+  parcellesModifiees(etat).length > 0 || (etat.guidages?.length ?? 0) > 0;
 
 /**
  * Passe à un nouvel état (annulable) et note la modification au journal. L'état est d'abord
@@ -164,7 +175,12 @@ function retirerDuJournal(entrees: EntreeJournal[]): void {
   if (entrees.length === 0) return;
   majSuivi({ ...suivi, journal: suivi.journal.filter((e) => !entrees.includes(e)) });
 }
-let mode: 'limite' | 'sommet' | 'simplifier' = 'limite';
+let mode: 'limite' | 'sommet' | 'simplifier' | 'guidage' = 'limite';
+/** Ligne de guidage en préparation : droite AB ou courbe, vers l'intérieur ou l'extérieur. */
+let typeGuidage: 'ab' | 'courbe' = 'ab';
+let guidageInterieur = true;
+/** Choix d'un bord, du premier au dernier sommet (simplification d'un bord, ligne de guidage). */
+const choixDeBord = () => (mode === 'simplifier' && porteeSimplif === 'bord') || mode === 'guidage';
 /** Tolérance de simplification choisie (m). */
 let tolerance = 0.25;
 const TOLERANCES = [0.1, 0.25, 0.5, 1];
@@ -278,7 +294,7 @@ async function charger(fichier: File): Promise<void> {
     const td = lireTaskData(decoder(new Uint8Array(await fichier.arrayBuffer())));
     if (
       session &&
-      parcellesModifiees(session.etat).length > 0 &&
+      travailEnCours(session.etat) &&
       !confirm(
         'Des modifications en cours sur le fichier ouvert seront perdues (pense à exporter). Continuer ?',
       )
@@ -440,7 +456,7 @@ function reprendreSauvegarde(contenu: unknown, provenance: string): string | nul
   const quand = `${quandFr(r.session.enregistreLe)} (${r.session.appareil})`;
   if (
     session &&
-    parcellesModifiees(session.etat).length > 0 &&
+    travailEnCours(session.etat) &&
     !confirm(`Remplacer le travail de cet appareil par la sauvegarde ${provenance} du ${quand} ?`)
   ) {
     return null;
@@ -769,7 +785,7 @@ function reprendreSession(): void {
 function fermerFichier(): void {
   if (!session) return;
   if (
-    parcellesModifiees(session.etat).length > 0 &&
+    travailEnCours(session.etat) &&
     !confirm('Fermer le fichier ? Les modifications non exportées seront perdues.')
   ) {
     return;
@@ -988,7 +1004,7 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
     const pts = anneaux[i]!;
     pts.forEach((q, k) => {
       let d: number;
-      if (mode === 'sommet' || (mode === 'simplifier' && porteeSimplif === 'bord')) {
+      if (mode === 'sommet' || choixDeBord()) {
         d = Math.hypot(q[0] - p[0], q[1] - p[1]);
       } else {
         const r = pts[(k + 1) % pts.length]!;
@@ -1007,7 +1023,7 @@ function toucher(ecran: { x: number; y: number }, versEcran: VersEcran, position
   const choix = meilleur as { anneau: number; indice: number } | null;
   const [ancienDebut, ancienBord] = [bordDebut, bord];
   effacerSelection();
-  if (choix && mode === 'simplifier' && porteeSimplif === 'bord') {
+  if (choix && choixDeBord()) {
     // Premier toucher : début du bord ; deuxième : fin ; un toucher de plus recommence.
     parcelleCourante = s.etat.anneaux[choix.anneau]!.parcelle;
     if (ancienDebut && !ancienBord && ancienDebut.anneau === choix.anneau) {
@@ -1203,6 +1219,10 @@ function appliquer(): void {
       const apres = r.bilan.reduce((n, b) => n + b.apres, 0);
       quoi = `${s.td.parcelles[parcelleCourante]!.nom}${porteeSimplif === 'bord' ? ' (un bord)' : ''} simplifiée (tolérance ${enCm(tolerance)}) : ${avant} → ${apres} points`;
       nouveau = r.etat;
+    } else if (mode === 'guidage' && apercuGuidage(s)) {
+      const g = apercuGuidage(s)!;
+      quoi = `Ligne ${g.type === 'ab' ? 'AB' : 'courbe'} « ${g.nom} » ajoutée à ${s.td.parcelles[g.parcelle]!.nom} (${enMetres(Math.abs(d))} m ${guidageInterieur ? 'à l’intérieur' : 'à l’extérieur'})`;
+      nouveau = { ...s.etat, guidages: [...(s.etat.guidages ?? []), g] };
     } else {
       return;
     }
@@ -1218,8 +1238,9 @@ function appliquer(): void {
         selLimite = retrouvee;
         sensLimite = sens;
       }
-    } else if (mode === 'sommet') {
-      // Le sommet ne change pas d'indice en glissant : on garde sommet, bord et sens.
+    } else if (mode === 'sommet' || mode === 'guidage') {
+      // Le sommet ne change pas d'indice en glissant : on garde sommet, bord et sens. Le bord d'une
+      // ligne de guidage reste choisi pour en tracer une autre (autre distance, autre type).
       exportPrepare = null;
     } else {
       effacerSelection();
@@ -1555,7 +1576,7 @@ function dessin(s: Session): Dessin {
       epaisseur,
     });
   };
-  if (mode === 'simplifier' && (bord || bordDebut)) {
+  if (choixDeBord() && (bord || bordDebut)) {
     const ring = (bord ?? bordDebut)!.anneau;
     const pts = anneaux[ring]!;
     if (bord) {
@@ -1568,6 +1589,11 @@ function dessin(s: Session): Dessin {
     d.points.push({ p: pts[debut]!, couleur: SEL, rayon: 8 });
     if (bord) d.points.push({ p: pts[bord.fin]!, couleur: SEL, rayon: 8 });
   }
+  const apercuG = apercuGuidage(s);
+  d.guidages = [
+    ...(s.etat.guidages ?? []).map((g) => ({ pts: [...g.points], apercu: false })),
+    ...(apercuG ? [{ pts: [...apercuG.points], apercu: true }] : []),
+  ];
   if (selLimite) {
     trait(selLimite, 7);
     const ref = selLimite;
@@ -1739,6 +1765,127 @@ function panneauSimplification(s: Session): HTMLElement {
         `Écart avec l’origine : ${enCm(ecartOrigine)}` +
           (ecartOrigine > tolerance ? ' (déjà simplifiée ?)' : ''),
       ),
+  );
+}
+
+/** Nom de la prochaine ligne, sur le modèle de la console : « A=B 2026.10.14_09:30_1 ». */
+function nomGuidage(etat: Etat, type: 'ab' | 'courbe'): string {
+  const d = new Date();
+  const z = (n: number) => String(n).padStart(2, '0');
+  const quand = `${d.getFullYear()}.${z(d.getMonth() + 1)}.${z(d.getDate())}_${z(d.getHours())}:${z(d.getMinutes())}`;
+  return `${type === 'ab' ? 'A=B' : 'Courbe'} ${quand}_${(etat.guidages?.length ?? 0) + 1}`;
+}
+
+/** Ligne de guidage que donnerait « Appliquer » sur le bord choisi (rien n'est encore ajouté). */
+function apercuGuidage(s: Session): Guidage | null {
+  if (mode !== 'guidage' || !bord) return null;
+  const a = s.etat.anneaux[bord.anneau]!;
+  const ids = sommetsDuBord(s.etat, bord);
+  const plan = planLocal(latLon(a.sommets[ids[0]!]!));
+  const pts = ids.map((i) => plan.versXY(latLon(a.sommets[i]!)));
+  // Côté intérieur : celui où un point décalé de 1 m depuis le milieu du bord tombe dans l'anneau
+  // (pour une zone exclue, l'intérieur de la parcelle est hors de l'anneau).
+  const [m1, m2] = ligneAB(pts.length > 1 ? pts : [pts[0]!, pts[0]!], 1);
+  const essai: XY = [(m1[0] + m2[0]) / 2, (m1[1] + m2[1]) / 2];
+  const dansAnneau = pointDansPolygone(
+    essai,
+    a.sommets.map((x) => plan.versXY(latLon(x))),
+  );
+  const gaucheInterieur = a.type === 1 ? dansAnneau : !dansAnneau;
+  const decalage = Math.abs(metres()) * (gaucheInterieur ? 1 : -1) * (guidageInterieur ? 1 : -1);
+  const xy = typeGuidage === 'ab' ? ligneAB(pts, decalage) : courbeDecalee(pts, decalage);
+  return {
+    parcelle: a.parcelle,
+    type: typeGuidage,
+    nom: nomGuidage(s.etat, typeGuidage),
+    points: xy.map((p) => plan.versLatLon(p)),
+  };
+}
+
+function panneauGuidage(s: Session): HTMLElement {
+  const choix = <T extends string>(valeurs: [T, string][], actuel: T, changer: (v: T) => void) =>
+    el(
+      'div',
+      { class: 'rangee' },
+      ...valeurs.map(([v, t]) =>
+        el(
+          'button',
+          {
+            class: v === actuel ? 'actif' : '',
+            onclick: () => {
+              changer(v);
+              afficher();
+            },
+          },
+          t,
+        ),
+      ),
+    );
+  const lignes = (s.etat.guidages ?? []).filter((g) => g.parcelle === parcelleCourante);
+  return el(
+    'div',
+    { class: 'info' },
+    choix(
+      [
+        ['ab', 'Droite AB'],
+        ['courbe', 'Courbe'],
+      ],
+      typeGuidage,
+      (v) => (typeGuidage = v),
+    ),
+    choix(
+      [
+        ['int', 'Vers l’intérieur'],
+        ['ext', 'Vers l’extérieur'],
+      ],
+      guidageInterieur ? 'int' : 'ext',
+      (v) => (guidageInterieur = v === 'int'),
+    ),
+    !bord
+      ? el(
+          'div',
+          { class: 'sens' },
+          bordDebut ? 'Touche le dernier sommet du bord.' : 'Touche le premier sommet du bord.',
+        )
+      : el(
+          'div',
+          { class: 'rangee' },
+          el(
+            'span',
+            { class: 'doux', style: 'flex:1' },
+            `Bord : ${sommetsDuBord(s.etat, bord).length} points`,
+          ),
+          el(
+            'button',
+            {
+              onclick: () => {
+                if (bord) bord = { ...bord, aRebours: !bord.aRebours };
+                afficher();
+              },
+            },
+            'Autre côté',
+          ),
+        ),
+    ...lignes.map((g) =>
+      el(
+        'div',
+        { class: 'rangee' },
+        el('span', { style: 'flex:1' }, g.nom),
+        el(
+          'button',
+          {
+            class: 'petit',
+            onclick: () =>
+              modifier(
+                () => ({ ...s.etat, guidages: (s.etat.guidages ?? []).filter((x) => x !== g) }),
+                `Ligne « ${g.nom} » supprimée`,
+                true,
+              ),
+          },
+          'Supprimer',
+        ),
+      ),
+    ),
   );
 }
 
@@ -2233,8 +2380,13 @@ function afficher(): void {
           modeBouton('limite', 'Limite'),
           modeBouton('sommet', 'Point'),
           modeBouton('simplifier', 'Simplifier'),
+          modeBouton('guidage', 'Guidage'),
         ),
-        mode === 'simplifier' ? panneauSimplification(s) : panneauSelection(s),
+        mode === 'simplifier'
+          ? panneauSimplification(s)
+          : mode === 'guidage'
+            ? panneauGuidage(s)
+            : panneauSelection(s),
         panneauRemplacement(s),
         raccourcis(),
       ];
@@ -2271,6 +2423,7 @@ function afficher(): void {
   const peutAppliquer =
     (mode === 'limite' && selLimite !== null && sensLimite !== null) ||
     (mode === 'sommet' && selSommet !== null && limiteGlisse !== null && sensGlisse !== null) ||
+    (mode === 'guidage' && bord !== null) ||
     (mode === 'simplifier' &&
       (apercuSimplification(s)?.bilan.some((b) => b.apres !== b.avant || b.ecartMax > 0) ?? false));
   remplir(

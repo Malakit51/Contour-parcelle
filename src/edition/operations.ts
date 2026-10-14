@@ -69,7 +69,7 @@ function appliquer(etat: Etat, deplacements: Deplacement[], ajouts: Ajout[]): Et
     const nouveau: Sommet = { lat: aj.ll[0], lon: aj.ll[1], origine: null };
     anneaux[aj.anneau]!.sommets.splice(position, 0, nouveau);
   }
-  return { anneaux };
+  return { ...etat, anneaux };
 }
 
 function xy(etat: Etat, plan: Plan, anneau: number, i: number): XY {
@@ -299,7 +299,10 @@ export function supprimerSommet(etat: Etat, ref: RefSommet): Etat {
   } else {
     sommets.splice(ref.sommet, 1);
   }
-  return { anneaux: etat.anneaux.map((a, i) => (i === ref.anneau ? { ...a, sommets } : a)) };
+  return {
+    ...etat,
+    anneaux: etat.anneaux.map((a, i) => (i === ref.anneau ? { ...a, sommets } : a)),
+  };
 }
 
 /** Portion de contour entre deux sommets, parcourue dans le sens de l'anneau ou à rebours. */
@@ -391,7 +394,7 @@ export function simplifierParcelle(
     });
     return { ...a, sommets };
   });
-  return { etat: { anneaux }, bilan };
+  return { etat: { ...etat, anneaux }, bilan };
 }
 
 /**
@@ -499,5 +502,8 @@ export function remplacerContour(etat: Etat, anneau: number, points: LatLon[]): 
     lon,
     origine: i === 0 ? a.sommets[0]!.origine : null,
   }));
-  return { anneaux: etat.anneaux.map((x, i) => (i === anneau ? { ...a, sommets } : x)) };
+  return {
+    ...etat,
+    anneaux: etat.anneaux.map((x, i) => (i === anneau ? { ...a, sommets } : x)),
+  };
 }

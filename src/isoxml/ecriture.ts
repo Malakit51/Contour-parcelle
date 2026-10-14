@@ -13,6 +13,37 @@ export interface Changements {
   surfaces?: ReadonlyArray<{ parcelle: Parcelle; m2: number }>;
   /** Retire les segments LSG A="5" (oui par défaut). */
   retirerSegments?: boolean;
+  /** Lignes de guidage à écrire (LSG A="5"), juste avant le contour de leur parcelle. */
+  guidages?: ReadonlyArray<{
+    parcelle: Parcelle;
+    lignes: ReadonlyArray<{ nom: string; points: ReadonlyArray<{ lat: number; lon: number }> }>;
+  }>;
+}
+
+const echapper = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/**
+ * Lignes de guidage au format de la console Claas : un LSG A="5" nommé, des PNT de type 2 avec
+ * 13 décimales et une altitude E="0".
+ */
+export function texteGuidages(
+  lignes: ReadonlyArray<{ nom: string; points: ReadonlyArray<{ lat: number; lon: number }> }>,
+  finDeLigne: string,
+): string {
+  return lignes
+    .map(
+      ({ nom, points }) =>
+        `<LSG A="5" B="${echapper(nom)}">${finDeLigne}` +
+        points
+          .map(
+            (p) =>
+              `<PNT A="2" C="${p.lat.toFixed(13)}" D="${p.lon.toFixed(13)}" E="0"/>${finDeLigne}`,
+          )
+          .join('') +
+        `</LSG>${finDeLigne}`,
+    )
+    .join('');
 }
 
 interface Remplacement {
@@ -83,6 +114,17 @@ export function exporterTaskData(td: TaskData, changements: Changements = {}): s
   }
   if (changements.retirerSegments ?? true) {
     for (const plage of td.segmentsIgnores) remplacements.push({ plage, texte: '' });
+  }
+  const finDeLigne = td.texte.includes('\r\n') ? '\r\n' : '\n';
+  for (const { parcelle, lignes } of changements.guidages ?? []) {
+    if (lignes.length === 0) continue;
+    if (parcelle.debutContour === null) {
+      throw new Error(
+        `${parcelle.nom} : pas de contour, impossible d'y écrire une ligne de guidage.`,
+      );
+    }
+    const p = parcelle.debutContour;
+    remplacements.push({ plage: { debut: p, fin: p }, texte: texteGuidages(lignes, finDeLigne) });
   }
   return remplacer(td.texte, remplacements);
 }

@@ -26,8 +26,20 @@ export interface AnneauEdite {
   readonly nbOrigine: number;
 }
 
+/** Ligne de guidage créée dans l'éditeur, écrite dans le fichier en LSG A="5". */
+export interface Guidage {
+  /** Indice dans `TaskData.parcelles`. */
+  readonly parcelle: number;
+  readonly type: 'ab' | 'courbe';
+  /** Nom écrit dans l'attribut B du LSG. */
+  readonly nom: string;
+  readonly points: readonly LatLon[];
+}
+
 export interface Etat {
   readonly anneaux: readonly AnneauEdite[];
+  /** Lignes de guidage créées dans l'éditeur (celles du fichier sont toujours retirées). */
+  readonly guidages?: readonly Guidage[];
 }
 
 export interface RefSommet {

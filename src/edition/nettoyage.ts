@@ -81,5 +81,5 @@ export function nettoyer(etat: Etat): Nettoyage {
   }
 
   const change = recolles > 0 || doublons.size > 0;
-  return { etat: change ? { anneaux } : etat, doublons, recolles };
+  return { etat: change ? { ...etat, anneaux } : etat, doublons, recolles };
 }

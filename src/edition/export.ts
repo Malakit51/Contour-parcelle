@@ -62,7 +62,21 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
     const m2 = nouvelleSurface(td, etat, p);
     return m2 === null ? [] : [{ parcelle: td.parcelles[p]!, m2 }];
   });
-  return { points, insertions, suppressions, surfaces };
+  const guidages = td.parcelles.flatMap((parcelle, i) => {
+    const lignes = (etat.guidages ?? []).filter((g) => g.parcelle === i);
+    return lignes.length === 0
+      ? []
+      : [
+          {
+            parcelle,
+            lignes: lignes.map((g) => ({
+              nom: g.nom,
+              points: g.points.map(([lat, lon]) => ({ lat, lon })),
+            })),
+          },
+        ];
+  });
+  return { points, insertions, suppressions, surfaces, guidages };
 }
 
 export function exporterEtat(td: TaskData, etat: Etat): string {

@@ -41,6 +41,8 @@ export interface Parcelle {
   /** Attribut D (surface en m²), absent dans certains fichiers. */
   surface: ValeurBrute | null;
   anneaux: Anneau[];
+  /** Début de la ligne du premier PLN de la parcelle : les lignes de guidage s'écrivent juste avant. */
+  debutContour: number | null;
 }
 
 export interface TaskData {
@@ -179,8 +181,11 @@ export function lireTaskData(texte: string): TaskData {
         nom: decoderEntites(attribut(b, 'C')?.texte ?? id),
         surface: attribut(b, 'D') ?? null,
         anneaux: [],
+        debutContour: null,
       };
       parcelles.push(parcelle);
+    } else if (b.nom === 'PLN' && parcelle && parcelle.debutContour === null) {
+      parcelle.debutContour = lignesEntieres(texte, b.plage).debut;
     } else if (b.nom === 'LSG' && parcelle) {
       const type = attribut(b, 'A')?.texte;
       const parent = pile[pile.length - 1];
