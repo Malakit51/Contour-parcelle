@@ -815,6 +815,10 @@ button.rond.alerte {
   .avec-volet .leaflet-top {
     top: 62px;
   }
+  /* Mesure : sous la pilule de la parcelle, qui est posée sur la carte. */
+  .avec-volet .boite-mesure {
+    top: calc(72px + env(safe-area-inset-top));
+  }
   .avec-volet .leaflet-bottom {
     bottom: var(--volet, 160px);
   }
