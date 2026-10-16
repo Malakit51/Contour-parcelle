@@ -275,11 +275,13 @@ describe('notes sur les parcelles', () => {
   it('CSV des notes : export puis reprise sans doublon', () => {
     const s = enregistrerNote(enregistrerNote(suiviVide(), n1), { ...n2, obstacle: true });
     const csv = csvNotes(s);
-    expect(csv).toContain('Parcelle;Type;Note;Date;Latitude;Longitude;Obstacle\r\n');
     expect(csv).toContain(
-      'Le Bois;Vulpin;"foyer ; près du bois";2026-10-15;45.0001234;2.0005678;\r\n',
+      'Parcelle;Type;Note;Date;Latitude;Longitude;Obstacle;Surface zone (m²);Zone\r\n',
     );
-    expect(csv).toContain('Le Bois;Chardons;;2026-10-16;;;oui\r\n');
+    expect(csv).toContain(
+      'Le Bois;Vulpin;"foyer ; près du bois";2026-10-15;45.0001234;2.0005678;;;\r\n',
+    );
+    expect(csv).toContain('Le Bois;Chardons;;2026-10-16;;;oui;;\r\n');
     const r = importerCsv(suiviVide(), csv, td.parcelles);
     expect(r.bilan).toEqual({ type: 'notes', ajouts: 2, dejaLa: 0, inconnues: [] });
     const reprises = notesDe(r.suivi, bois!);
@@ -288,5 +290,74 @@ describe('notes sur les parcelles', () => {
       ['Vulpin', 'foyer ; près du bois', [45.0001234, 2.0005678], false],
     ]);
     expect(importerCsv(s, csv, td.parcelles).bilan).toMatchObject({ ajouts: 0, dejaLa: 2 });
+  });
+});
+
+describe('zones dessinées dans les notes', () => {
+  // Carré d'environ 20 m sur 20 m (1 seconde de latitude ≈ 30,9 m).
+  const d = 20 / 111_320;
+  const lat0 = 45;
+  const dl = d / Math.cos((lat0 * Math.PI) / 180);
+  const carre: [number, number][] = [
+    [lat0, 2],
+    [lat0, 2 + dl],
+    [lat0 + d, 2 + dl],
+    [lat0 + d, 2],
+  ];
+
+  it('surface et point intérieur, même pour une zone en L', async () => {
+    const { surfaceZone, pointInterieur, texteSurface } = await import('../src/suivi/zones');
+    expect(surfaceZone(carre)).toBeCloseTo(400, -1);
+    expect(texteSurface(400)).toBe('400 m²');
+    expect(texteSurface(3500)).toBe('3\u202f500 m²');
+    expect(texteSurface(12_345)).toBe('1,23 ha');
+    const enL: [number, number][] = [
+      [lat0, 2],
+      [lat0, 2 + 2 * dl],
+      [lat0 + d * 0.2, 2 + 2 * dl],
+      [lat0 + d * 0.2, 2 + dl * 0.2],
+      [lat0 + 2 * d, 2 + dl * 0.2],
+      [lat0 + 2 * d, 2],
+    ];
+    const [la, lo] = pointInterieur(enL);
+    // Le centre de gravité d'un L fin tombe dehors : le point choisi est dans une branche.
+    expect(la < lat0 + d * 0.2 || lo < 2 + dl * 0.2).toBe(true);
+  });
+
+  it('tracé GPS : points imprécis ou trop proches ignorés', async () => {
+    const { ajouterPointTrace } = await import('../src/suivi/zones');
+    let t = ajouterPointTrace([], [lat0, 2], 5);
+    t = ajouterPointTrace(t, [lat0 + d / 20, 2], 5); // 1 m : trop près
+    t = ajouterPointTrace(t, [lat0 + d, 2], 30); // ± 30 m : imprécis
+    t = ajouterPointTrace(t, [lat0 + d, 2], 8);
+    expect(t).toEqual([
+      [lat0, 2],
+      [lat0 + d, 2],
+    ]);
+  });
+
+  it('CSV : la zone part avec sa surface et revient telle quelle', () => {
+    const n: Note = {
+      id: 'z1',
+      cle: cleParcelle(bois!),
+      parcelle: 'Le Bois',
+      type: 'Mouillère',
+      texte: '',
+      creee: '2026-10-16T10:00:00.000Z',
+      modifiee: '2026-10-16T10:00:00.000Z',
+      position: [lat0 + d / 2, 2 + dl / 2],
+      zone: carre,
+    };
+    const csv = csvNotes(enregistrerNote(suiviVide(), n));
+    expect(csv).toMatch(
+      /;Mouillère;;2026-10-16;45\.0000898;2\.0001270;;40\d;45\.0000000 2\.0000000 \| /,
+    );
+    const r = importerCsv(suiviVide(), csv, td.parcelles);
+    const [reprise] = notesDe(r.suivi, bois!);
+    expect(reprise!.zone!.length).toBe(4);
+    reprise!.zone!.forEach((p, k) => {
+      expect(p[0]).toBeCloseTo(carre[k]![0], 7);
+      expect(p[1]).toBeCloseTo(carre[k]![1], 7);
+    });
   });
 });

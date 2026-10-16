@@ -5,6 +5,7 @@
 // par son nom.
 
 import type { Parcelle } from '../isoxml/lecture';
+import { surfaceZone, zoneDuTexte, zoneEnTexte } from './zones';
 
 export type EtatContour = 'verifie' | 'a-confirmer' | 'a-refaire';
 
@@ -63,6 +64,11 @@ export interface Note {
   position: [number, number] | null;
   /** Obstacle (poteau…) : l'optimisation du guidage le place en bout d'outil. */
   obstacle?: boolean;
+  /**
+   * Zone dessinée (tache d'adventices, mouillère…), [latitude, longitude] sans répétition du
+   * premier point ; `position` est alors un point à l'intérieur (épingle, parcelle).
+   */
+  zone?: [number, number][];
   supprimee?: boolean;
 }
 
@@ -233,7 +239,17 @@ export function nouvelIdNote(): string {
 
 export function csvNotes(suivi: Suivi): string {
   const lignes = [
-    ligneCsv(['Parcelle', 'Type', 'Note', 'Date', 'Latitude', 'Longitude', 'Obstacle']),
+    ligneCsv([
+      'Parcelle',
+      'Type',
+      'Note',
+      'Date',
+      'Latitude',
+      'Longitude',
+      'Obstacle',
+      'Surface zone (m²)',
+      'Zone',
+    ]),
   ];
   const notes = (suivi.notes ?? [])
     .filter((n) => !n.supprimee)
@@ -252,6 +268,8 @@ export function csvNotes(suivi: Suivi): string {
         n.position ? n.position[0].toFixed(7) : '',
         n.position ? n.position[1].toFixed(7) : '',
         n.obstacle ? 'oui' : '',
+        n.zone ? Math.round(surfaceZone(n.zone)) : '',
+        n.zone ? zoneEnTexte(n.zone) : '',
       ]),
     );
   }
@@ -468,6 +486,8 @@ export function importerCsv(
       lat = '',
       lon = '',
       obs = '',
+      ,
+      zoneTexte = '',
     ] of lignes) {
       const p = parNom.get(nom.trim());
       const jour = dateIso(date);
@@ -485,6 +505,7 @@ export function importerCsv(
       const quand = new Date(a, m - 1, j, 12).toISOString();
       const la = nombre(lat);
       const lo = nombre(lon);
+      const zone = zoneDuTexte(zoneTexte);
       notes.push({
         id: `csv-${id}`,
         cle: cleParcelle(p),
@@ -495,6 +516,7 @@ export function importerCsv(
         modifiee: quand,
         position: la !== null && lo !== null ? [la, lo] : null,
         ...(/^(oui|o|1|x|vrai)$/i.test(obs.trim()) ? { obstacle: true } : {}),
+        ...(zone ? { zone } : {}),
       });
       bilan.ajouts++;
     }

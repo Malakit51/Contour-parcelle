@@ -29,6 +29,11 @@ export interface Dessin {
   guidages?: { pts: LatLon[]; apercu: boolean }[];
   /** Flèches à toucher, posées en `depuis` et pointant vers `vers` (choix du sens d'un décalage). */
   fleches?: { depuis: LatLon; vers: LatLon; choisie: boolean; action: () => void }[];
+  /**
+   * Zones des notes, remplies de la couleur de leur type ; `enCours` : zone en train d'être
+   * tracée (violet, coins marqués, pas encore fermée).
+   */
+  zones?: { pts: LatLon[]; couleur: string; choisie: boolean; enCours?: boolean }[];
   /** Notes posées sur la carte : épingle de la couleur du type, nom affiché si `choisie`. */
   notes?: {
     obstacle?: boolean;
@@ -278,6 +283,37 @@ export class Carte {
       })
         .on('click', f.action)
         .addTo(this.calque);
+    }
+    for (const z of dessin.zones ?? []) {
+      if (z.enCours) {
+        L.polyline(z.pts.map(ll), { color: '#c026d3', weight: 4, interactive: false }).addTo(
+          this.calque,
+        );
+        if (z.pts.length > 2)
+          L.polyline([ll(z.pts[z.pts.length - 1]!), ll(z.pts[0]!)], {
+            color: '#c026d3',
+            weight: 2,
+            dashArray: '6 6',
+            interactive: false,
+          }).addTo(this.calque);
+        for (const p of z.pts)
+          L.circleMarker(ll(p), {
+            radius: 5,
+            color: '#fff',
+            weight: 2,
+            fillColor: '#c026d3',
+            fillOpacity: 1,
+            interactive: false,
+          }).addTo(this.calque);
+        continue;
+      }
+      L.polygon(z.pts.map(ll), {
+        color: z.couleur,
+        weight: z.choisie ? 4 : 2,
+        fillColor: z.couleur,
+        fillOpacity: z.choisie ? 0.35 : 0.22,
+        interactive: false,
+      }).addTo(this.calque);
     }
     for (const n of dessin.notes ?? []) {
       L.marker(ll(n.p), {

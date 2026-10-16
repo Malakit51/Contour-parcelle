@@ -195,10 +195,23 @@ export function dessin(s: Session): Dessin {
           afficher();
         },
       }));
-    // Endroit choisi pour la note en cours de saisie.
-    if (ui.noteEnCours?.position) {
+    // Endroit choisi pour la note en cours de saisie (sa zone en violet, si elle en a une).
+    if (ui.noteEnCours?.position && !ui.noteEnCours.zone) {
       d.points.push({ p: ui.noteEnCours.position, couleur: SEL, rayon: 9 });
     }
+    // Zones des notes (onglet Suivi) : celle de la note en cours de saisie à la place de la sienne.
+    if (ui.onglet === 'suivi') {
+      d.zones = (ui.suivi.notes ?? [])
+        .filter((n) => !n.supprimee && n.zone && parCle.has(n.cle))
+        .filter((n) => n.id !== ui.noteEnCours?.id)
+        .map((n) => ({ pts: n.zone!, couleur: couleurNote(n.type), choisie: ui.noteVue === n.id }));
+      if (ui.noteEnCours?.zone)
+        d.zones.push({ pts: ui.noteEnCours.zone, couleur: SEL, choisie: true });
+    }
+  }
+  // Zone en cours de tracé (au doigt ou en marchant), dans tous les onglets.
+  if (ui.traceZone && ui.traceZone.points.length > 0) {
+    (d.zones ??= []).push({ pts: ui.traceZone.points, couleur: SEL, choisie: true, enCours: true });
   }
   // Mesure en cours : trait orange entre les points touchés.
   const MESURE = '#ff6d00';

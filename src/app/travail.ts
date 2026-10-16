@@ -277,6 +277,9 @@ export function arreterOutilsCarte(): void {
   ui.placementNote = false;
   ui.placerAuDoigt = false;
   ui.ajoutEnCours = false;
+  // Le tracé d'une zone au doigt attend des touchers : il s'arrête comme les autres outils. Le
+  // tracé en marchant continue (il ne prend pas les touchers) ; il a ses propres boutons.
+  if (ui.traceZone?.mode === 'points') ui.traceZone = null;
 }
 
 export function effacerSelection(): void {

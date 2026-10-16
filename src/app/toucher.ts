@@ -25,9 +25,16 @@ export function toucher(
 ): void {
   if (!ui.session) return;
   const s = ui.session;
+  // Coin de la zone d'une note, posé au doigt.
+  if (ui.traceZone?.mode === 'points') {
+    ui.traceZone = { ...ui.traceZone, points: [...ui.traceZone.points, position] };
+    afficher();
+    return;
+  }
   // Endroit d'une note en cours de saisie.
   if (ui.placementNote && ui.noteEnCours) {
     ui.noteEnCours.position = [position[0], position[1]];
+    ui.noteEnCours.zone = null;
     ui.placementNote = false;
     ui.message = { texte: 'Endroit noté.', erreur: false };
     afficher();

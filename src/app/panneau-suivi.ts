@@ -26,6 +26,8 @@ import { enregistrerSauvegarde } from './exporter';
 import { afficher } from './mise-en-page';
 import { arreterOutilsCarte, dateFr, effacerSelection, majSuivi, quandFr } from './travail';
 import { cadrerParcelle, carte } from './vue';
+import { annulerTrace, commencerTrace } from './trace-zone';
+import { surfaceZone, texteSurface } from '../suivi/zones';
 
 /** Choix de la portée de l'onglet : barre groupée, comme la portée du guidage. */
 function choixPortee(): HTMLElement {
@@ -166,8 +168,10 @@ function ouvrirNote(
   texte: string,
   position: [number, number] | null,
   obstacle: boolean,
+  zone: [number, number][] | null = null,
 ): void {
-  ui.noteEnCours = { id, parcelle, position, obstacle };
+  annulerTrace();
+  ui.noteEnCours = { id, parcelle, position, obstacle, zone };
   ui.placementNote = false;
   ui.porteeSuivi = 'parcelle';
   champTypeNote.value = type;
@@ -203,6 +207,7 @@ function enregistrerNoteEnCours(s: Session): void {
       modifiee: maintenant,
       position: enCours.position,
       ...(enCours.obstacle ? { obstacle: true } : {}),
+      ...(enCours.zone ? { zone: enCours.zone } : {}),
     }),
   );
   ui.noteEnCours = null;
@@ -244,12 +249,18 @@ function formulaireNote(s: Session, nom: string): HTMLElement {
     ),
     el(
       'div',
-      { class: ui.placementNote ? 'sens' : 'doux' },
+      { class: ui.placementNote || ui.traceZone ? 'sens' : 'doux' },
       ui.placementNote
         ? 'Touche la carte à l’endroit voulu.'
-        : enCours.position
-          ? `Endroit : ${enCours.position[0].toFixed(6)}, ${enCours.position[1].toFixed(6)}`
-          : 'Endroit : toute la parcelle',
+        : ui.traceZone
+          ? ui.traceZone.mode === 'points'
+            ? 'Touche les coins de la zone sur la carte, puis « Terminer » en haut.'
+            : 'Fais le tour de la zone à pied, puis « Terminer » en haut.'
+          : enCours.zone
+            ? `Endroit : zone de ${texteSurface(surfaceZone(enCours.zone))} (${enCours.zone.length} points)`
+            : enCours.position
+              ? `Endroit : ${enCours.position[0].toFixed(6)}, ${enCours.position[1].toFixed(6)}`
+              : 'Endroit : toute la parcelle',
     ),
     el(
       'div',
@@ -260,6 +271,7 @@ function formulaireNote(s: Session, nom: string): HTMLElement {
           class: ui.placementNote ? 'actif' : '',
           onclick: () => {
             const actif = !ui.placementNote;
+            annulerTrace();
             arreterOutilsCarte();
             ui.placementNote = actif;
             afficher();
@@ -270,12 +282,32 @@ function formulaireNote(s: Session, nom: string): HTMLElement {
       el(
         'button',
         {
+          class: ui.traceZone?.mode === 'points' ? 'actif' : '',
+          onclick: () => commencerTrace('points'),
+        },
+        'Dessiner une zone',
+      ),
+      el(
+        'button',
+        {
+          class: ui.traceZone?.mode === 'gps' ? 'actif' : '',
+          onclick: () => commencerTrace('gps'),
+        },
+        'Tracer en marchant',
+      ),
+      el(
+        'button',
+        {
           onclick: async () => {
             ui.message = { texte: 'Recherche de la position…', erreur: false };
             afficher();
             try {
               const { p: ici, precision } = await carte.positionTelephone();
-              if (ui.noteEnCours) ui.noteEnCours.position = [ici[0], ici[1]];
+              annulerTrace();
+              if (ui.noteEnCours) {
+                ui.noteEnCours.position = [ici[0], ici[1]];
+                ui.noteEnCours.zone = null;
+              }
               ui.placementNote = false;
               ui.message = {
                 texte: `Endroit noté ici (± ${Math.round(precision)} m).`,
@@ -294,7 +326,11 @@ function formulaireNote(s: Session, nom: string): HTMLElement {
           'button',
           {
             onclick: () => {
-              if (ui.noteEnCours) ui.noteEnCours.position = null;
+              annulerTrace();
+              if (ui.noteEnCours) {
+                ui.noteEnCours.position = null;
+                ui.noteEnCours.zone = null;
+              }
               ui.placementNote = false;
               afficher();
             },
@@ -314,6 +350,7 @@ function formulaireNote(s: Session, nom: string): HTMLElement {
         'button',
         {
           onclick: () => {
+            annulerTrace();
             ui.noteEnCours = null;
             ui.placementNote = false;
             afficher();
@@ -370,7 +407,7 @@ function panneauNotes(s: Session): HTMLElement | null {
           el(
             'span',
             { class: 'doux' },
-            ` · ${dateFr(aujourdhui(new Date(n.creee)))}${n.position ? '' : ' · toute la parcelle'}`,
+            ` · ${dateFr(aujourdhui(new Date(n.creee)))}${n.zone ? ` · zone de ${texteSurface(surfaceZone(n.zone))}` : n.position ? '' : ' · toute la parcelle'}`,
           ),
         ),
         el(
@@ -384,7 +421,8 @@ function panneauNotes(s: Session): HTMLElement | null {
                 onclick: () => {
                   ui.noteVue = n.id;
                   afficher();
-                  carte.centrerSur(n.position!);
+                  if (n.zone) carte.cadrer(n.zone);
+                  else carte.centrerSur(n.position!);
                 },
               },
               'Voir',
@@ -393,7 +431,8 @@ function panneauNotes(s: Session): HTMLElement | null {
             'button',
             {
               class: 'petit',
-              onclick: () => ouvrirNote(i, n.id, n.type, n.texte, n.position, !!n.obstacle),
+              onclick: () =>
+                ouvrirNote(i, n.id, n.type, n.texte, n.position, !!n.obstacle, n.zone ?? null),
             },
             'Modifier',
           ),

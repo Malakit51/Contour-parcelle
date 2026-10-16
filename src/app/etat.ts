@@ -139,7 +139,14 @@ export interface EtatInterface {
     parcelle: number;
     position: [number, number] | null;
     obstacle: boolean;
+    /** Zone dessinée (position = un point à l'intérieur), ou null. */
+    zone: [number, number][] | null;
   } | null;
+  /**
+   * Zone de la note en cours de tracé : coins touchés sur la carte (« points »), ou positions
+   * GPS enregistrées en faisant le tour à pied (« gps »). null : aucun tracé.
+   */
+  traceZone: { mode: 'points' | 'gps'; points: LatLon[]; precision: number | null } | null;
   /** Le prochain toucher sur la carte donne l'endroit de la note en cours. */
   placementNote: boolean;
   /** Ligne de guidage montrée sur la carte (touchée dans la liste « Lignes déjà créées »). */
@@ -226,6 +233,7 @@ export const ui: EtatInterface = {
   jeuxMasques: jeuxMasquesGardes(),
   menuLignesOuvert: false,
   noteEnCours: null,
+  traceZone: null,
   placementNote: false,
   noteVue: null,
   ligneVue: null,

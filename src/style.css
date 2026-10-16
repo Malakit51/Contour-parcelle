@@ -823,6 +823,20 @@ button.rond.alerte {
   color: #222;
   font-weight: 600;
   box-shadow: 0 1px 4px #0006;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+/* Tracé d'une zone : bandeau plus large, calé à gauche (les boutons ronds sont à droite), le
+   texte sur une ligne et les boutons en dessous. */
+.boite-mesure.trace {
+  left: 8px;
+  transform: none;
+  max-width: calc(100% - 76px);
+  padding: 6px;
+}
+.boite-mesure.trace > span {
+  flex-basis: 100%;
+  text-align: center;
 }
 .boite-mesure[hidden] {
   display: none;

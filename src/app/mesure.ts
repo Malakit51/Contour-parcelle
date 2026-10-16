@@ -5,6 +5,8 @@ import { el } from '../ui/dom';
 import { ui } from './etat';
 import { afficher, remplir } from './mise-en-page';
 import { arreterOutilsCarte } from './travail';
+import { annulerTrace, retirerDernierPoint, terminerTrace } from './trace-zone';
+import { surfaceZone, texteSurface } from '../suivi/zones';
 
 /** Résultat de la mesure, posé en haut de la carte (élément fixe, rempli à chaque affichage). */
 export const boiteMesure = el('div', { class: 'boite-mesure', hidden: '' });
@@ -30,6 +32,31 @@ export function majMesure(): void {
       },
       texte,
     );
+  // Tracé de la zone d'une note : nombre de points, retirer le dernier, terminer, annuler.
+  const t = ui.traceZone;
+  boiteMesure.classList.toggle('trace', !!t);
+  if (t) {
+    const n = t.points.length;
+    boiteMesure.hidden = false;
+    remplir(
+      boiteMesure,
+      el(
+        'span',
+        {},
+        t.mode === 'points'
+          ? n === 0
+            ? 'Zone : touche les coins sur la carte.'
+            : `Zone : ${n} coin(s)${n >= 3 ? ` · ${texteSurface(surfaceZone(t.points))}` : ''}`
+          : `En marchant : ${n} point(s)` +
+              (t.precision !== null ? ` · GPS ± ${Math.round(t.precision)} m` : ' · GPS…') +
+              (n >= 3 ? ` · ${texteSurface(surfaceZone(t.points))}` : ''),
+      ),
+      n > 0 && el('button', { onclick: retirerDernierPoint }, 'Retirer le dernier'),
+      n >= 3 && el('button', { class: 'principal', onclick: terminerTrace }, 'Terminer'),
+      el('button', { onclick: annulerTrace }, 'Annuler'),
+    );
+    return;
+  }
   const consigne = ui.placementNote
     ? 'Touche la carte à l’endroit de la note.'
     : ui.placerAuDoigt
