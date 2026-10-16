@@ -85,6 +85,31 @@ export function directionsDesCotes(
   return gardees;
 }
 
+/**
+ * Direction choisie à la main : le côté (entre deux coins) qui contient le segment `segment`
+ * (de `contour[segment]` au sommet suivant), redressé en droite moyenne même s'il n'est pas
+ * droit. Un segment pris dans un coin (côtés de moins de 5 m) donne sa propre direction.
+ */
+export function directionDuSegment(
+  contour: readonly XY[],
+  segment: number,
+  seuilCoins = 30,
+): Direction & { sommets: number[] } {
+  const n = contour.length;
+  const suivant = (segment + 1) % n;
+  const cotes = cotesEntreCoins(n, coins(contour, seuilCoins));
+  let cote = cotes.findIndex((ids) =>
+    ids.some((id, k) => id === segment && ids[k + 1] === suivant),
+  );
+  const ids = cote >= 0 ? cotes[cote]! : [segment, suivant];
+  if (cote < 0) cote = -1;
+  const [a, b] = ligneAB(
+    ids.map((i) => contour[i]!),
+    0,
+  );
+  return { cote, a, b, longueur: Math.hypot(b[0] - a[0], b[1] - a[1]), sommets: ids };
+}
+
 /** Morceaux de la droite {s = n·x} à l'intérieur des anneaux (pair-impair), en abscisse le long de u. */
 function morceaux(
   anneaux: readonly (readonly XY[])[],

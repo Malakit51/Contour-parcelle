@@ -127,7 +127,7 @@ export function apercuGuidages(s: Session): Guidage[] {
   if (ui.porteeGuidage === 'parcelle') return coinsGuidage(s)?.lignes ?? [];
   if (ui.porteeGuidage === 'optimiser') {
     const o = optimisationCourante(s);
-    const prop = o?.optimisation.propositions[ui.propositionChoisie];
+    const prop = o?.proposition;
     return o && prop
       ? lignesOptimisees(
           s.etat,
@@ -445,6 +445,8 @@ export function optimisationCourante(s: Session): {
   parcelle: number;
   outil: Outil;
   optimisation: NonNullable<ReturnType<typeof optimiserParcelle>>;
+  /** Proposition choisie : une des propositions, ou les passages du côté touché. */
+  proposition: Proposition;
 } | null {
   const outil = outilCourant();
   const p = ui.parcelleCourante;
@@ -455,10 +457,15 @@ export function optimisationCourante(s: Session): {
   const obstacles = (ui.suivi.notes ?? [])
     .filter((n) => n.obstacle && !n.supprimee && n.position)
     .map((n) => n.position!);
-  const optimisation = optimiserParcelle(s.etat, p, obstacles, outil, ui.seuilCoins);
-  if (!optimisation || optimisation.propositions.length === 0) return null;
-  if (ui.propositionChoisie >= optimisation.propositions.length) ui.propositionChoisie = 0;
-  return { parcelle: p, outil, optimisation };
+  const segment = ui.coteOptimise?.parcelle === p ? ui.coteOptimise.segment : null;
+  const optimisation = optimiserParcelle(s.etat, p, obstacles, outil, ui.seuilCoins, segment);
+  if (!optimisation) return null;
+  const { propositions, manuelle } = optimisation;
+  if (ui.propositionChoisie === -1 && !manuelle) ui.propositionChoisie = 0;
+  if (ui.propositionChoisie >= propositions.length) ui.propositionChoisie = manuelle ? -1 : 0;
+  const proposition = ui.propositionChoisie === -1 ? manuelle : propositions[ui.propositionChoisie];
+  if (!proposition) return null;
+  return { parcelle: p, outil, optimisation, proposition };
 }
 
 function texteObstacles(prop: Proposition): string {
@@ -563,9 +570,33 @@ function panneauOptimisation(s: Session): (HTMLElement | false)[] {
   const o = optimisationCourante(s);
   const nom = s.td.parcelles[ui.parcelleCourante]!.nom;
   if (!o) {
-    return [outils, el('div', { class: 'erreur' }, `Aucun côté droit d’au moins 20 m sur ${nom}.`)];
+    return [
+      outils,
+      el(
+        'div',
+        { class: 'erreur' },
+        `Aucun côté droit d’au moins 20 m sur ${nom} : touche un bord pour y caler les passages.`,
+      ),
+    ];
   }
-  const propositions = o.optimisation.propositions.slice(0, 3).map((prop, i) =>
+  // Le côté touché sur la carte (s'il y en a un) passe devant les propositions calculées.
+  const { manuelle } = o.optimisation;
+  const choix: [number, Proposition][] = [
+    ...(manuelle ? [[-1, manuelle] as [number, Proposition]] : []),
+    ...o.optimisation.propositions.slice(0, 3).map((p, i): [number, Proposition] => [i, p]),
+  ];
+  // Le côté touché peut redonner une des propositions : on le dit, pour ne pas chercher la différence.
+  const pareille = manuelle
+    ? o.optimisation.propositions
+        .slice(0, 3)
+        .findIndex(
+          (p) =>
+            Math.abs(((((p.cap - manuelle.cap) % 180) + 270) % 180) - 90) < 1 &&
+            p.demiTours === manuelle.demiTours &&
+            Math.abs(p.longueurTotale - manuelle.longueurTotale) < 1,
+        )
+    : -1;
+  const propositions = choix.map(([i, prop]) =>
     el(
       'button',
       {
@@ -578,7 +609,7 @@ function panneauOptimisation(s: Session): (HTMLElement | false)[] {
       el(
         'span',
         { class: 'carte-sens-titre' },
-        `${i + 1} · cap ${Math.round(prop.cap)}° · ${prop.demiTours} demi-tours`,
+        `${i === -1 ? `Ton côté${pareille >= 0 ? ` (= ${pareille + 1})` : ''}` : i + 1} · cap ${Math.round(prop.cap)}° · ${prop.demiTours} demi-tours`,
       ),
       el(
         'span',
@@ -599,6 +630,13 @@ function panneauOptimisation(s: Session): (HTMLElement | false)[] {
       el('span', { class: 'doux' }, `${o.optimisation.propositions.length} direction(s)`),
     ),
     el('div', { class: 'propositions' }, ...propositions),
+    el(
+      'div',
+      { class: manuelle ? 'doux' : 'sens' },
+      manuelle
+        ? 'Touche un autre bord pour changer de côté.'
+        : 'Ou touche un bord de la parcelle : passages parallèles à ce côté.',
+    ),
     // Tours de tournière : une ligne par côté, à une demi-largeur du bord (puis + une largeur).
     outil.tourniere > 0 &&
       (() => {

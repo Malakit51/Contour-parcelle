@@ -145,7 +145,21 @@ export function dessin(s: Session): Dessin {
   }
   // Optimisation : passages de la proposition choisie, en traits fins sous la ligne AB.
   const optim = enEdition ? optimisationCourante(s) : null;
-  const prop = optim?.optimisation.propositions[ui.propositionChoisie];
+  const prop = optim?.proposition;
+  // Côté touché : en violet, comme une limite choisie.
+  const manuelle = optim?.optimisation.manuelle;
+  if (optim && manuelle && ui.propositionChoisie === -1) {
+    const ext = s.etat.anneaux.find((a) => a.parcelle === optim.parcelle && a.type === 1)!;
+    manuelle.sommets.forEach((i, k) => {
+      if (k > 0)
+        d.traits.push({
+          a: latLon(ext.sommets[manuelle.sommets[k - 1]!]!),
+          b: latLon(ext.sommets[i]!),
+          couleur: SEL,
+          epaisseur: 7,
+        });
+    });
+  }
   if (optim && prop) {
     for (const [a, b] of prop.lignes) {
       d.traits.push({

@@ -189,9 +189,7 @@ export function appliquer(): void {
       const base = optim ? outilCourant()!.nom : baseNomLignes();
       const touchees = new Set(gs.map((g) => g.parcelle));
       const nom = s.td.parcelles[gs[0]!.parcelle]!.nom;
-      const prop = optim
-        ? optimisationCourante(s)?.optimisation.propositions[ui.propositionChoisie]
-        : null;
+      const prop = optim ? optimisationCourante(s)?.proposition : null;
       quoi = prop
         ? `« ${gs[0]!.nom} » optimisée sur ${nom} (cap ${Math.round(prop.cap)}°, ${prop.demiTours} demi-tours)` +
           (gs.length > 1 ? ` et ${gs.length - 1} ligne(s) de fourrière` : '')

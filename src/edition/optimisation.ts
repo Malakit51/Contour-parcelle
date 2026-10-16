@@ -2,7 +2,12 @@
 // obstacles passent dans un plan local, les propositions en reviennent en lignes de guidage.
 
 import { pointDansPolygone, planLocal, type LatLon, type Plan, type XY } from '../geometrie/plan';
-import { proposerPassages, type Proposition } from '../geometrie/passages';
+import {
+  directionDuSegment,
+  evaluerDirection,
+  proposerPassages,
+  type Proposition,
+} from '../geometrie/passages';
 import { latLon, type Etat, type Guidage } from './etat';
 import { lignesDeParcelle } from './guidages';
 
@@ -18,6 +23,11 @@ export interface Optimisation {
   propositions: Proposition[];
   /** Obstacles retenus (dans la parcelle), dans l'ordre de `Proposition.obstacles`. */
   obstacles: LatLon[];
+  /**
+   * Passages parallèles au côté touché sur la carte (`segment`), avec les sommets de ce côté
+   * (indices dans le contour extérieur) ; null sans côté touché.
+   */
+  manuelle: (Proposition & { sommets: number[] }) | null;
 }
 
 /** Propositions de passages pour la parcelle `p` (contour extérieur), de la meilleure à la moins bonne. */
@@ -27,6 +37,7 @@ export function optimiserParcelle(
   obstacles: readonly LatLon[],
   outil: Outil,
   seuilCoins = 30,
+  segment: number | null = null,
 ): Optimisation | null {
   const ext = etat.anneaux.find((a) => a.parcelle === p && a.type === 1);
   if (!ext || outil.largeur <= 0 || etat.supprimees?.includes(p)) return null;
@@ -37,14 +48,16 @@ export function optimiserParcelle(
     .filter((a, i) => a.parcelle === p && a.type === 2 && !etat.zonesRetirees?.includes(i))
     .map((a) => a.sommets.map(xy));
   const dedans = obstacles.filter((o) => pointDansPolygone(plan.versXY(o), contour));
-  const propositions = proposerPassages(
-    contour,
-    trous,
-    dedans.map((o) => plan.versXY(o)),
-    { largeur: outil.largeur, tourniere: outil.tourniere },
-    seuilCoins,
-  );
-  return { plan, propositions, obstacles: dedans };
+  const obstaclesXY = dedans.map((o) => plan.versXY(o));
+  const reglages = { largeur: outil.largeur, tourniere: outil.tourniere };
+  const propositions = proposerPassages(contour, trous, obstaclesXY, reglages, seuilCoins);
+  let manuelle: Optimisation['manuelle'] = null;
+  if (segment !== null && segment >= 0 && segment < contour.length) {
+    const { sommets, ...direction } = directionDuSegment(contour, segment, seuilCoins);
+    if (direction.longueur > 0.5)
+      manuelle = { ...evaluerDirection(contour, trous, direction, obstaclesXY, reglages), sommets };
+  }
+  return { plan, propositions, obstacles: dedans, manuelle };
 }
 
 /** Ligne AB d'une proposition, en ligne de guidage de la parcelle `p`. */

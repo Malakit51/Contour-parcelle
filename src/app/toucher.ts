@@ -253,6 +253,15 @@ export function toucher(
     ui.parcelleCourante = s.etat.anneaux[choix.anneau]!.parcelle;
     if (ui.mode === 'limite') ui.selLimite = { anneau: choix.anneau, debut: choix.indice };
     else if (ui.mode === 'sommet') ui.selSommet = { anneau: choix.anneau, sommet: choix.indice };
+    // Optimisation : un bord touché du contour extérieur donne des passages parallèles à son côté.
+    if (
+      ui.mode === 'guidage' &&
+      ui.porteeGuidage === 'optimiser' &&
+      s.etat.anneaux[choix.anneau]!.type === 1
+    ) {
+      ui.coteOptimise = { parcelle: ui.parcelleCourante, segment: choix.indice };
+      ui.propositionChoisie = -1;
+    }
     ui.onglet = ongletDuMode();
   } else {
     // Toucher à l'intérieur d'une parcelle (loin de ses limites) : on la sélectionne.

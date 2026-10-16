@@ -76,7 +76,10 @@ export interface EtatInterface {
   outils: Outil[];
   outilChoisi: number;
   /** Proposition d'optimisation choisie (0 = la meilleure). */
+  /** Proposition choisie (0, 1, 2…) ; -1 : passages parallèles au côté touché (`coteOptimise`). */
   propositionChoisie: number;
+  /** Optimisation : côté du contour touché sur la carte (segment du contour extérieur). */
+  coteOptimise: { parcelle: number; segment: number } | null;
   /** Optimisation : créer aussi les lignes des tours de tournière. */
   lignesTourniere: boolean;
   /** Angle à partir duquel un sommet est un coin (lignes de toute la parcelle). */
@@ -193,6 +196,7 @@ export const ui: EtatInterface = {
   outils: outilsGardes(),
   outilChoisi: Number(lireStockage(CLE_OUTIL_CHOISI) ?? 0) || 0,
   propositionChoisie: 0,
+  coteOptimise: null,
   lignesTourniere: true,
   seuilCoins: 30,
   tolerance: 0.25,

@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { etatInitial, latLon } from '../src/edition/etat';
-import { directionsDesCotes, evaluerDirection, proposerPassages } from '../src/geometrie/passages';
+import {
+  directionDuSegment,
+  directionsDesCotes,
+  evaluerDirection,
+  proposerPassages,
+} from '../src/geometrie/passages';
 import { planLocal, type XY } from '../src/geometrie/plan';
 import { lireTaskData } from '../src/isoxml/lecture';
 
@@ -223,5 +228,39 @@ describe('lignes de tournière', () => {
     // Semoir 4 m avec 12 m de tournière : 3 tours (à 2, 6 et 10 m).
     expect(lignesTourniere(etat, 0, { nom: 'S', largeur: 4, tourniere: 12 })).toHaveLength(12);
     expect(lignesTourniere(etat, 0, { nom: 'S', largeur: 4, tourniere: 0 })).toEqual([]);
+  });
+});
+
+describe('passages parallèles à un côté touché', () => {
+  it('un segment du côté Sud (un peu courbe) : tout le côté, redressé', () => {
+    const c: XY[] = [
+      [0, 0],
+      [50, 0.3],
+      [100, 0],
+      [150, -0.2],
+      [200, 0],
+      [200, 100],
+      [0, 100],
+    ];
+    const d = directionDuSegment(c, 2);
+    expect(d.sommets).toEqual([0, 1, 2, 3, 4]);
+    expect(Math.abs(d.b[1] - d.a[1])).toBeLessThan(0.5);
+    expect(d.longueur).toBeCloseTo(200, 0);
+    const p = evaluerDirection(c, [], d, [], { largeur: 20, tourniere: 0 });
+    expect(p.cap).toBeCloseTo(90, 0);
+  });
+
+  it('côté Est du rectangle : 10 passages Nord-Sud, à côté des propositions', async () => {
+    const { preparer } = await import('./outils');
+    const { optimiserParcelle } = await import('../src/edition/optimisation');
+    const { etat } = preparer({ R });
+    const outil = { nom: 'Pulvé 20 m', largeur: 20, tourniere: 0 };
+    expect(optimiserParcelle(etat, 0, [], outil)!.manuelle).toBeNull();
+    const o = optimiserParcelle(etat, 0, [], outil, 30, 1)!;
+    expect(o.manuelle).toMatchObject({ passages: 10, demiTours: 9, sommets: [1, 2] });
+    expect(o.manuelle!.cap).toBeCloseTo(0, 6);
+    expect(o.manuelle!.longueurPassages).toBeCloseTo(1000, 3);
+    // Les propositions calculées restent (le long côté d'abord).
+    expect(o.propositions[0]!.demiTours).toBe(4);
   });
 });
