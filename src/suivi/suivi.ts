@@ -61,6 +61,8 @@ export interface Note {
   modifiee: string;
   /** Endroit dans la parcelle [latitude, longitude], ou null pour toute la parcelle. */
   position: [number, number] | null;
+  /** Obstacle (poteau…) : l'optimisation du guidage le place en bout d'outil. */
+  obstacle?: boolean;
   supprimee?: boolean;
 }
 
@@ -230,7 +232,9 @@ export function nouvelIdNote(): string {
 }
 
 export function csvNotes(suivi: Suivi): string {
-  const lignes = [ligneCsv(['Parcelle', 'Type', 'Note', 'Date', 'Latitude', 'Longitude'])];
+  const lignes = [
+    ligneCsv(['Parcelle', 'Type', 'Note', 'Date', 'Latitude', 'Longitude', 'Obstacle']),
+  ];
   const notes = (suivi.notes ?? [])
     .filter((n) => !n.supprimee)
     .sort(
@@ -247,6 +251,7 @@ export function csvNotes(suivi: Suivi): string {
         aujourdhui(new Date(n.creee)),
         n.position ? n.position[0].toFixed(7) : '',
         n.position ? n.position[1].toFixed(7) : '',
+        n.obstacle ? 'oui' : '',
       ]),
     );
   }
@@ -455,7 +460,15 @@ export function importerCsv(
         .filter((n) => !n.supprimee)
         .map((n) => cleNote(n.cle, n.type, n.texte, aujourdhui(new Date(n.creee)))),
     );
-    for (const [nom = '', type = '', texte = '', date = '', lat = '', lon = ''] of lignes) {
+    for (const [
+      nom = '',
+      type = '',
+      texte = '',
+      date = '',
+      lat = '',
+      lon = '',
+      obs = '',
+    ] of lignes) {
       const p = parNom.get(nom.trim());
       const jour = dateIso(date);
       if (!p || !jour || !(type.trim() || texte.trim())) {
@@ -481,6 +494,7 @@ export function importerCsv(
         creee: quand,
         modifiee: quand,
         position: la !== null && lo !== null ? [la, lo] : null,
+        ...(/^(oui|o|1|x|vrai)$/i.test(obs.trim()) ? { obstacle: true } : {}),
       });
       bilan.ajouts++;
     }

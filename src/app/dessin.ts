@@ -132,6 +132,7 @@ export function dessin(s: Session): Dessin {
         lettre: (n.type || n.texte || '?').trim().charAt(0).toUpperCase(),
         titre: n.type || n.texte,
         choisie: ui.noteVue === n.id,
+        obstacle: !!n.obstacle,
         action: () => {
           ui.noteVue = n.id;
           ui.parcelleCourante = parCle.get(n.cle)!;

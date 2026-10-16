@@ -31,6 +31,7 @@ export interface Dessin {
   fleches?: { depuis: LatLon; vers: LatLon; choisie: boolean; action: () => void }[];
   /** Notes posées sur la carte : épingle de la couleur du type, nom affiché si `choisie`. */
   notes?: {
+    obstacle?: boolean;
     p: LatLon;
     couleur: string;
     lettre: string;
@@ -253,7 +254,7 @@ export class Carte {
           className: '',
           iconSize: [0, 0],
           html:
-            `<div class="epingle${n.choisie ? ' choisie' : ''}" style="background:${n.couleur}"><span>${echapper(n.lettre)}</span></div>` +
+            `<div class="epingle${n.choisie ? ' choisie' : ''}${n.obstacle ? ' obstacle' : ''}" style="background:${n.couleur}"><span>${echapper(n.lettre)}</span></div>` +
             (n.choisie ? `<div class="epingle-titre">${echapper(n.titre)}</div>` : ''),
         }),
       })

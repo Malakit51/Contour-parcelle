@@ -273,18 +273,19 @@ describe('notes sur les parcelles', () => {
   });
 
   it('CSV des notes : export puis reprise sans doublon', () => {
-    const s = enregistrerNote(enregistrerNote(suiviVide(), n1), n2);
+    const s = enregistrerNote(enregistrerNote(suiviVide(), n1), { ...n2, obstacle: true });
     const csv = csvNotes(s);
-    expect(csv).toContain('Parcelle;Type;Note;Date;Latitude;Longitude\r\n');
+    expect(csv).toContain('Parcelle;Type;Note;Date;Latitude;Longitude;Obstacle\r\n');
     expect(csv).toContain(
-      'Le Bois;Vulpin;"foyer ; près du bois";2026-10-15;45.0001234;2.0005678\r\n',
+      'Le Bois;Vulpin;"foyer ; près du bois";2026-10-15;45.0001234;2.0005678;\r\n',
     );
+    expect(csv).toContain('Le Bois;Chardons;;2026-10-16;;;oui\r\n');
     const r = importerCsv(suiviVide(), csv, td.parcelles);
     expect(r.bilan).toEqual({ type: 'notes', ajouts: 2, dejaLa: 0, inconnues: [] });
     const reprises = notesDe(r.suivi, bois!);
-    expect(reprises.map((n) => [n.type, n.texte, n.position])).toEqual([
-      ['Chardons', '', null],
-      ['Vulpin', 'foyer ; près du bois', [45.0001234, 2.0005678]],
+    expect(reprises.map((n) => [n.type, n.texte, n.position, !!n.obstacle])).toEqual([
+      ['Chardons', '', null, true],
+      ['Vulpin', 'foyer ; près du bois', [45.0001234, 2.0005678], false],
     ]);
     expect(importerCsv(s, csv, td.parcelles).bilan).toMatchObject({ ajouts: 0, dejaLa: 2 });
   });

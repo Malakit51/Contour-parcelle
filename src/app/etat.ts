@@ -120,7 +120,12 @@ export interface EtatInterface {
   /** Points de la mesure en cours (null : outil de mesure fermé). */
   mesure: LatLon[] | null;
   /** Note en cours de saisie (onglet Suivi) : null si aucune. `id` null pour une nouvelle note. */
-  noteEnCours: { id: string | null; parcelle: number; position: [number, number] | null } | null;
+  noteEnCours: {
+    id: string | null;
+    parcelle: number;
+    position: [number, number] | null;
+    obstacle: boolean;
+  } | null;
   /** Le prochain toucher sur la carte donne l'endroit de la note en cours. */
   placementNote: boolean;
   /** Note montrée sur la carte (nom affiché sous l'épingle). */

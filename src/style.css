@@ -1077,3 +1077,24 @@ body {
   background: var(--surface);
   color: var(--fg);
 }
+
+/* Obstacle : épingle carrée bordée de noir, pour la distinguer d'une simple note. */
+.epingle.obstacle {
+  border-radius: 4px;
+  border-color: #16201a;
+}
+.case-obstacle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.case-obstacle input {
+  width: 24px;
+  height: 24px;
+}
+.badge-obstacle {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--etat-a-refaire);
+}

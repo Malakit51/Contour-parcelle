@@ -96,8 +96,9 @@ function ouvrirNote(
   type: string,
   texte: string,
   position: [number, number] | null,
+  obstacle: boolean,
 ): void {
-  ui.noteEnCours = { id, parcelle, position };
+  ui.noteEnCours = { id, parcelle, position, obstacle };
   ui.placementNote = false;
   champTypeNote.value = type;
   champTexteNote.value = texte;
@@ -128,6 +129,7 @@ function enregistrerNoteEnCours(s: Session): void {
       creee: ancienne?.creee ?? maintenant,
       modifiee: maintenant,
       position: enCours.position,
+      ...(enCours.obstacle ? { obstacle: true } : {}),
     }),
   );
   ui.noteEnCours = null;
@@ -135,6 +137,14 @@ function enregistrerNoteEnCours(s: Session): void {
   ui.noteVue = id;
   ui.message = { texte: `Note enregistrée sur ${p.nom}.`, erreur: false };
   afficher();
+}
+
+function caseObstacle(coche: boolean): HTMLInputElement {
+  const c = el('input', { type: 'checkbox', ...(coche ? { checked: '' } : {}) });
+  c.addEventListener('change', () => {
+    if (ui.noteEnCours) ui.noteEnCours.obstacle = c.checked;
+  });
+  return c;
 }
 
 function formulaireNote(s: Session, nom: string): HTMLElement {
@@ -147,6 +157,12 @@ function formulaireNote(s: Session, nom: string): HTMLElement {
     listeTypes,
     champTypeNote,
     champTexteNote,
+    el(
+      'label',
+      { class: 'case-obstacle' },
+      caseObstacle(enCours.obstacle),
+      'Obstacle (à mettre en bout d’outil)',
+    ),
     el(
       'div',
       { class: ui.placementNote ? 'sens' : 'doux' },
@@ -245,7 +261,7 @@ export function panneauNotes(s: Session): HTMLElement | null {
       el('strong', {}, notes.length > 0 ? `Notes (${notes.length})` : 'Notes'),
       el(
         'button',
-        { class: 'petit', onclick: () => ouvrirNote(i, null, '', '', null) },
+        { class: 'petit', onclick: () => ouvrirNote(i, null, '', '', null, false) },
         'Ajouter une note',
       ),
     ),
@@ -258,6 +274,7 @@ export function panneauNotes(s: Session): HTMLElement | null {
           'span',
           {},
           el('strong', {}, n.type || 'Note'),
+          n.obstacle ? el('span', { class: 'badge-obstacle' }, ' obstacle') : '',
           n.texte ? ` — ${n.texte}` : '',
           el(
             'span',
@@ -283,7 +300,10 @@ export function panneauNotes(s: Session): HTMLElement | null {
             ),
           el(
             'button',
-            { class: 'petit', onclick: () => ouvrirNote(i, n.id, n.type, n.texte, n.position) },
+            {
+              class: 'petit',
+              onclick: () => ouvrirNote(i, n.id, n.type, n.texte, n.position, !!n.obstacle),
+            },
             'Modifier',
           ),
           el(
