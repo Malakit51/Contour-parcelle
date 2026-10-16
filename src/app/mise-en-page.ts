@@ -14,6 +14,7 @@ import { boiteMesure, majMesure } from './mesure';
 import {
   apercuCollage,
   apercuSimplification,
+  boutonSupprimerParcelle,
   choixActionBord,
   appliquer,
   commandesSommet,
@@ -461,6 +462,7 @@ export function afficher(): void {
         // Recoller sur l'ancien TASKDATA se fait point par point : le remplacement est à côté.
         ui.mode === 'sommet' && panneauRemplacement(s),
         distanceUtile && raccourcis(),
+        boutonSupprimerParcelle(s),
       ];
       break;
     case 'guidage':

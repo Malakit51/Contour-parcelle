@@ -127,3 +127,20 @@ describe('retirer une zone exclue', () => {
     ).toThrow();
   });
 });
+
+describe('parcelle qui contient un point', () => {
+  it('retrouve la parcelle d’un endroit, ignore une parcelle retirée', async () => {
+    const { parcelleContenant } = await import('../src/edition/etat');
+    const etat = etatInitial(td);
+    const p = indice('14 Jard');
+    const ring = etat.anneaux.find((a) => a.parcelle === p && a.type === 1)!;
+    // Milieu de deux sommets opposés : dans la parcelle (14 Jard est d'un seul tenant, convexe ici).
+    const n = ring.sommets.length;
+    const a = ring.sommets[0]!;
+    const b = ring.sommets[Math.floor(n / 2)]!;
+    const milieu: [number, number] = [(a.lat + b.lat) / 2, (a.lon + b.lon) / 2];
+    expect(parcelleContenant(etat, milieu)).toBe(p);
+    expect(parcelleContenant(supprimerParcelle(etat, p), milieu)).toBeNull();
+    expect(parcelleContenant(etat, [0, 0])).toBeNull();
+  });
+});

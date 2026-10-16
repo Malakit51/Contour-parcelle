@@ -26,7 +26,6 @@ import {
   optimiserParcelle,
   type Outil,
 } from '../edition/optimisation';
-import { cleParcelle } from '../suivi/suivi';
 import { CLE_OUTIL_CHOISI, CLE_OUTILS } from './etat';
 import { type Proposition } from '../geometrie/passages';
 
@@ -451,9 +450,10 @@ export function optimisationCourante(s: Session): {
   const p = ui.parcelleCourante;
   if (ui.mode !== 'guidage' || ui.porteeGuidage !== 'optimiser' || !outil || p === null)
     return null;
-  const cle = cleParcelle(s.td.parcelles[p]!);
+  // Tous les obstacles notés : optimiserParcelle garde ceux dont l'endroit est dans la parcelle
+  // (une note peut avoir été rangée dans une voisine).
   const obstacles = (ui.suivi.notes ?? [])
-    .filter((n) => n.obstacle && !n.supprimee && n.position && n.cle === cle)
+    .filter((n) => n.obstacle && !n.supprimee && n.position)
     .map((n) => n.position!);
   const optimisation = optimiserParcelle(s.etat, p, obstacles, outil, ui.seuilCoins);
   if (!optimisation || optimisation.propositions.length === 0) return null;

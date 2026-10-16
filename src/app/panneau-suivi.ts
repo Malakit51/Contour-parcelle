@@ -12,7 +12,6 @@ import {
   enregistrerNote,
   fiche,
   importerCsv,
-  notesDe,
   nouvelIdNote,
   supprimerNote,
   typesDeNotes,
@@ -20,18 +19,10 @@ import {
 } from '../suivi/suivi';
 import { el } from '../ui/dom';
 import { couleurNote, type Session, ui } from './etat';
+import { parcelleContenant } from '../edition/etat';
 import { enregistrerSauvegarde } from './exporter';
 import { afficher } from './mise-en-page';
-import {
-  arreterOutilsCarte,
-  dateFr,
-  effacerSelection,
-  majSuivi,
-  modifier,
-  quandFr,
-} from './travail';
-import { supprimerParcelle } from '../edition/operations';
-import { blocsDeParcelle } from '../isoxml/ecriture';
+import { arreterOutilsCarte, dateFr, effacerSelection, majSuivi, quandFr } from './travail';
 import { cadrerParcelle, carte } from './vue';
 
 /** État du contour de la parcelle courante : trois boutons et la remarque. */
@@ -82,36 +73,6 @@ export function panneauSuiviParcelle(s: Session): HTMLElement | null {
       ),
     ),
     derniere && el('div', { class: 'doux' }, `${quandFr(derniere.quand)} · ${derniere.action}`),
-    el(
-      'div',
-      { class: 'rangee' },
-      el(
-        'button',
-        {
-          class: 'petit danger',
-          onclick: () => {
-            const i = ui.parcelleCourante!;
-            const n = blocsDeParcelle(s.td.texte, p.id).taches.length;
-            if (
-              !confirm(
-                `Retirer ${p.nom} du fichier exporté${n > 0 ? `, avec ses ${n} tâche(s)` : ''} ?\n\n` +
-                  'Elle reste dans la console et dans ton export d’origine. « Annuler » ou « Remettre » (onglet Export) la fait revenir.',
-              )
-            ) {
-              return;
-            }
-            modifier(
-              () => supprimerParcelle(ui.session!.etat, i),
-              `${p.nom} retirée du fichier${n > 0 ? ` (avec ${n} tâche(s))` : ''}`,
-              false,
-            );
-            ui.parcelleCourante = null;
-            afficher();
-          },
-        },
-        'Supprimer la parcelle',
-      ),
-    ),
   );
 }
 
@@ -147,7 +108,10 @@ function ouvrirNote(
 function enregistrerNoteEnCours(s: Session): void {
   const enCours = ui.noteEnCours;
   if (!enCours) return;
-  const p = s.td.parcelles[enCours.parcelle]!;
+  // Une note posée à un endroit est rangée dans la parcelle qui contient cet endroit.
+  const ici = enCours.position ? parcelleContenant(s.etat, enCours.position) : null;
+  const p = s.td.parcelles[ici ?? enCours.parcelle]!;
+  const deplacee = ici !== null && ici !== enCours.parcelle;
   const type = champTypeNote.value.trim();
   const texte = champTexteNote.value.trim();
   if (!type && !texte) {
@@ -161,8 +125,8 @@ function enregistrerNoteEnCours(s: Session): void {
   majSuivi(
     enregistrerNote(ui.suivi, {
       id,
-      cle: ancienne?.cle ?? cleParcelle(p),
-      parcelle: ancienne?.parcelle ?? p.nom,
+      cle: ici !== null || !ancienne ? cleParcelle(p) : ancienne.cle,
+      parcelle: ici !== null || !ancienne ? p.nom : ancienne.parcelle,
       type,
       texte,
       creee: ancienne?.creee ?? maintenant,
@@ -174,7 +138,13 @@ function enregistrerNoteEnCours(s: Session): void {
   ui.noteEnCours = null;
   ui.placementNote = false;
   ui.noteVue = id;
-  ui.message = { texte: `Note enregistrée sur ${p.nom}.`, erreur: false };
+  if (deplacee) ui.parcelleCourante = ici;
+  ui.message = {
+    texte: deplacee
+      ? `Note enregistrée sur ${p.nom} (son endroit est dans cette parcelle).`
+      : `Note enregistrée sur ${p.nom}.`,
+    erreur: false,
+  };
   afficher();
 }
 
@@ -292,7 +262,16 @@ export function panneauNotes(s: Session): HTMLElement | null {
   if (ui.parcelleCourante === null) return null;
   const i = ui.parcelleCourante;
   const p = s.td.parcelles[i]!;
-  const notes = notesDe(ui.suivi, p);
+  // Une note posée à un endroit s'affiche dans la parcelle qui contient cet endroit (même si elle
+  // a été créée alors qu'une voisine était choisie) ; sans endroit, dans sa parcelle.
+  const cle = cleParcelle(p);
+  const notes = (ui.suivi.notes ?? [])
+    .filter((n) => {
+      if (n.supprimee) return false;
+      const ici = n.position ? parcelleContenant(s.etat, n.position) : null;
+      return ici !== null ? ici === i : n.cle === cle;
+    })
+    .sort((x, y) => y.creee.localeCompare(x.creee));
   return el(
     'div',
     { class: 'info notes-parcelle' },

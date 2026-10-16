@@ -3,7 +3,7 @@
 // L'état ne se modifie jamais en place : chaque opération renvoie un nouvel état, ce qui rend
 // « annuler » trivial (on garde la liste des états précédents).
 
-import { aireSignee, planLocal, type LatLon, type XY } from '../geometrie/plan';
+import { aireSignee, planLocal, pointDansPolygone, type LatLon, type XY } from '../geometrie/plan';
 import type { Point, TaskData } from '../isoxml/lecture';
 import { sommets as sommetsLus } from '../isoxml/parcelles';
 
@@ -174,4 +174,23 @@ export function surfaceEtat(etat: Etat, parcelle: number): number {
     total += a.type === 1 ? aire : -aire;
   }
   return total;
+}
+
+/**
+ * Parcelle dont le contour extérieur contient le point (null : aucune). Sert à ranger une note
+ * dans la parcelle où elle se trouve vraiment.
+ */
+export function parcelleContenant(etat: Etat, p: LatLon): number | null {
+  for (const [i, a] of etat.anneaux.entries()) {
+    if (a.type !== 1 || anneauIgnore(etat, i)) continue;
+    const plan = planLocal(p);
+    if (
+      pointDansPolygone(
+        [0, 0],
+        a.sommets.map((s) => plan.versXY(latLon(s))),
+      )
+    )
+      return a.parcelle;
+  }
+  return null;
 }

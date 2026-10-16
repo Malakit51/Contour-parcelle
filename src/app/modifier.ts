@@ -14,8 +14,10 @@ import {
   simplifierParcelle,
   sommetsDuBord,
   supprimerSommet,
+  supprimerParcelle,
   supprimerZone,
 } from '../edition/operations';
+import { blocsDeParcelle } from '../isoxml/ecriture';
 import { planLocal } from '../geometrie/plan';
 import { ecartMaximal } from '../geometrie/simplification';
 import { el } from '../ui/dom';
@@ -632,6 +634,43 @@ export function raccourcis(): HTMLElement {
         },
         v > 0 ? `+${enMetres(v)}` : `−${enMetres(-v)}`,
       ),
+    ),
+  );
+}
+
+/** Bas de l'onglet Modifier : retirer toute la parcelle choisie du fichier (avec ses tâches). */
+export function boutonSupprimerParcelle(s: Session): HTMLElement | null {
+  const i = ui.parcelleCourante;
+  if (i === null) return null;
+  const p = s.td.parcelles[i]!;
+  return el(
+    'div',
+    { class: 'rangee', style: 'justify-content:flex-end' },
+    el(
+      'button',
+      {
+        class: 'petit danger',
+        onclick: () => {
+          const n = blocsDeParcelle(s.td.texte, p.id).taches.length;
+          if (
+            !confirm(
+              `Retirer toute la parcelle ${p.nom} du fichier exporté${n > 0 ? `, avec ses ${n} tâche(s)` : ''} ?\n\n` +
+                'Pour enlever seulement le trou d’un poteau : touche un point du trou, puis « Supprimer la zone exclue ».\n' +
+                'Elle reste dans la console et dans ton export d’origine. « Annuler » ou « Remettre » (onglet Export) la fait revenir.',
+            )
+          ) {
+            return;
+          }
+          modifier(
+            () => supprimerParcelle(ui.session!.etat, i),
+            `${p.nom} retirée du fichier${n > 0 ? ` (avec ${n} tâche(s))` : ''}`,
+            false,
+          );
+          ui.parcelleCourante = null;
+          afficher();
+        },
+      },
+      `Supprimer la parcelle ${p.nom}`,
     ),
   );
 }
