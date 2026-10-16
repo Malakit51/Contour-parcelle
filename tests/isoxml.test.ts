@@ -69,7 +69,8 @@ describe('fichier d’exemple', () => {
 });
 
 // Fichier réel, présent seulement sur la machine de développement (jamais dans le dépôt).
-const REEL = 'donnees_locales/TASKDATA.XML';
+// Export de la console du 13/10/2026, anonymisé (déplacé, tourné, identités remplacées).
+const REEL = 'tests/fixtures/console-anonyme.xml';
 
 describe.runIf(existsSync(REEL))('export réel de la console', () => {
   // Lecture paresseuse : le corps du describe s'exécute même quand le fichier est absent.
@@ -98,7 +99,7 @@ describe.runIf(existsSync(REEL))('export réel de la console', () => {
     expect(diffs.every((d) => d.apres === null)).toBe(true);
     for (const d of diffs) {
       expect(d.avant).toMatch(
-        /^(<LSG A="5"[^>]*>|<PNT A="2" C="[\d.]+" D="[\d.]+" E="0"\/>|<\/LSG>)\r\n$/,
+        /^(<LSG A="5"[^>]*>|<PNT A="2" C="[-\d.]+" D="[-\d.]+" E="0"\/>|<\/LSG>)\r\n$/,
       );
     }
     expect(diffs).toHaveLength(td.segmentsIgnores.length * 4);

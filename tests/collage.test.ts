@@ -1,10 +1,12 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { collerBord, modeleLePlusProche } from '../src/edition/collage';
-import { controler } from '../src/edition/controles';
-import { latLon, sommetsEn, surfaceEtat } from '../src/edition/etat';
+import { controler, sommetsPresqueCommuns } from '../src/edition/controles';
+import { etatInitial, latLon, sommetsEn, surfaceEtat } from '../src/edition/etat';
 import { exporterEtat, verifierRelecture } from '../src/edition/export';
 import { ErreurEdition } from '../src/edition/operations';
 import { type XY } from '../src/geometrie/plan';
+import { lireTaskData } from '../src/isoxml/lecture';
 import { enMetres, preparer } from './outils';
 
 const A: XY[] = [
@@ -188,5 +190,25 @@ describe('coller un bord sur la parcelle voisine', () => {
     expect(() => collerBord(etat, { anneau: 0, debut: 1, fin: 3, aRebours: false }, 1)).toThrow(
       /troisième parcelle/,
     );
+  });
+});
+
+describe('export de la console (anonymisé) : coller 23 Huss sur 22 Huss', () => {
+  it('le point de 23 Huss à 91 cm du coin commun disparaît, sans alerte', () => {
+    const td = lireTaskData(readFileSync('tests/fixtures/console-anonyme.xml', 'utf8'));
+    const etat = etatInitial(td);
+    const anneau = (nom: string) =>
+      etat.anneaux.findIndex((a) => td.parcelles[a.parcelle]!.nom === nom);
+    const [a22, a23] = [anneau('22 Huss'), anneau('23 Huss')];
+    expect(sommetsPresqueCommuns(td, etat, 2).map((x) => x.noms)).toEqual([['22 Huss', '23 Huss']]);
+    // Bord de 23 Huss : son point presque commun (6), le coin commun (7), l'autre sommet commun (8).
+    const r = collerBord(etat, { anneau: a23, debut: 6, fin: 8, aRebours: false }, a22);
+    expect(r.bilan).toMatchObject({ avant: 12, apres: 11, ajoutsModele: 0 });
+    expect(r.bilan.ecartMax).toBeCloseTo(0.92, 2);
+    expect(r.etat.anneaux[a22]).toEqual(etat.anneaux[a22]);
+    expect(sommetsPresqueCommuns(td, r.etat, 2)).toEqual([]);
+    const p = [etat.anneaux[a22]!.parcelle, etat.anneaux[a23]!.parcelle];
+    expect(controler(td, r.etat, p)).toEqual([]);
+    expect(verifierRelecture(td, r.etat, exporterEtat(td, r.etat))).toEqual([]);
   });
 });

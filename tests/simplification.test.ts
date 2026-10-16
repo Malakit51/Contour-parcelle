@@ -94,7 +94,8 @@ describe('simplification d’un contour', () => {
   });
 });
 
-const REEL = 'donnees_locales/TASKDATA.XML';
+// Export de la console du 13/10/2026, anonymisé (déplacé, tourné, identités remplacées).
+const REEL = 'tests/fixtures/console-anonyme.xml';
 
 describe.runIf(existsSync(REEL))('simplification de l’export réel', () => {
   it('toutes les parcelles à 25 cm : écart limité, surface quasi inchangée, voisins intacts', () => {

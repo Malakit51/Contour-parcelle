@@ -283,7 +283,8 @@ describe('export après modification', () => {
   });
 });
 
-const REEL = 'donnees_locales/TASKDATA.XML';
+// Export de la console du 13/10/2026, anonymisé (déplacé, tourné, identités remplacées).
+const REEL = 'tests/fixtures/console-anonyme.xml';
 
 describe.runIf(existsSync(REEL))('export réel : limite 130usag / 131usag', () => {
   // Lecture paresseuse : le corps du describe s'exécute même quand le fichier est absent.
