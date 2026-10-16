@@ -12,10 +12,12 @@ import { contenuFichier } from './fichier';
 import { apercuGuidages, commandesLignes, panneauGuidage } from './guidage';
 import { boiteMesure, majMesure } from './mesure';
 import {
+  apercuCollage,
   apercuSimplification,
   appliquer,
   commandesSommet,
   panneauSelection,
+  panneauCollage,
   panneauSimplification,
   raccourcis,
 } from './modifier';
@@ -49,6 +51,7 @@ function texteAppliquer(): string {
     return n > 1 ? `Créer ${n} lignes` : 'Créer la ligne';
   }
   if (ui.mode === 'simplifier') return 'Simplifier';
+  if (ui.mode === 'coller') return 'Coller';
   return 'Appliquer';
 }
 
@@ -407,14 +410,17 @@ export function afficher(): void {
           modeBouton('sommet', 'Point'),
           modeBouton('simplifier', 'Simplifier'),
           modeBouton('guidage', 'Guidage'),
+          modeBouton('coller', 'Coller'),
         ),
         ui.mode === 'simplifier'
           ? panneauSimplification(s)
           : ui.mode === 'guidage'
             ? panneauGuidage(s)
-            : panneauSelection(s),
+            : ui.mode === 'coller'
+              ? panneauCollage(s)
+              : panneauSelection(s),
         panneauRemplacement(s),
-        raccourcis(),
+        ui.mode !== 'coller' && raccourcis(),
       ];
       break;
     case 'suivi':
@@ -453,6 +459,7 @@ export function afficher(): void {
       ui.limiteGlisse !== null &&
       ui.sensGlisse !== null) ||
     (ui.mode === 'guidage' && apercuGuidages(s).length > 0) ||
+    (ui.mode === 'coller' && 'etat' in (apercuCollage(s) ?? {})) ||
     (ui.mode === 'simplifier' &&
       (apercuSimplification(s)?.bilan.some((b) => b.apres !== b.avant || b.ecartMax > 0) ?? false));
   remplir(

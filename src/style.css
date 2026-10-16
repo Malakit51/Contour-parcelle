@@ -309,6 +309,8 @@ button.petit {
   box-shadow: none;
   color: var(--doux);
   font-weight: 400;
+  min-width: 0;
+  font-size: 0.9em;
 }
 .modes button.principal {
   background: var(--choisi);

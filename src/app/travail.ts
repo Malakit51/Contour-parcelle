@@ -263,6 +263,7 @@ export function effacerSelection(): void {
   ui.sensGlisse = null;
   ui.bordDebut = null;
   ui.bord = null;
+  ui.modele = null;
   ui.sensLimite = null;
   ui.selLimite = null;
   ui.selSommet = null;

@@ -1,5 +1,6 @@
-// Onglet Modifier : limite, point, simplification, Appliquer.
+// Onglet Modifier : limite, point, simplification, collage, Appliquer.
 
+import { type BilanCollage, collerBord } from '../edition/collage';
 import { type Etat, latLon, limitesJumelles, sommetsEn } from '../edition/etat';
 import { nouvelleSurface } from '../edition/export';
 import { ajouterGuidages } from '../edition/guidages';
@@ -112,7 +113,24 @@ export function apercuSimplification(s: Session) {
   return simplifierParcelle(s.etat, ui.parcelleCourante, ui.tolerance);
 }
 
+/**
+ * Aperçu du collage du bord choisi sur la parcelle modèle (rien n'est encore modifié), ou le
+ * message qui explique pourquoi c'est impossible.
+ */
+export function apercuCollage(
+  s: Session,
+): { etat: Etat; bilan: BilanCollage } | { erreur: string } | null {
+  if (ui.mode !== 'coller' || !ui.bord || ui.modele === null) return null;
+  try {
+    return collerBord(s.etat, ui.bord, ui.modele);
+  } catch (e) {
+    return { erreur: (e as Error).message };
+  }
+}
+
 export const enCm = (m: number) => `${Math.round(m * 100)} cm`;
+/** Écart lisible : en centimètres sous 1 m, en mètres au-delà. */
+const ecartLisible = (m: number) => (m < 1 ? enCm(m) : `${enMetres(m)} m`);
 
 export function appliquer(): void {
   if (!ui.session) return;
@@ -148,6 +166,11 @@ export function appliquer(): void {
       const avant = r.bilan.reduce((n, b) => n + b.avant, 0);
       const apres = r.bilan.reduce((n, b) => n + b.apres, 0);
       quoi = `${s.td.parcelles[ui.parcelleCourante]!.nom}${ui.porteeSimplif === 'bord' ? ' (un bord)' : ''} simplifiée (tolérance ${enCm(ui.tolerance)}) : ${avant} → ${apres} points`;
+      nouveau = r.etat;
+    } else if (ui.mode === 'coller' && ui.bord && ui.modele !== null) {
+      const r = apercuCollage(s);
+      if (!r || 'erreur' in r) throw new ErreurEdition(r?.erreur ?? 'Rien à coller.');
+      quoi = `Bord de ${nomParcelle(s, ui.bord.anneau)} collé sur ${nomParcelle(s, ui.modele)} (écart max ${ecartLisible(r.bilan.ecartMax)}, ${r.bilan.avant} → ${r.bilan.apres} points)`;
       nouveau = r.etat;
     } else if (ui.mode === 'guidage' && apercuGuidages(s).length > 0) {
       const gs = apercuGuidages(s);
@@ -311,6 +334,73 @@ export function panneauSimplification(s: Session): HTMLElement {
           (ecartOrigine > ui.tolerance ? ' (déjà simplifiée ?)' : ''),
       ),
   );
+}
+
+export function panneauCollage(s: Session): HTMLElement {
+  if (!ui.bord) {
+    return el(
+      'div',
+      { class: 'info' },
+      el('strong', {}, 'Coller un bord sur la parcelle voisine'),
+      el(
+        'div',
+        { class: 'sens' },
+        ui.bordDebut
+          ? 'Touche le dernier sommet du bord.'
+          : 'Touche le premier sommet du bord qui doit bouger.',
+      ),
+    );
+  }
+  const bord = ui.bord;
+  const x = nomParcelle(s, bord.anneau);
+  const lignes: (HTMLElement | false)[] = [
+    el('strong', {}, `Coller un bord de ${x}`),
+    el(
+      'div',
+      { class: 'rangee' },
+      el('span', { class: 'doux' }, `Bord : ${sommetsDuBord(s.etat, bord).length} points`),
+      el(
+        'button',
+        {
+          onclick: () => {
+            if (ui.bord) ui.bord = { ...ui.bord, aRebours: !ui.bord.aRebours };
+            afficher();
+          },
+        },
+        'Autre côté',
+      ),
+    ),
+  ];
+  if (ui.modele === null) {
+    lignes.push(el('div', { class: 'sens' }, 'Touche la parcelle voisine qui sert de modèle.'));
+    return el('div', { class: 'info' }, ...lignes);
+  }
+  const y = nomParcelle(s, ui.modele);
+  lignes.push(el('div', {}, `Modèle : ${y} (ne bouge pas)`));
+  const r = apercuCollage(s);
+  if (r && 'erreur' in r) {
+    lignes.push(el('div', { class: 'erreur' }, r.erreur));
+  } else if (r) {
+    const p = s.etat.anneaux[bord.anneau]!.parcelle;
+    const surface = Math.round(
+      (nouvelleSurface(s.td, r.etat, p) ?? 0) - (nouvelleSurface(s.td, s.etat, p) ?? 0),
+    );
+    lignes.push(
+      el(
+        'div',
+        { class: 'sens' },
+        `${r.bilan.avant} → ${r.bilan.apres} points · écart max ${ecartLisible(r.bilan.ecartMax)} · surface ${surface >= 0 ? '+' : ''}${surface} m²`,
+      ),
+      r.bilan.ajoutsModele > 0 &&
+        el(
+          'div',
+          { class: 'doux' },
+          `${r.bilan.ajoutsModele === 1 ? '1 point ajouté' : `${r.bilan.ajoutsModele} points ajoutés`} sur la limite de ${y}, sans changer sa surface.`,
+        ),
+    );
+  }
+  lignes.push(el('div', { class: 'doux' }, 'Touche une autre parcelle pour changer de modèle.'));
+  return el('div', { class: 'info' }, ...lignes);
 }
 
 export function panneauSelection(s: Session): HTMLElement {

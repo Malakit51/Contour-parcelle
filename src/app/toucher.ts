@@ -1,5 +1,6 @@
 // Toucher sur la carte : sélection de limite, de sommet, de bord ; placement au doigt.
 
+import { modeleLePlusProche } from '../edition/collage';
 import { precedent } from '../edition/etat';
 import { ajouterPoint, bordLePlusCourt, placerSommet } from '../edition/operations';
 import { type LatLon, pointDansPolygone, positionSurSegment, type XY } from '../geometrie/plan';
@@ -134,6 +135,41 @@ export function toucher(
       }
     }
   }
+  // Mode Coller, bord choisi : toucher une autre parcelle (sa limite ou son intérieur) en fait le
+  // modèle. Toucher la parcelle du bord recommence le choix du bord.
+  if (ui.mode === 'coller' && ui.bord) {
+    const parcelleBord = s.etat.anneaux[ui.bord.anneau]!.parcelle;
+    let modele: { anneau: number; d: number } | null = null;
+    anneaux.forEach((pts, i) => {
+      if (s.etat.anneaux[i]!.parcelle === parcelleBord) return;
+      pts.forEach((q, k) => {
+        const r = pts[(k + 1) % pts.length]!;
+        const pos = positionSurSegment(p, q, r);
+        const d =
+          pos.t < 0
+            ? Math.hypot(p[0] - q[0], p[1] - q[1])
+            : pos.t > 1
+              ? Math.hypot(p[0] - r[0], p[1] - r[1])
+              : pos.ecart;
+        if (d <= rayon && (!modele || d < modele.d)) modele = { anneau: i, d };
+      });
+    });
+    const touche =
+      (modele as { anneau: number } | null)?.anneau ??
+      anneaux.findIndex(
+        (pts, i) =>
+          s.etat.anneaux[i]!.type === 1 &&
+          s.etat.anneaux[i]!.parcelle !== parcelleBord &&
+          pointDansPolygone(p, pts),
+      );
+    if (touche >= 0) {
+      ui.modele = touche;
+      ui.message = null;
+      ui.onglet = 'modifier';
+      afficher();
+      return;
+    }
+  }
   let meilleur: { anneau: number; indice: number; d: number } | null = null;
   for (const i of ordre) {
     const pts = anneaux[i]!;
@@ -165,6 +201,8 @@ export function toucher(
       if (ancienDebut.sommet !== choix.indice) {
         ui.bordDebut = ancienDebut;
         ui.bord = bordLePlusCourt(s.etat, choix.anneau, ancienDebut.sommet, choix.indice);
+        // Collage : la parcelle voisine la plus proche du bord est proposée comme modèle.
+        if (ui.mode === 'coller') ui.modele = modeleLePlusProche(s.etat, ui.bord);
       } else ui.bordDebut = ancienDebut;
     } else {
       ui.bordDebut = { anneau: choix.anneau, sommet: choix.indice };

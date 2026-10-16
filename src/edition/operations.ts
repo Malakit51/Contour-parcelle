@@ -36,21 +36,21 @@ const ANGLE_MIN_DEG = 10;
 /** Écart (m) en dessous duquel un point est considéré comme sur une droite. */
 const ALIGNEMENT_M = 0.001;
 
-interface Deplacement {
+export interface Deplacement {
   anneau: number;
   sommet: number;
   ll: LatLon;
 }
 
 /** Point ajouté entre le sommet `v` et son voisin `w` de l'anneau, juste à côté de `v`. */
-interface Ajout {
+export interface Ajout {
   anneau: number;
   v: number;
   w: number;
   ll: LatLon;
 }
 
-function appliquer(etat: Etat, deplacements: Deplacement[], ajouts: Ajout[]): Etat {
+export function appliquer(etat: Etat, deplacements: Deplacement[], ajouts: Ajout[]): Etat {
   const anneaux = etat.anneaux.map((a) => ({ ...a, sommets: [...a.sommets] }));
   for (const d of deplacements) {
     const a = anneaux[d.anneau]!;

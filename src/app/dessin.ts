@@ -8,13 +8,15 @@ import { type Dessin } from '../ui/carte';
 import { choixDeBord, COULEURS, COULEURS_ETAT, SEL, type Session, ui } from './etat';
 import { apercuGuidages, coinsGuidage } from './guidage';
 import { afficher } from './mise-en-page';
-import { apercuSimplification } from './modifier';
+import { apercuCollage, apercuSimplification } from './modifier';
 import { anneauxLL } from './vue';
 
 export function dessin(s: Session): Dessin {
   const anneaux = anneauxLL(s);
-  // Simplification : la parcelle courante est dessinée telle qu'elle serait, l'actuelle en pointillés.
-  const apercu = apercuSimplification(s);
+  // Simplification ou collage : la parcelle courante est dessinée telle qu'elle serait, l'actuelle
+  // en pointillés.
+  const collage = apercuCollage(s);
+  const apercu = apercuSimplification(s) ?? (collage && 'etat' in collage ? collage : null);
   const affiches = apercu ? apercu.etat.anneaux.map((a) => a.sommets.map(latLon)) : anneaux;
   const d: Dessin = {
     reference: ui.reference?.anneaux ?? [],
@@ -35,6 +37,13 @@ export function dessin(s: Session): Dessin {
     traits: [],
     points: [],
   };
+  // Parcelle modèle du collage : son contour en violet fin.
+  if (ui.mode === 'coller' && ui.modele !== null) {
+    const pts = anneaux[ui.modele]!;
+    pts.forEach((a, k) =>
+      d.traits.push({ a, b: pts[(k + 1) % pts.length]!, couleur: SEL, epaisseur: 2 }),
+    );
+  }
   const trait = (ref: RefLimite, epaisseur: number) => {
     const pts = anneaux[ref.anneau]!;
     d.traits.push({

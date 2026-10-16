@@ -55,7 +55,9 @@ export interface EtatInterface {
   suiviNonEnregistre: boolean;
   /** Couleur des parcelles sur la carte : selon l'état du contour, ou pour distinguer les voisines. */
   couleursParEtat: boolean;
-  mode: 'limite' | 'sommet' | 'simplifier' | 'guidage';
+  mode: 'limite' | 'sommet' | 'simplifier' | 'guidage' | 'coller';
+  /** Mode Coller : anneau de la parcelle voisine qui sert de modèle. */
+  modele: number | null;
   /** Ligne de guidage en préparation : droite AB ou courbe, vers l'intérieur ou l'extérieur. */
   typeGuidage: 'ab' | 'courbe';
   guidageInterieur: boolean;
@@ -131,6 +133,7 @@ export const ui: EtatInterface = {
   suiviNonEnregistre: false,
   couleursParEtat: true,
   mode: 'limite',
+  modele: null,
   typeGuidage: 'ab',
   guidageInterieur: true,
   porteeGuidage: 'bord',
@@ -184,7 +187,8 @@ export const RAYON_TOUCHER_PX = 26;
 export const SEUILS_COINS = [20, 30, 45, 60];
 export const TOLERANCES = [0.1, 0.25, 0.5, 1];
 
-/** Choix d'un bord, du premier au dernier sommet (simplification d'un bord, ligne de guidage). */
+/** Choix d'un bord, du premier au dernier sommet (simplification d'un bord, ligne de guidage, collage). */
 export const choixDeBord = () =>
+  ui.mode === 'coller' ||
   (ui.mode === 'simplifier' && ui.porteeSimplif === 'bord') ||
   (ui.mode === 'guidage' && ui.porteeGuidage === 'bord');
