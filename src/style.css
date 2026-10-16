@@ -1008,3 +1008,72 @@ body {
 .controle-export details {
   margin-top: 6px;
 }
+
+/* ---------- Notes sur la carte ---------- */
+.epingle {
+  position: absolute;
+  /* La pointe (en bas) sur l'endroit noté. */
+  transform: translate(-50%, -125%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50% 50% 50% 0;
+  rotate: -45deg;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 45%);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.epingle > * {
+  rotate: 45deg;
+}
+.epingle.choisie {
+  width: 34px;
+  height: 34px;
+  border-color: var(--choix);
+  border-width: 3px;
+}
+.epingle-titre {
+  position: absolute;
+  transform: translate(-50%, 18px);
+  white-space: nowrap;
+  background: var(--surface);
+  color: var(--fg);
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 0.85rem;
+  box-shadow: var(--ombre);
+}
+.notes-parcelle .note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px solid var(--ligne-douce);
+}
+.notes-parcelle .note > .rangee {
+  grid-column: 2;
+  justify-content: flex-start;
+}
+.pastille-note {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+.formulaire-note {
+  display: grid;
+  gap: 8px;
+}
+.formulaire-note textarea {
+  font: inherit;
+  min-height: 64px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid var(--ligne-douce);
+  background: var(--surface);
+  color: var(--fg);
+}

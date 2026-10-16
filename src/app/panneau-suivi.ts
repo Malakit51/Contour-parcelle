@@ -8,16 +8,22 @@ import {
   csvSuivi,
   aujourdhui,
   type EtatContour,
+  csvNotes,
+  enregistrerNote,
   fiche,
   importerCsv,
+  notesDe,
+  nouvelIdNote,
+  supprimerNote,
+  typesDeNotes,
   LIBELLES,
 } from '../suivi/suivi';
 import { el } from '../ui/dom';
-import { type Session, ui } from './etat';
+import { couleurNote, type Session, ui } from './etat';
 import { enregistrerSauvegarde } from './exporter';
 import { afficher } from './mise-en-page';
 import { dateFr, effacerSelection, majSuivi, quandFr } from './travail';
-import { cadrerParcelle } from './vue';
+import { cadrerParcelle, carte } from './vue';
 
 /** État du contour de la parcelle courante : trois boutons et la remarque. */
 export function panneauSuiviParcelle(s: Session): HTMLElement | null {
@@ -70,6 +76,236 @@ export function panneauSuiviParcelle(s: Session): HTMLElement | null {
   );
 }
 
+// ---------- Notes sur la parcelle ----------
+
+// Champs créés une seule fois : les recréer pendant la saisie fermerait le clavier.
+const listeTypes = el('datalist', { id: 'types-notes' });
+const champTypeNote = el('input', {
+  type: 'text',
+  list: 'types-notes',
+  placeholder: 'Type (vulpin, chardons…)',
+  autocomplete: 'off',
+  enterkeyhint: 'next',
+  'aria-label': 'Type de note',
+});
+const champTexteNote = el('textarea', { placeholder: 'Note', 'aria-label': 'Note' });
+
+function ouvrirNote(
+  parcelle: number,
+  id: string | null,
+  type: string,
+  texte: string,
+  position: [number, number] | null,
+): void {
+  ui.noteEnCours = { id, parcelle, position };
+  ui.placementNote = false;
+  champTypeNote.value = type;
+  champTexteNote.value = texte;
+  afficher();
+}
+
+function enregistrerNoteEnCours(s: Session): void {
+  const enCours = ui.noteEnCours;
+  if (!enCours) return;
+  const p = s.td.parcelles[enCours.parcelle]!;
+  const type = champTypeNote.value.trim();
+  const texte = champTexteNote.value.trim();
+  if (!type && !texte) {
+    ui.message = { texte: 'Tape au moins un type ou un texte.', erreur: true };
+    afficher();
+    return;
+  }
+  const maintenant = new Date().toISOString();
+  const ancienne = (ui.suivi.notes ?? []).find((n) => n.id === enCours.id);
+  const id = enCours.id ?? nouvelIdNote();
+  majSuivi(
+    enregistrerNote(ui.suivi, {
+      id,
+      cle: ancienne?.cle ?? cleParcelle(p),
+      parcelle: ancienne?.parcelle ?? p.nom,
+      type,
+      texte,
+      creee: ancienne?.creee ?? maintenant,
+      modifiee: maintenant,
+      position: enCours.position,
+    }),
+  );
+  ui.noteEnCours = null;
+  ui.placementNote = false;
+  ui.noteVue = id;
+  ui.message = { texte: `Note enregistrée sur ${p.nom}.`, erreur: false };
+  afficher();
+}
+
+function formulaireNote(s: Session, nom: string): HTMLElement {
+  const enCours = ui.noteEnCours!;
+  listeTypes.replaceChildren(...typesDeNotes(ui.suivi).map((t) => el('option', { value: t })));
+  return el(
+    'div',
+    { class: 'info formulaire-note' },
+    el('strong', {}, `${enCours.id ? 'Modifier la note' : 'Nouvelle note'} · ${nom}`),
+    listeTypes,
+    champTypeNote,
+    champTexteNote,
+    el(
+      'div',
+      { class: ui.placementNote ? 'sens' : 'doux' },
+      ui.placementNote
+        ? 'Touche la carte à l’endroit voulu.'
+        : enCours.position
+          ? `Endroit : ${enCours.position[0].toFixed(6)}, ${enCours.position[1].toFixed(6)}`
+          : 'Endroit : toute la parcelle',
+    ),
+    el(
+      'div',
+      { class: 'rangee' },
+      el(
+        'button',
+        {
+          class: ui.placementNote ? 'actif' : '',
+          onclick: () => {
+            ui.placementNote = !ui.placementNote;
+            afficher();
+          },
+        },
+        'Toucher la carte',
+      ),
+      el(
+        'button',
+        {
+          onclick: async () => {
+            ui.message = { texte: 'Recherche de la position…', erreur: false };
+            afficher();
+            try {
+              const { p: ici, precision } = await carte.positionTelephone();
+              if (ui.noteEnCours) ui.noteEnCours.position = [ici[0], ici[1]];
+              ui.placementNote = false;
+              ui.message = {
+                texte: `Endroit noté ici (± ${Math.round(precision)} m).`,
+                erreur: false,
+              };
+            } catch (e) {
+              ui.message = { texte: `Pas de position : ${(e as Error).message}.`, erreur: true };
+            }
+            afficher();
+          },
+        },
+        'Ici (GPS)',
+      ),
+      enCours.position &&
+        el(
+          'button',
+          {
+            onclick: () => {
+              if (ui.noteEnCours) ui.noteEnCours.position = null;
+              ui.placementNote = false;
+              afficher();
+            },
+          },
+          'Sans endroit',
+        ),
+    ),
+    el(
+      'div',
+      { class: 'rangee' },
+      el(
+        'button',
+        { class: 'principal', onclick: () => enregistrerNoteEnCours(s) },
+        'Enregistrer la note',
+      ),
+      el(
+        'button',
+        {
+          onclick: () => {
+            ui.noteEnCours = null;
+            ui.placementNote = false;
+            afficher();
+          },
+        },
+        'Annuler',
+      ),
+    ),
+  );
+}
+
+/** Notes de la parcelle courante : liste, ou formulaire d'ajout ou de modification. */
+export function panneauNotes(s: Session): HTMLElement | null {
+  // Le formulaire reste ouvert même si on touche une autre parcelle : la note garde la sienne.
+  if (ui.noteEnCours) return formulaireNote(s, s.td.parcelles[ui.noteEnCours.parcelle]!.nom);
+  if (ui.parcelleCourante === null) return null;
+  const i = ui.parcelleCourante;
+  const p = s.td.parcelles[i]!;
+  const notes = notesDe(ui.suivi, p);
+  return el(
+    'div',
+    { class: 'info notes-parcelle' },
+    el(
+      'div',
+      { class: 'entete-selection' },
+      el('strong', {}, notes.length > 0 ? `Notes (${notes.length})` : 'Notes'),
+      el(
+        'button',
+        { class: 'petit', onclick: () => ouvrirNote(i, null, '', '', null) },
+        'Ajouter une note',
+      ),
+    ),
+    ...notes.map((n) =>
+      el(
+        'div',
+        { class: 'note' },
+        el('span', { class: 'pastille-note', style: `background:${couleurNote(n.type)}` }),
+        el(
+          'span',
+          {},
+          el('strong', {}, n.type || 'Note'),
+          n.texte ? ` — ${n.texte}` : '',
+          el(
+            'span',
+            { class: 'doux' },
+            ` · ${dateFr(aujourdhui(new Date(n.creee)))}${n.position ? '' : ' · toute la parcelle'}`,
+          ),
+        ),
+        el(
+          'span',
+          { class: 'rangee', style: 'margin:0;flex-wrap:nowrap' },
+          n.position &&
+            el(
+              'button',
+              {
+                class: 'petit',
+                onclick: () => {
+                  ui.noteVue = n.id;
+                  afficher();
+                  carte.centrerSur(n.position!);
+                },
+              },
+              'Voir',
+            ),
+          el(
+            'button',
+            { class: 'petit', onclick: () => ouvrirNote(i, n.id, n.type, n.texte, n.position) },
+            'Modifier',
+          ),
+          el(
+            'button',
+            {
+              class: 'petit',
+              onclick: () => {
+                // « Annuler » ne vaut que pour les contours : on demande confirmation.
+                if (!confirm(`Supprimer la note « ${n.type || n.texte} » ?`)) return;
+                majSuivi(supprimerNote(ui.suivi, n.id));
+                ui.message = { texte: 'Note supprimée.', erreur: false };
+                afficher();
+              },
+            },
+            'Supprimer',
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 /** Liste de toutes les parcelles avec leur état, journal et exports CSV. */
 export function panneauSuiviGeneral(s: Session): HTMLElement {
   const parcelles = s.td.parcelles
@@ -90,6 +326,15 @@ export function panneauSuiviGeneral(s: Session): HTMLElement {
         `journal-contours-${aujourdhui()}.csv`,
         'text/csv',
       ),
+      ...((ui.suivi.notes ?? []).some((n) => !n.supprimee)
+        ? [
+            await enregistrerSauvegarde(
+              encoder(csvNotes(ui.suivi)),
+              `notes-parcelles-${aujourdhui()}.csv`,
+              'text/csv',
+            ),
+          ]
+        : []),
     ];
     ui.message = { texte: `${ou.join('. ')}.`, erreur: ou.some((t) => t.startsWith('Dossier')) };
     afficher();
@@ -194,7 +439,9 @@ async function reprendreCsv(s: Session, f: File): Promise<{ texte: string; erreu
     const quoi =
       b.type === 'suivi'
         ? `Suivi repris : ${b.ajouts} parcelle(s) mise(s) à jour`
-        : `Journal repris : ${b.ajouts} ligne(s) ajoutée(s)`;
+        : b.type === 'notes'
+          ? `Notes reprises : ${b.ajouts} ajoutée(s)`
+          : `Journal repris : ${b.ajouts} ligne(s) ajoutée(s)`;
     const deja =
       b.dejaLa > 0
         ? b.type === 'suivi'
@@ -203,7 +450,7 @@ async function reprendreCsv(s: Session, f: File): Promise<{ texte: string; erreu
         : '';
     const inconnues =
       b.inconnues.length > 0
-        ? b.type === 'suivi'
+        ? b.type !== 'journal'
           ? `. Absentes du fichier ouvert : ${b.inconnues.join(', ')}`
           : `. Illisibles : ${b.inconnues.join(', ')}`
         : '';

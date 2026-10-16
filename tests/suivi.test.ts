@@ -10,6 +10,12 @@ import {
   fiche,
   fusionner,
   importerCsv,
+  csvNotes,
+  enregistrerNote,
+  notesDe,
+  supprimerNote,
+  typesDeNotes,
+  type Note,
   suiviVide,
   versionSuivante,
 } from '../src/suivi/suivi';
@@ -218,5 +224,68 @@ describe('restaurer le suivi depuis un CSV', () => {
 
   it('refuse un autre fichier', () => {
     expect(() => importerCsv(suiviVide(), 'a;b\r\n1;2\r\n', td.parcelles)).toThrow(/ni un CSV/);
+  });
+});
+
+describe('notes sur les parcelles', () => {
+  const note = (
+    id: string,
+    type: string,
+    texte: string,
+    quand: string,
+    position: [number, number] | null = null,
+  ): Note => ({
+    id,
+    cle: cleParcelle(bois!),
+    parcelle: 'Le Bois',
+    type,
+    texte,
+    creee: quand,
+    modifiee: quand,
+    position,
+  });
+  const n1 = note(
+    'a',
+    'Vulpin',
+    'foyer ; près du bois',
+    '2026-10-15T08:00:00.000Z',
+    [45.0001234, 2.0005678],
+  );
+  const n2 = note('b', 'Chardons', '', '2026-10-16T08:00:00.000Z');
+
+  it('ajout, modification, suppression ; types proposés par fréquence', () => {
+    let s = enregistrerNote(enregistrerNote(suiviVide(), n1), n2);
+    s = enregistrerNote(s, note('c', 'Vulpin', 'autre foyer', '2026-10-16T09:00:00.000Z'));
+    expect(notesDe(s, bois!).map((n) => n.id)).toEqual(['c', 'b', 'a']);
+    expect(notesDe(s, jard!)).toEqual([]);
+    expect(typesDeNotes(s)).toEqual(['Vulpin', 'Chardons']);
+    s = enregistrerNote(s, { ...n2, texte: 'en bordure', modifiee: '2026-10-16T10:00:00.000Z' });
+    expect(notesDe(s, bois!).find((n) => n.id === 'b')!.texte).toBe('en bordure');
+    s = supprimerNote(s, 'c', new Date('2026-10-16T11:00:00.000Z'));
+    expect(notesDe(s, bois!).map((n) => n.id)).toEqual(['b', 'a']);
+  });
+
+  it('fusion entre appareils : la dernière modification l’emporte, une suppression ne revient pas', () => {
+    const a = enregistrerNote(enregistrerNote(suiviVide(), n1), n2);
+    const b = supprimerNote(a, 'a', new Date('2026-10-16T12:00:00.000Z'));
+    expect(notesDe(fusionner(a, b), bois!).map((n) => n.id)).toEqual(['b']);
+    expect(notesDe(fusionner(b, a), bois!).map((n) => n.id)).toEqual(['b']);
+  });
+
+  it('CSV des notes : export puis reprise sans doublon', () => {
+    const s = enregistrerNote(enregistrerNote(suiviVide(), n1), n2);
+    const csv = csvNotes(s);
+    expect(csv).toContain('Parcelle;Type;Note;Date;Latitude;Longitude\r\n');
+    expect(csv).toContain(
+      'Le Bois;Vulpin;"foyer ; près du bois";2026-10-15;45.0001234;2.0005678\r\n',
+    );
+    const r = importerCsv(suiviVide(), csv, td.parcelles);
+    expect(r.bilan).toEqual({ type: 'notes', ajouts: 2, dejaLa: 0, inconnues: [] });
+    const reprises = notesDe(r.suivi, bois!);
+    expect(reprises.map((n) => [n.type, n.texte, n.position])).toEqual([
+      ['Chardons', '', null],
+      ['Vulpin', 'foyer ; près du bois', [45.0001234, 2.0005678]],
+    ]);
+    expect(importerCsv(s, csv, td.parcelles).bilan).toMatchObject({ ajouts: 0, dejaLa: 2 });
   });
 });

@@ -22,7 +22,7 @@ import {
   panneauSimplification,
   raccourcis,
 } from './modifier';
-import { panneauSuiviGeneral, panneauSuiviParcelle } from './panneau-suivi';
+import { panneauNotes, panneauSuiviGeneral, panneauSuiviParcelle } from './panneau-suivi';
 import { panneauRemplacement } from './reference';
 import { ecrireStockage } from './stockage';
 import { annuler, effacerSelection, enMetres, metres } from './travail';
@@ -462,6 +462,7 @@ export function afficher(): void {
     case 'suivi':
       contenu = [
         panneauSuiviParcelle(s) ?? el('div', { class: 'info doux' }, 'Touche une parcelle.'),
+        panneauNotes(s),
         el(
           'div',
           { class: 'rangee' },

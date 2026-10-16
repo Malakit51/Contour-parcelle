@@ -119,6 +119,12 @@ export interface EtatInterface {
   sessionIllisible: string | null;
   /** Points de la mesure en cours (null : outil de mesure fermé). */
   mesure: LatLon[] | null;
+  /** Note en cours de saisie (onglet Suivi) : null si aucune. `id` null pour une nouvelle note. */
+  noteEnCours: { id: string | null; parcelle: number; position: [number, number] | null } | null;
+  /** Le prochain toucher sur la carte donne l'endroit de la note en cours. */
+  placementNote: boolean;
+  /** Note montrée sur la carte (nom affiché sous l'épingle). */
+  noteVue: string | null;
   /** Jeux de lignes de guidage masqués à l'écran. */
   jeuxMasques: Set<string>;
   menuLignesOuvert: boolean;
@@ -182,6 +188,9 @@ export const ui: EtatInterface = {
   mesure: null,
   jeuxMasques: jeuxMasquesGardes(),
   menuLignesOuvert: false,
+  noteEnCours: null,
+  placementNote: false,
+  noteVue: null,
   emplacementConnu: null,
   dossierSauvegardes: lireStockage(CLE_DOSSIER_SAUVEGARDES),
   suiviOuvert: true,
@@ -204,6 +213,23 @@ export const COULEURS_ETAT: Record<EtatContour, string> = {
 };
 /** Rayon de toucher, en pixels à l'écran. */
 export const RAYON_TOUCHER_PX = 26;
+
+/** Couleur d'une note selon son type (toujours la même pour un même type). */
+const COULEURS_NOTES = [
+  '#2962ff',
+  '#ff6e40',
+  '#00897b',
+  '#8d6e63',
+  '#ec407a',
+  '#7cb342',
+  '#ffa000',
+  '#546e7a',
+];
+export function couleurNote(type: string): string {
+  let h = 0;
+  for (const c of type.trim().toLowerCase()) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return COULEURS_NOTES[h % COULEURS_NOTES.length]!;
+}
 
 export const SEUILS_COINS = [20, 30, 45, 60];
 export const TOLERANCES = [0.1, 0.25, 0.5, 1];

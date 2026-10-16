@@ -29,6 +29,15 @@ export interface Dessin {
   guidages?: { pts: LatLon[]; apercu: boolean }[];
   /** Flèches à toucher, posées en `depuis` et pointant vers `vers` (choix du sens d'un décalage). */
   fleches?: { depuis: LatLon; vers: LatLon; choisie: boolean; action: () => void }[];
+  /** Notes posées sur la carte : épingle de la couleur du type, nom affiché si `choisie`. */
+  notes?: {
+    p: LatLon;
+    couleur: string;
+    lettre: string;
+    titre: string;
+    choisie: boolean;
+    action: () => void;
+  }[];
 }
 
 export type VersEcran = (p: LatLon) => { x: number; y: number };
@@ -237,7 +246,53 @@ export class Carte {
         .on('click', f.action)
         .addTo(this.calque);
     }
+    for (const n of dessin.notes ?? []) {
+      L.marker(ll(n.p), {
+        bubblingMouseEvents: false,
+        icon: L.divIcon({
+          className: '',
+          iconSize: [0, 0],
+          html:
+            `<div class="epingle${n.choisie ? ' choisie' : ''}" style="background:${n.couleur}"><span>${echapper(n.lettre)}</span></div>` +
+            (n.choisie ? `<div class="epingle-titre">${echapper(n.titre)}</div>` : ''),
+        }),
+      })
+        .on('click', n.action)
+        .addTo(this.calque);
+    }
     this.majNoms();
+  }
+
+  /** Recentre la carte sur un point, en zoomant au moins à `zoom`. */
+  centrerSur(p: LatLon, zoom = 18): void {
+    this.carte.setView(ll(p), Math.max(this.carte.getZoom(), zoom));
+  }
+
+  /**
+   * Position du téléphone : la dernière reçue si le GPS est allumé et récente, sinon une mesure
+   * demandée exprès (jusqu'à 20 s).
+   */
+  async positionTelephone(): Promise<{ p: LatLon; precision: number }> {
+    const d = this.dernierePosition;
+    if (d && Date.now() - d.timestamp < 10_000) {
+      return { p: [d.coords.latitude, d.coords.longitude], precision: d.coords.accuracy };
+    }
+    if (!('geolocation' in navigator))
+      throw new Error('position GPS indisponible sur cet appareil');
+    const pos = await new Promise<GeolocationPosition>((ok, ko) =>
+      navigator.geolocation.getCurrentPosition(ok, ko, {
+        enableHighAccuracy: true,
+        maximumAge: 5000,
+        timeout: 20000,
+      }),
+    ).catch((err: GeolocationPositionError) => {
+      throw new Error(
+        err.code === err.PERMISSION_DENIED
+          ? 'position refusée : autorise la localisation pour ce site dans Chrome'
+          : `position indisponible (${err.message})`,
+      );
+    });
+    return { p: [pos.coords.latitude, pos.coords.longitude], precision: pos.coords.accuracy };
   }
 
   /** Remplace les boutons posés sur la carte (rien : on les retire). */

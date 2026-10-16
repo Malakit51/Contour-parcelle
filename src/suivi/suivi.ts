@@ -40,6 +40,28 @@ export interface Suivi {
   journal: EntreeJournal[];
   /** Dernière version de TASKDATA exportée (« 0.12 »…), partagée entre appareils. */
   derniereVersion?: string;
+  /** Notes sur les parcelles (adventices, particularités…), avec un endroit facultatif. */
+  notes?: Note[];
+}
+
+/**
+ * Note sur une parcelle. Une note supprimée est gardée (`supprimee`) pour que la fusion entre
+ * deux appareils ne la fasse pas revenir.
+ */
+export interface Note {
+  id: string;
+  /** Repère de la parcelle (GUID, à défaut « nom:… »), comme pour les fiches. */
+  cle: string;
+  parcelle: string;
+  /** Type saisi librement (« Vulpin », « Chardons »…). */
+  type: string;
+  texte: string;
+  /** Création et dernière modification (ISO). */
+  creee: string;
+  modifiee: string;
+  /** Endroit dans la parcelle [latitude, longitude], ou null pour toute la parcelle. */
+  position: [number, number] | null;
+  supprimee?: boolean;
 }
 
 /** Version utilisée avant l'éditeur (notation « task data 0.11 ») : le premier export sera 0.12. */
@@ -167,6 +189,70 @@ export function csvJournal(suivi: Suivi): string {
  * Fusionne deux suivis (deux appareils) : pour chaque parcelle, la fiche la plus récente l'emporte
  * (à date égale, celle de `b`) ; les journaux s'additionnent sans doublons, dans l'ordre du temps.
  */
+// ---------- Notes ----------
+
+/** Notes (non supprimées) d'une parcelle, les plus récentes d'abord. */
+export function notesDe(suivi: Suivi, p: Parcelle): Note[] {
+  const cle = cleParcelle(p);
+  return (suivi.notes ?? [])
+    .filter((n) => n.cle === cle && !n.supprimee)
+    .sort((x, y) => y.creee.localeCompare(x.creee));
+}
+
+/** Types déjà utilisés (pour les proposer à la saisie), du plus fréquent au moins fréquent. */
+export function typesDeNotes(suivi: Suivi): string[] {
+  const compte = new Map<string, number>();
+  for (const n of suivi.notes ?? []) {
+    if (!n.supprimee && n.type) compte.set(n.type, (compte.get(n.type) ?? 0) + 1);
+  }
+  return [...compte.entries()]
+    .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0], 'fr'))
+    .map(([t]) => t);
+}
+
+/** Ajoute la note, ou remplace celle de même identifiant. */
+export function enregistrerNote(suivi: Suivi, note: Note): Suivi {
+  const notes = (suivi.notes ?? []).filter((n) => n.id !== note.id);
+  return { ...suivi, notes: [...notes, note] };
+}
+
+export function supprimerNote(suivi: Suivi, id: string, maintenant = new Date()): Suivi {
+  return {
+    ...suivi,
+    notes: (suivi.notes ?? []).map((n) =>
+      n.id === id ? { ...n, supprimee: true, modifiee: maintenant.toISOString() } : n,
+    ),
+  };
+}
+
+export function nouvelIdNote(): string {
+  return `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function csvNotes(suivi: Suivi): string {
+  const lignes = [ligneCsv(['Parcelle', 'Type', 'Note', 'Date', 'Latitude', 'Longitude'])];
+  const notes = (suivi.notes ?? [])
+    .filter((n) => !n.supprimee)
+    .sort(
+      (a, b) =>
+        a.parcelle.localeCompare(b.parcelle, 'fr', { numeric: true }) ||
+        a.creee.localeCompare(b.creee),
+    );
+  for (const n of notes) {
+    lignes.push(
+      ligneCsv([
+        n.parcelle,
+        n.type,
+        n.texte,
+        aujourdhui(new Date(n.creee)),
+        n.position ? n.position[0].toFixed(7) : '',
+        n.position ? n.position[1].toFixed(7) : '',
+      ]),
+    );
+  }
+  return BOM + lignes.join('\r\n') + '\r\n';
+}
+
 export function fusionner(a: Suivi, b: Suivi): Suivi {
   const fiches: Record<string, Fiche> = { ...a.fiches };
   for (const [cle, f] of Object.entries(b.fiches)) {
@@ -184,7 +270,19 @@ export function fusionner(a: Suivi, b: Suivi): Suivi {
     .sort((x, y) => x.quand.localeCompare(y.quand));
   const versions = [a.derniereVersion, b.derniereVersion].filter((v): v is string => !!v);
   const derniereVersion = versions.sort(comparerVersions).at(-1);
-  return { version: 1, fiches, journal, ...(derniereVersion ? { derniereVersion } : {}) };
+  // Notes : par identifiant, la version modifiée en dernier l'emporte (suppression comprise).
+  const notes = new Map<string, Note>();
+  for (const n of [...(a.notes ?? []), ...(b.notes ?? [])]) {
+    const m = notes.get(n.id);
+    if (!m || n.modifiee >= m.modifiee) notes.set(n.id, n);
+  }
+  return {
+    version: 1,
+    fiches,
+    journal,
+    ...(derniereVersion ? { derniereVersion } : {}),
+    ...(notes.size > 0 ? { notes: [...notes.values()] } : {}),
+  };
 }
 
 // ---------- Import d'un CSV (restauration du suivi ou du journal) ----------
@@ -248,7 +346,7 @@ function nombre(v: string): number | null {
 }
 
 export interface BilanImport {
-  type: 'suivi' | 'journal';
+  type: 'suivi' | 'journal' | 'notes';
   /** Fiches restaurées, ou lignes de journal ajoutées. */
   ajouts: number;
   /** Lignes ignorées : déjà présentes, ou fiche plus récente sur l'appareil. */
@@ -347,7 +445,48 @@ export function importerCsv(
     const journal = [...suivi.journal, ...nouvelles].sort((x, y) => x.quand.localeCompare(y.quand));
     return { suivi: { ...suivi, journal }, bilan };
   }
+  if (titres[0] === 'parcelle' && titres[1] === 'type' && titres[2] === 'note') {
+    const bilan: BilanImport = { type: 'notes', ajouts: 0, dejaLa: 0, inconnues: [] };
+    const notes = [...(suivi.notes ?? [])];
+    const cleNote = (cle: string, type: string, texte: string, jour: string) =>
+      `${cle}|${type.trim()}|${texte.trim()}|${jour}`;
+    const presentes = new Set(
+      notes
+        .filter((n) => !n.supprimee)
+        .map((n) => cleNote(n.cle, n.type, n.texte, aujourdhui(new Date(n.creee)))),
+    );
+    for (const [nom = '', type = '', texte = '', date = '', lat = '', lon = ''] of lignes) {
+      const p = parNom.get(nom.trim());
+      const jour = dateIso(date);
+      if (!p || !jour || !(type.trim() || texte.trim())) {
+        bilan.inconnues.push(nom.trim() || '(sans nom)');
+        continue;
+      }
+      const id = cleNote(cleParcelle(p), type, texte, jour);
+      if (presentes.has(id)) {
+        bilan.dejaLa++;
+        continue;
+      }
+      presentes.add(id);
+      const [a, m, j] = jour.split('-').map(Number) as [number, number, number];
+      const quand = new Date(a, m - 1, j, 12).toISOString();
+      const la = nombre(lat);
+      const lo = nombre(lon);
+      notes.push({
+        id: `csv-${id}`,
+        cle: cleParcelle(p),
+        parcelle: p.nom,
+        type: type.trim(),
+        texte: texte.trim(),
+        creee: quand,
+        modifiee: quand,
+        position: la !== null && lo !== null ? [la, lo] : null,
+      });
+      bilan.ajouts++;
+    }
+    return { suivi: { ...suivi, notes }, bilan };
+  }
   throw new Error(
-    'Ce fichier n’est ni un CSV du suivi (Parcelle ; État…) ni un CSV du journal (Date ; Heure ; Parcelle…).',
+    'Ce fichier n’est ni un CSV du suivi (Parcelle ; État…), ni du journal (Date ; Heure ; Parcelle…), ni des notes (Parcelle ; Type ; Note…).',
   );
 }

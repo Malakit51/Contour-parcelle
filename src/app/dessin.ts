@@ -3,9 +3,18 @@
 import { latLon, type RefLimite } from '../edition/etat';
 import { jeuDe } from '../edition/guidages';
 import { cotesLimite, repereLeLong, sommetsDuBord } from '../edition/operations';
-import { fiche } from '../suivi/suivi';
+import { cleParcelle, fiche } from '../suivi/suivi';
 import { type Dessin } from '../ui/carte';
-import { choixDeBord, COULEURS, COULEURS_ETAT, SEL, type Session, ui, ongletDuMode } from './etat';
+import {
+  choixDeBord,
+  COULEURS,
+  COULEURS_ETAT,
+  couleurNote,
+  ongletDuMode,
+  SEL,
+  type Session,
+  ui,
+} from './etat';
 import { apercuGuidages, coinsGuidage } from './guidage';
 import { afficher } from './mise-en-page';
 import { apercuCollage, apercuSimplification } from './modifier';
@@ -111,6 +120,32 @@ export function dessin(s: Session): Dessin {
       couleur: SEL,
       rayon: 9,
     });
+  }
+  // Notes de toutes les parcelles, dans l'onglet Suivi (épingles de la couleur de leur type).
+  if (ui.onglet === 'suivi') {
+    const parCle = new Map(s.td.parcelles.map((p, i) => [cleParcelle(p), i]));
+    d.notes = (ui.suivi.notes ?? [])
+      .filter((n) => !n.supprimee && n.position && parCle.has(n.cle))
+      .map((n) => ({
+        p: n.position!,
+        couleur: couleurNote(n.type),
+        lettre: (n.type || n.texte || '?').trim().charAt(0).toUpperCase(),
+        titre: n.type || n.texte,
+        choisie: ui.noteVue === n.id,
+        action: () => {
+          ui.noteVue = n.id;
+          ui.parcelleCourante = parCle.get(n.cle)!;
+          ui.message = {
+            texte: `${n.parcelle} · ${n.type || 'Note'}${n.texte ? ` : ${n.texte}` : ''}`,
+            erreur: false,
+          };
+          afficher();
+        },
+      }));
+    // Endroit choisi pour la note en cours de saisie.
+    if (ui.noteEnCours?.position) {
+      d.points.push({ p: ui.noteEnCours.position, couleur: SEL, rayon: 9 });
+    }
   }
   // Mesure en cours : trait orange entre les points touchés.
   const MESURE = '#ff6d00';
