@@ -1,6 +1,7 @@
 // Onglet Suivi : état des contours et journal.
 
 import { encoder } from '../isoxml/octets';
+import { type Parcelle } from '../isoxml/lecture';
 import {
   changerFiche,
   cleParcelle,
@@ -76,40 +77,32 @@ export function panneauSuivi(s: Session): (HTMLElement | null | false)[] {
   }
 }
 
-// Remarque tapée dans le panneau : champ créé une seule fois (le recréer fermerait le clavier),
-// enregistré quand on quitte le champ.
-const champRemarque = el('textarea', {
-  class: 'remarque',
-  rows: '2',
-  placeholder: 'Remarque (bord à revoir, haie arrachée…)',
-  'aria-label': 'Remarque',
-});
-let remarquePour: number | null = null;
-function garderRemarque(): void {
-  const s = ui.session;
-  if (!s || remarquePour === null) return;
-  const p = s.td.parcelles[remarquePour]!;
-  const remarque = champRemarque.value.trim();
-  if (remarque !== fiche(ui.suivi, p).remarque) majSuivi(changerFiche(ui.suivi, p, { remarque }));
-}
-// Gardée à chaque lettre (rien de perdu si l'application est fermée pendant la frappe) ; le
-// panneau n'est redessiné qu'en quittant le champ.
-champRemarque.addEventListener('input', garderRemarque);
-champRemarque.addEventListener('change', () => {
-  garderRemarque();
+/** Remarque d'avant les notes : devient une note sans endroit (type « Remarque »). */
+function remarqueEnNote(p: Parcelle): void {
+  const f = fiche(ui.suivi, p);
+  const maintenant = new Date().toISOString();
+  const avecNote = enregistrerNote(ui.suivi, {
+    id: nouvelIdNote(),
+    cle: cleParcelle(p),
+    parcelle: p.nom,
+    type: 'Remarque',
+    texte: f.remarque,
+    creee: maintenant,
+    modifiee: maintenant,
+    position: null,
+  });
+  // La date de la fiche est celle de l'état du contour : on la garde.
+  majSuivi(changerFiche(avecNote, p, { remarque: '' }, f.date ? new Date(f.date) : new Date()));
+  ui.message = { texte: `Remarque de ${p.nom} passée dans les notes.`, erreur: false };
   afficher();
-});
+}
 
-/** État du contour de la parcelle courante : trois états en barre groupée et la remarque. */
+/** État du contour de la parcelle courante : trois états en barre groupée. */
 function panneauSuiviParcelle(s: Session): HTMLElement | null {
   if (ui.parcelleCourante === null) return null;
   const p = s.td.parcelles[ui.parcelleCourante]!;
   const f = fiche(ui.suivi, p);
   const derniere = [...ui.suivi.journal].reverse().find((e) => e.cle === cleParcelle(p));
-  if (remarquePour !== ui.parcelleCourante || document.activeElement !== champRemarque) {
-    remarquePour = ui.parcelleCourante;
-    champRemarque.value = f.remarque;
-  }
   return el(
     'div',
     { class: 'info' },
@@ -136,7 +129,14 @@ function panneauSuiviParcelle(s: Session): HTMLElement | null {
         ),
       ),
     ),
-    champRemarque,
+    // Plus de remarque (doublon avec les notes) : une ancienne remarque peut passer en note.
+    f.remarque &&
+      el(
+        'div',
+        { class: 'rangee' },
+        el('span', { class: 'doux', style: 'flex:1' }, `Ancienne remarque : ${f.remarque}`),
+        el('button', { class: 'petit', onclick: () => remarqueEnNote(p) }, 'En faire une note'),
+      ),
     derniere && el('div', { class: 'doux' }, `${quandFr(derniere.quand)} · ${derniere.action}`),
   );
 }

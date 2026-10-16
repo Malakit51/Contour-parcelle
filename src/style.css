@@ -1128,19 +1128,6 @@ button.nom-ligne {
 }
 
 /* ---------- Onglet Suivi ---------- */
-textarea.remarque {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  font: inherit;
-  margin: 4px 0 6px;
-  padding: 8px;
-  border-radius: 10px;
-  border: 1px solid var(--ligne-douce);
-  background: var(--surface);
-  color: var(--fg);
-  resize: vertical;
-}
 .etats-contour button {
   font-size: 0.95em;
 }
