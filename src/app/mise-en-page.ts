@@ -25,7 +25,7 @@ import {
 import { panneauNotes, panneauSuiviGeneral, panneauSuiviParcelle } from './panneau-suivi';
 import { panneauRemplacement } from './reference';
 import { ecrireStockage } from './stockage';
-import { annuler, effacerSelection, enMetres, metres } from './travail';
+import { annuler, arreterOutilsCarte, effacerSelection, enMetres, metres } from './travail';
 import { cadrerParcelle, cadrerTout, carte, texteGps } from './vue';
 
 export const app = document.getElementById('app')!;
@@ -364,7 +364,9 @@ export function afficher(): void {
       'mesure',
       'Mesurer',
       () => {
-        ui.mesure = ui.mesure === null ? [] : null;
+        const ouvrir = ui.mesure === null;
+        arreterOutilsCarte();
+        ui.mesure = ouvrir ? [] : null;
         afficher();
       },
       ui.mesure !== null ? 'actif' : '',
@@ -390,6 +392,7 @@ export function afficher(): void {
         {
           class: o === ui.onglet ? 'onglet choisi' : 'onglet',
           onclick: () => {
+            if (o !== ui.onglet) arreterOutilsCarte();
             ui.onglet = o;
             // Guidage et Modifier ont chacun leurs modes : on passe de l'un à l'autre.
             if (o === 'guidage' && ui.mode !== 'guidage') {
@@ -422,6 +425,7 @@ export function afficher(): void {
           if (actif) return;
           ui.mode = bord ? ui.actionBord : m;
           effacerSelection();
+          arreterOutilsCarte();
           afficher();
         },
       },
@@ -494,7 +498,12 @@ export function afficher(): void {
   // Onglet Export : le bouton principal écrit l'export (sur la clé, ou en téléchargement).
   const enExport = ui.onglet === 'export';
   // Pas de distance à saisir pour l'optimisation du guidage (la largeur vient de l'outil).
-  const sansDistance = enExport || (ui.onglet === 'guidage' && ui.porteeGuidage === 'optimiser');
+  const sansBouton = ui.onglet === 'suivi' || ui.onglet === 'fichier';
+  const sansDistance =
+    enExport ||
+    sansBouton ||
+    (ui.onglet === 'guidage' && ui.porteeGuidage === 'optimiser') ||
+    (ui.onglet === 'modifier' && (ui.mode === 'simplifier' || ui.mode === 'coller'));
   const peutAppliquer = enExport
     ? exportAJour() !== null
     : (ui.mode === 'limite' && ui.selLimite !== null && ui.sensLimite !== null) ||
@@ -520,22 +529,26 @@ export function afficher(): void {
       },
       icone('annuler', 24),
     ),
-    // Pas de distance à l'export : le bouton prend la place.
+    // Pas de distance là où elle ne sert pas : le bouton prend la place.
     !sansDistance && el('label', { class: 'case-distance' }, champDistance, el('span', {}, 'm')),
-    (boutonAppliquer = el(
-      'button',
-      {
-        class: enExport ? 'principal large' : 'principal',
-        onclick: enExport ? exporterVersCle : appliquer,
-        ...(peutAppliquer ? {} : { disabled: '' }),
-      },
-      texteAppliquer(),
-    )),
+    // Suivi et Fichier : rien à appliquer, seul « Annuler » reste.
+    !sansBouton &&
+      (boutonAppliquer = el(
+        'button',
+        {
+          class: enExport ? 'principal large' : 'principal',
+          onclick: enExport ? exporterVersCle : appliquer,
+          ...(peutAppliquer ? {} : { disabled: '' }),
+        },
+        texteAppliquer(),
+      )),
   );
   if (document.activeElement !== champDistance) champDistance.value = ui.saisie;
   // Croix de flèches : dans le volet ouvert, sinon sur la carte.
   carte.definirCommandes(
-    ui.mode === 'sommet' && ui.selSommet && !croixDansLeVolet() ? commandesSommet() : null,
+    ui.onglet === 'modifier' && ui.mode === 'sommet' && ui.selSommet && !croixDansLeVolet()
+      ? commandesSommet()
+      : null,
   );
   carte.definirCommandesDroite(boutonsCarte);
   majMesure();

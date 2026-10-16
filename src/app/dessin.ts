@@ -24,8 +24,13 @@ export function dessin(s: Session): Dessin {
   const anneaux = anneauxLL(s);
   // Simplification ou collage : la parcelle courante est dessinée telle qu'elle serait, l'actuelle
   // en pointillés.
-  const collage = apercuCollage(s);
-  const apercu = apercuSimplification(s) ?? (collage && 'etat' in collage ? collage : null);
+  // Ce qui sert à modifier (aperçus, sélections, flèches) ne s'affiche que dans les onglets
+  // Modifier et Guidage : ailleurs, la carte montre seulement les parcelles (et les notes).
+  const enEdition = ui.onglet === 'modifier' || ui.onglet === 'guidage';
+  const collage = enEdition ? apercuCollage(s) : null;
+  const apercu = enEdition
+    ? (apercuSimplification(s) ?? (collage && 'etat' in collage ? collage : null))
+    : null;
   const affiches = apercu ? apercu.etat.anneaux.map((a) => a.sommets.map(latLon)) : anneaux;
   const d: Dessin = {
     reference: ui.reference?.anneaux ?? [],
@@ -47,7 +52,7 @@ export function dessin(s: Session): Dessin {
     points: [],
   };
   // Parcelle modèle du collage : son contour en violet fin.
-  if (ui.mode === 'coller' && ui.modele !== null) {
+  if (enEdition && ui.mode === 'coller' && ui.modele !== null) {
     const pts = anneaux[ui.modele]!;
     pts.forEach((a, k) =>
       d.traits.push({ a, b: pts[(k + 1) % pts.length]!, couleur: SEL, epaisseur: 2 }),
@@ -62,7 +67,7 @@ export function dessin(s: Session): Dessin {
       epaisseur,
     });
   };
-  if (choixDeBord() && (ui.bord || ui.bordDebut)) {
+  if (enEdition && choixDeBord() && (ui.bord || ui.bordDebut)) {
     const ring = (ui.bord ?? ui.bordDebut)!.anneau;
     const pts = anneaux[ring]!;
     if (ui.bord) {
@@ -79,13 +84,15 @@ export function dessin(s: Session): Dessin {
     ...(s.etat.guidages ?? [])
       .filter((g) => !ui.jeuxMasques.has(jeuDe(g.nom)))
       .map((g) => ({ pts: [...g.points], apercu: false })),
-    ...(ui.porteeGuidage === 'toutes' ? [] : apercuGuidages(s)).map((g) => ({
+    ...(!enEdition || ui.porteeGuidage === 'toutes' ? [] : apercuGuidages(s)).map((g) => ({
       pts: [...g.points],
       apercu: true,
     })),
   ];
-  for (const c of coinsGuidage(s)?.coins ?? []) d.points.push({ p: c, couleur: SEL, rayon: 7 });
-  if (ui.selLimite) {
+  if (enEdition) {
+    for (const c of coinsGuidage(s)?.coins ?? []) d.points.push({ p: c, couleur: SEL, rayon: 7 });
+  }
+  if (enEdition && ui.selLimite) {
     trait(ui.selLimite, 7);
     const ref = ui.selLimite;
     const c = cotesLimite(s.etat, ref);
@@ -100,7 +107,7 @@ export function dessin(s: Session): Dessin {
       },
     }));
   }
-  if (ui.selSommet) {
+  if (enEdition && ui.selSommet) {
     if (ui.limiteGlisse) {
       trait(ui.limiteGlisse, 5);
       const ref = ui.selSommet;
@@ -122,7 +129,7 @@ export function dessin(s: Session): Dessin {
     });
   }
   // Optimisation : passages de la proposition choisie, en traits fins sous la ligne AB.
-  const optim = optimisationCourante(s);
+  const optim = enEdition ? optimisationCourante(s) : null;
   const prop = optim?.optimisation.propositions[ui.propositionChoisie];
   if (optim && prop) {
     for (const [a, b] of prop.lignes) {

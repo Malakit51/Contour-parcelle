@@ -4,6 +4,7 @@ import { distanceExacte } from '../geometrie/plan';
 import { el } from '../ui/dom';
 import { ui } from './etat';
 import { afficher, remplir } from './mise-en-page';
+import { arreterOutilsCarte } from './travail';
 
 /** Résultat de la mesure, posé en haut de la carte (élément fixe, rempli à chaque affichage). */
 export const boiteMesure = el('div', { class: 'boite-mesure', hidden: '' });
@@ -13,7 +14,34 @@ export const enM = (m: number) =>
     ? `${(m / 1000).toFixed(3).replace('.', ',')} km`
     : `${m.toFixed(1).replace('.', ',')} m`;
 
+/**
+ * Bandeau en haut de la carte : ce que fera le prochain toucher (un seul outil actif à la fois),
+ * avec de quoi l'arrêter. Rien quand le toucher fait son travail habituel (choisir).
+ */
 export function majMesure(): void {
+  const arreter = (texte = 'Annuler') =>
+    el(
+      'button',
+      {
+        onclick: () => {
+          arreterOutilsCarte();
+          afficher();
+        },
+      },
+      texte,
+    );
+  const consigne = ui.placementNote
+    ? 'Touche la carte à l’endroit de la note.'
+    : ui.placerAuDoigt
+      ? '☝ Touche la carte là où le point doit aller.'
+      : ui.ajoutEnCours
+        ? 'Touche une limite pour y ajouter un point.'
+        : null;
+  if (consigne) {
+    boiteMesure.hidden = false;
+    remplir(boiteMesure, el('span', {}, consigne), arreter());
+    return;
+  }
   boiteMesure.hidden = ui.mesure === null;
   if (ui.mesure === null) return;
   const pts = ui.mesure;
@@ -27,10 +55,10 @@ export function majMesure(): void {
       'span',
       {},
       pts.length < 2
-        ? 'Touche deux points (un sommet attire le doigt).'
+        ? 'Règle : touche deux points (un sommet attire le doigt).'
         : pts.length === 2
-          ? enM(total)
-          : `${enM(total)} (dernier : ${enM(dernier)})`,
+          ? `Règle : ${enM(total)}`
+          : `Règle : ${enM(total)} (dernier : ${enM(dernier)})`,
     ),
     pts.length > 0 &&
       el(
@@ -43,5 +71,6 @@ export function majMesure(): void {
         },
         'Effacer',
       ),
+    arreter('Fermer'),
   );
 }

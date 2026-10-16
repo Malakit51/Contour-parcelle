@@ -257,6 +257,17 @@ export function fermerFichier(): void {
   afficher();
 }
 
+/**
+ * Arrête les outils qui attendent le prochain toucher sur la carte : règle, placement d'une note,
+ * « ☝ au doigt », ajout d'un point. Un seul peut être actif à la fois.
+ */
+export function arreterOutilsCarte(): void {
+  ui.mesure = null;
+  ui.placementNote = false;
+  ui.placerAuDoigt = false;
+  ui.ajoutEnCours = false;
+}
+
 export function effacerSelection(): void {
   ui.placerAuDoigt = false;
   ui.ajoutEnCours = false;

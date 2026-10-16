@@ -1,6 +1,7 @@
 // Onglet Modifier : limite, point, simplification, collage, Appliquer.
 
 import { type BilanCollage, collerBord, modeleLePlusProche } from '../edition/collage';
+import { remplacerLignesOutil } from '../edition/optimisation';
 import { type Etat, latLon, limitesJumelles, sommetsEn } from '../edition/etat';
 import { nouvelleSurface } from '../edition/export';
 import { ajouterGuidages } from '../edition/guidages';
@@ -21,7 +22,14 @@ import { icone } from '../ui/icones';
 import { type Session, TOLERANCES, ui } from './etat';
 import { apercuGuidages, baseNomLignes, optimisationCourante, outilCourant } from './guidage';
 import { afficher, croixDansLeVolet } from './mise-en-page';
-import { effacerSelection, enMetres, enregistrerModification, metres, modifier } from './travail';
+import {
+  arreterOutilsCarte,
+  effacerSelection,
+  enMetres,
+  enregistrerModification,
+  metres,
+  modifier,
+} from './travail';
 import { coteLimite, effetsLimite, longueur, nomParcelle } from './vue';
 
 export const DIRECTIONS = {
@@ -77,10 +85,9 @@ export function commandesSommet(): HTMLElement {
         title: 'Placer au doigt',
         'aria-label': 'Placer au doigt',
         onclick: () => {
-          ui.placerAuDoigt = !ui.placerAuDoigt;
-          ui.message = ui.placerAuDoigt
-            ? { texte: 'Touche la carte à l’endroit voulu.', erreur: false }
-            : null;
+          const actif = !ui.placerAuDoigt;
+          arreterOutilsCarte();
+          ui.placerAuDoigt = actif;
           afficher();
         },
       },
@@ -184,14 +191,16 @@ export function appliquer(): void {
         : null;
       quoi = prop
         ? `Ligne AB « ${gs[0]!.nom} » optimisée sur ${nom} (cap ${Math.round(prop.cap)}°, ${prop.demiTours} demi-tours)` +
-          (gs.length > 1 ? ` et ${gs.length - 1} ligne(s) de tournière` : '')
+          (gs.length > 1 ? ` et ${gs.length - 1} ligne(s) de fourrière` : '')
         : ui.porteeGuidage === 'bord'
           ? `Ligne ${gs[0]!.type === 'ab' ? 'AB' : 'courbe'} « ${gs[0]!.nom} » ajoutée à ${nom} (${cote})`
           : ui.porteeGuidage === 'parcelle'
             ? `${gs.length} lignes « ${base} » sur ${nom} (${cote})`
             : `${gs.length} lignes « ${base} » sur ${touchees.size} parcelles (${cote})`;
       // Toute une parcelle : le jeu de même nom déjà créé sur la parcelle est remplacé.
-      nouveau = ajouterGuidages(s.etat, gs, ui.porteeGuidage === 'bord' ? null : base);
+      nouveau = optim
+        ? remplacerLignesOutil(s.etat, gs[0]!.parcelle, outilCourant()!, gs)
+        : ajouterGuidages(s.etat, gs, ui.porteeGuidage === 'bord' ? null : base);
     } else {
       return;
     }
@@ -491,8 +500,8 @@ export function panneauSelection(s: Session): HTMLElement {
       onclick: () => {
         const actif = !ui.ajoutEnCours;
         effacerSelection();
+        arreterOutilsCarte();
         ui.ajoutEnCours = actif;
-        ui.message = actif ? { texte: 'Touche une limite.', erreur: false } : null;
         afficher();
       },
     },

@@ -21,6 +21,8 @@ import { cadrerParcelle } from './vue';
 import {
   lignesOptimisees,
   lignesTourniere,
+  nomFourriere,
+  nomLigneAB,
   optimiserParcelle,
   type Outil,
 } from '../edition/optimisation';
@@ -660,7 +662,7 @@ function panneauOptimisation(s: Session): (HTMLElement | false)[] {
               el(
                 'span',
                 { class: 'carte-sens-titre' },
-                avec ? 'Avec la tournière' : 'Sans la tournière',
+                avec ? 'Avec la fourrière' : 'Sans la fourrière',
               ),
               el(
                 'span',
@@ -674,7 +676,7 @@ function panneauOptimisation(s: Session): (HTMLElement | false)[] {
     el(
       'div',
       { class: 'doux' },
-      `Règle la console sur ${m(outil.largeur)} exactement : un écart se cumule à chaque passage. Lignes « ${outil.nom} 1 » (AB des passages)${ui.lignesTourniere && outil.tourniere > 0 ? `, « ${outil.nom} 2 » et suivantes (tournière)` : ''} ; elles remplacent celles du même nom sur la parcelle.`,
+      `Règle la console sur ${m(outil.largeur)} exactement : un écart se cumule à chaque passage. Lignes « ${nomLigneAB(outil)} »${ui.lignesTourniere && outil.tourniere > 0 ? `, « ${nomFourriere(outil, 1)} », « ${nomFourriere(outil, 2)} »…` : ''} ; elles remplacent celles déjà créées pour cet outil sur la parcelle.`,
     ),
   ];
 }

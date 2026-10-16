@@ -3,7 +3,13 @@
 import { modeleLePlusProche } from '../edition/collage';
 import { precedent } from '../edition/etat';
 import { ajouterPoint, bordLePlusCourt, placerSommet } from '../edition/operations';
-import { type LatLon, pointDansPolygone, positionSurSegment, type XY } from '../geometrie/plan';
+import {
+  distancePointSegment,
+  type LatLon,
+  pointDansPolygone,
+  positionSurSegment,
+  type XY,
+} from '../geometrie/plan';
 import { type VersEcran } from '../ui/carte';
 import { choixDeBord, RAYON_TOUCHER_PX, ui, ongletDuMode } from './etat';
 import { afficher } from './mise-en-page';
@@ -35,6 +41,30 @@ export function toucher(
       versEcran,
     );
     ui.mesure = [...ui.mesure, aimant ?? position];
+    afficher();
+    return;
+  }
+  // Onglets Suivi, Export, Fichier : un toucher choisit seulement la parcelle (sur sa limite ou à
+  // l'intérieur), sans renvoyer vers Modifier ni sélectionner de limite ou de sommet.
+  if (ui.onglet !== 'modifier' && ui.onglet !== 'guidage') {
+    const p: XY = [ecran.x, ecran.y];
+    const anneaux = anneauxLL(s).map((pts) =>
+      pts.map((ll): XY => {
+        const e = versEcran(ll);
+        return [e.x, e.y];
+      }),
+    );
+    let proche: { anneau: number; d: number } | null = null;
+    anneaux.forEach((pts, i) => {
+      pts.forEach((q, k) => {
+        const d = distancePointSegment(p, q, pts[(k + 1) % pts.length]!);
+        if (d <= RAYON_TOUCHER_PX && (!proche || d < proche.d)) proche = { anneau: i, d };
+      });
+    });
+    const i =
+      (proche as { anneau: number } | null)?.anneau ??
+      anneaux.findIndex((pts, j) => s.etat.anneaux[j]!.type === 1 && pointDansPolygone(p, pts));
+    if (i >= 0) ui.parcelleCourante = s.etat.anneaux[i]!.parcelle;
     afficher();
     return;
   }

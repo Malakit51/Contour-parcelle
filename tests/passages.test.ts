@@ -202,12 +202,23 @@ describe('lignes de tournière', () => {
     const o = optimiserParcelle(etat, 0, [], outil)!;
     const lignes = lignesOptimisees(etat, 0, o.propositions[0]!, o.plan, outil, true);
     expect(lignes.map((g) => g.nom)).toEqual([
-      'Pulvé 38 m 1',
-      'Pulvé 38 m 2',
-      'Pulvé 38 m 3',
-      'Pulvé 38 m 4',
-      'Pulvé 38 m 5',
+      'Ligne AB Pulvé 38 m',
+      'Fourrière Pulvé 38 m 1',
+      'Fourrière Pulvé 38 m 2',
+      'Fourrière Pulvé 38 m 3',
+      'Fourrière Pulvé 38 m 4',
     ]);
+    // Refaire l'optimisation remplace ces lignes (et les anciens noms « Pulvé 38 m 1 »), pas les autres.
+    const { remplacerLignesOutil } = await import('../src/edition/optimisation');
+    const autre = { ...lignes[0]!, nom: 'Semoir 4 m 1' };
+    const ancienne = { ...lignes[0]!, nom: 'Pulvé 38 m 1' };
+    const e = remplacerLignesOutil(
+      { ...etat, guidages: [autre, ancienne, ...lignes] },
+      0,
+      outil,
+      lignes,
+    );
+    expect(e.guidages!.map((g) => g.nom)).toEqual(['Semoir 4 m 1', ...lignes.map((g) => g.nom)]);
     expect(lignesOptimisees(etat, 0, o.propositions[0]!, o.plan, outil, false)).toHaveLength(1);
     // Semoir 4 m avec 12 m de tournière : 3 tours (à 2, 6 et 10 m).
     expect(lignesTourniere(etat, 0, { nom: 'S', largeur: 4, tourniere: 12 })).toHaveLength(12);

@@ -73,9 +73,13 @@ export function lignesTourniere(etat: Etat, p: number, outil: Outil, seuilCoins 
   return lignes;
 }
 
+/** Noms explicites, pour s'y retrouver dans la console : « Ligne AB Pulvé 38 m », « Fourrière Pulvé 38 m 1 »… */
+export const nomLigneAB = (outil: Outil) => `Ligne AB ${outil.nom}`;
+export const nomFourriere = (outil: Outil, n: number) => `Fourrière ${outil.nom} ${n}`;
+
 /**
- * Lignes créées par l'optimisation : la ligne AB des passages (« outil 1 »), puis les tours de
- * tournière (« outil 2 », « outil 3 »…), toutes du même jeu pour être remplacées ensemble.
+ * Lignes créées par l'optimisation : la ligne AB des passages (« Ligne AB Pulvé 38 m »), puis les
+ * tours de tournière (« Fourrière Pulvé 38 m 1 », « Fourrière Pulvé 38 m 2 »…).
  */
 export function lignesOptimisees(
   etat: Etat,
@@ -86,9 +90,35 @@ export function lignesOptimisees(
   avecTourniere: boolean,
   seuilCoins = 30,
 ): Guidage[] {
-  const toutes = [
-    ligneDeProposition(p, prop, plan, ''),
-    ...(avecTourniere ? lignesTourniere(etat, p, outil, seuilCoins) : []),
+  return [
+    ligneDeProposition(p, prop, plan, nomLigneAB(outil)),
+    ...(avecTourniere ? lignesTourniere(etat, p, outil, seuilCoins) : []).map((g, i) => ({
+      ...g,
+      nom: nomFourriere(outil, i + 1),
+    })),
   ];
-  return toutes.map((g, i) => ({ ...g, nom: `${outil.nom} ${i + 1}` }));
+}
+
+/**
+ * Remplace, sur la parcelle `p`, les lignes déjà créées par l'optimisation pour cet outil (ligne
+ * AB, fourrière, et anciens noms « Pulvé 38 m 1 »…) par `lignes`. Les autres lignes restent.
+ */
+export function remplacerLignesOutil(
+  etat: Etat,
+  p: number,
+  outil: Outil,
+  lignes: readonly Guidage[],
+): Etat {
+  const fourriere = `Fourrière ${outil.nom} `;
+  const ancien = new RegExp(`^${outil.nom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\d+$`);
+  const gardees = (etat.guidages ?? []).filter(
+    (g) =>
+      g.parcelle !== p ||
+      !(
+        g.nom === nomLigneAB(outil) ||
+        (g.nom.startsWith(fourriere) && /\d+$/.test(g.nom)) ||
+        ancien.test(g.nom)
+      ),
+  );
+  return { ...etat, guidages: [...gardees, ...lignes] };
 }

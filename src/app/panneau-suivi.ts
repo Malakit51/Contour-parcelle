@@ -22,7 +22,7 @@ import { el } from '../ui/dom';
 import { couleurNote, type Session, ui } from './etat';
 import { enregistrerSauvegarde } from './exporter';
 import { afficher } from './mise-en-page';
-import { dateFr, effacerSelection, majSuivi, quandFr } from './travail';
+import { arreterOutilsCarte, dateFr, effacerSelection, majSuivi, quandFr } from './travail';
 import { cadrerParcelle, carte } from './vue';
 
 /** État du contour de la parcelle courante : trois boutons et la remarque. */
@@ -180,7 +180,9 @@ function formulaireNote(s: Session, nom: string): HTMLElement {
         {
           class: ui.placementNote ? 'actif' : '',
           onclick: () => {
-            ui.placementNote = !ui.placementNote;
+            const actif = !ui.placementNote;
+            arreterOutilsCarte();
+            ui.placementNote = actif;
             afficher();
           },
         },
