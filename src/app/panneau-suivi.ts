@@ -22,7 +22,16 @@ import { el } from '../ui/dom';
 import { couleurNote, type Session, ui } from './etat';
 import { enregistrerSauvegarde } from './exporter';
 import { afficher } from './mise-en-page';
-import { arreterOutilsCarte, dateFr, effacerSelection, majSuivi, quandFr } from './travail';
+import {
+  arreterOutilsCarte,
+  dateFr,
+  effacerSelection,
+  majSuivi,
+  modifier,
+  quandFr,
+} from './travail';
+import { supprimerParcelle } from '../edition/operations';
+import { blocsDeParcelle } from '../isoxml/ecriture';
 import { cadrerParcelle, carte } from './vue';
 
 /** État du contour de la parcelle courante : trois boutons et la remarque. */
@@ -73,6 +82,36 @@ export function panneauSuiviParcelle(s: Session): HTMLElement | null {
       ),
     ),
     derniere && el('div', { class: 'doux' }, `${quandFr(derniere.quand)} · ${derniere.action}`),
+    el(
+      'div',
+      { class: 'rangee' },
+      el(
+        'button',
+        {
+          class: 'petit danger',
+          onclick: () => {
+            const i = ui.parcelleCourante!;
+            const n = blocsDeParcelle(s.td.texte, p.id).taches.length;
+            if (
+              !confirm(
+                `Retirer ${p.nom} du fichier exporté${n > 0 ? `, avec ses ${n} tâche(s)` : ''} ?\n\n` +
+                  'Elle reste dans la console et dans ton export d’origine. « Annuler » ou « Remettre » (onglet Export) la fait revenir.',
+              )
+            ) {
+              return;
+            }
+            modifier(
+              () => supprimerParcelle(ui.session!.etat, i),
+              `${p.nom} retirée du fichier${n > 0 ? ` (avec ${n} tâche(s))` : ''}`,
+              false,
+            );
+            ui.parcelleCourante = null;
+            afficher();
+          },
+        },
+        'Supprimer la parcelle',
+      ),
+    ),
   );
 }
 
@@ -332,6 +371,7 @@ export function panneauNotes(s: Session): HTMLElement | null {
 export function panneauSuiviGeneral(s: Session): HTMLElement {
   const parcelles = s.td.parcelles
     .map((p, i) => ({ p, i, f: fiche(ui.suivi, p) }))
+    .filter(({ i }) => !s.etat.supprimees?.includes(i))
     .sort((a, b) => a.p.nom.localeCompare(b.p.nom, 'fr', { numeric: true }));
   const compte = (e: EtatContour) => parcelles.filter((x) => x.f.etat === e).length;
   const journal = [...ui.suivi.journal].reverse().slice(0, 50);

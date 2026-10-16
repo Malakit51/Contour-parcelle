@@ -46,6 +46,9 @@ export function parcellesChangees(a: Etat, b: Etat): number[] {
       changees.add(r.parcelle);
     }
   });
+  for (const p of [...(a.supprimees ?? []), ...(b.supprimees ?? [])]) {
+    if ((a.supprimees ?? []).includes(p) !== (b.supprimees ?? []).includes(p)) changees.add(p);
+  }
   const ga = a.guidages ?? [];
   const gb = b.guidages ?? [];
   for (const g of [...ga.filter((x) => !gb.includes(x)), ...gb.filter((x) => !ga.includes(x))]) {
@@ -56,7 +59,9 @@ export function parcellesChangees(a: Etat, b: Etat): number[] {
 
 /** Travail qui serait perdu en ouvrant un autre fichier : contours modifiés ou lignes de guidage. */
 export const travailEnCours = (etat: Etat) =>
-  parcellesModifiees(etat).length > 0 || (etat.guidages?.length ?? 0) > 0;
+  parcellesModifiees(etat).length > 0 ||
+  (etat.guidages?.length ?? 0) > 0 ||
+  (etat.supprimees?.length ?? 0) > 0;
 
 /**
  * Passe à un nouvel état (annulable) et note la modification au journal. L'état est d'abord

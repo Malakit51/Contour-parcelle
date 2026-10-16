@@ -2,7 +2,14 @@
 
 import { distancePointSegment, planLocal, type Plan, type XY } from '../geometrie/plan';
 import type { TaskData } from '../isoxml/lecture';
-import { distanceM, etatInitial, latLon, TOLERANCE_PARTAGE_M, type Etat } from './etat';
+import {
+  distanceM,
+  etatInitial,
+  latLon,
+  sansSupprimees,
+  TOLERANCE_PARTAGE_M,
+  type Etat,
+} from './etat';
 import { DOUBLON_M } from './nettoyage';
 
 export interface Alerte {
@@ -49,8 +56,10 @@ const segment = (a: AnneauXY, i: number): [XY, XY] => [a.pts[i]!, a.pts[(i + 1) 
  * Contrôle les parcelles `parcelles` (indices dans td.parcelles) : anneau d'au moins 3 sommets,
  * aucune auto-intersection, aucun croisement avec une autre parcelle, sommets communs identiques.
  */
-export function controler(td: TaskData, etat: Etat, parcelles: readonly number[]): Alerte[] {
+export function controler(td: TaskData, etatComplet: Etat, parcelles: readonly number[]): Alerte[] {
   const alertes: Alerte[] = [];
+  // Les parcelles retirées ne sont plus contrôlées, ni comme voisines.
+  const etat = sansSupprimees(etatComplet);
   const concernes = etat.anneaux.flatMap((a, i) => (parcelles.includes(a.parcelle) ? [i] : []));
   if (concernes.length === 0) return alertes;
   const plan = planLocal(latLon(etat.anneaux[concernes[0]!]!.sommets[0]!));
@@ -102,7 +111,9 @@ export function controler(td: TaskData, etat: Etat, parcelles: readonly number[]
   }
   // Voisins qui avaient des sommets communs dans le fichier d'origine et en ont perdu : leur
   // limite commune ne coïncide plus (bande vide ou chevauchement le long de cette limite).
-  const avant = paresDeVoisins(etatInitial(td));
+  const avant = paresDeVoisins(
+    sansSupprimees({ ...etatInitial(td), supprimees: etatComplet.supprimees ?? [] }),
+  );
   const apres = paresDeVoisins(etat);
   for (const [cle, n] of avant) {
     const [a, b] = cle.split('|').map(Number) as [number, number];

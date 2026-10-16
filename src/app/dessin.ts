@@ -37,8 +37,9 @@ export function dessin(s: Session): Dessin {
     fantomes: apercu
       ? anneaux.filter((_, i) => s.etat.anneaux[i]!.parcelle === ui.parcelleCourante)
       : [],
-    anneaux: affiches.map((pts, i) => {
+    anneaux: affiches.flatMap((pts, i) => {
       const a = s.etat.anneaux[i]!;
+      if (s.etat.supprimees?.includes(a.parcelle)) return [];
       return {
         pts,
         couleur: ui.couleursParEtat

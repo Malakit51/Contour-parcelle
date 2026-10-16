@@ -54,8 +54,11 @@ export function anneauxXY(s: Session): XY[][] {
   return s.etat.anneaux.map((a) => a.sommets.map((p) => s.plan.versXY(latLon(p))));
 }
 
+/** Points de chaque anneau (vide pour une parcelle retirée : ni dessinée, ni touchable). */
 export function anneauxLL(s: Session): LatLon[][] {
-  return s.etat.anneaux.map((a) => a.sommets.map(latLon));
+  return s.etat.anneaux.map((a) =>
+    s.etat.supprimees?.includes(a.parcelle) ? [] : a.sommets.map(latLon),
+  );
 }
 
 export function cadrerTout(): void {

@@ -2,12 +2,13 @@
 
 import { exporterTaskData, type Changements } from '../isoxml/ecriture';
 import { lireTaskData, type Point, type TaskData } from '../isoxml/lecture';
-import { distanceM, etatInitial, latLon, surfaceEtat, type Etat } from './etat';
+import { distanceM, estSupprimee, etatInitial, latLon, surfaceEtat, type Etat } from './etat';
 
 /** Parcelles dont au moins un sommet a bougé, a été ajouté ou supprimé. */
 export function parcellesModifiees(etat: Etat): number[] {
   const modifiees = new Set<number>();
   for (const a of etat.anneaux) {
+    if (estSupprimee(etat, a.parcelle)) continue;
     const supprime = a.sommets.filter((s) => s.origine).length < a.nbOrigine;
     if (
       supprime ||
@@ -37,6 +38,7 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
   const insertions: { apres: Point; points: { lat: number; lon: number }[] }[] = [];
   const suppressions: Point[] = [];
   for (const a of etat.anneaux) {
+    if (estSupprimee(etat, a.parcelle)) continue;
     const anneau = td.parcelles[a.parcelle]!.anneaux[a.anneau]!;
     // Points du fichier qui ne sont plus utilisés (hors répétition finale du premier).
     const utilises = new Set(a.sommets.map((s) => s.origine));
@@ -67,6 +69,7 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
     return m2 === null ? [] : [{ parcelle: td.parcelles[p]!, m2 }];
   });
   const guidages = td.parcelles.flatMap((parcelle, i) => {
+    if (estSupprimee(etat, i)) return [];
     const lignes = (etat.guidages ?? []).filter((g) => g.parcelle === i);
     return lignes.length === 0
       ? []
@@ -80,7 +83,8 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
           },
         ];
   });
-  return { points, insertions, suppressions, surfaces, guidages };
+  const parcellesRetirees = (etat.supprimees ?? []).map((p) => td.parcelles[p]!);
+  return { points, insertions, suppressions, surfaces, guidages, parcellesRetirees };
 }
 
 export function exporterEtat(td: TaskData, etat: Etat): string {
@@ -101,14 +105,22 @@ export function verifierRelecture(td: TaskData, etat: Etat, texte: string): stri
     return [`Le fichier produit est illisible : ${(e as Error).message}`];
   }
   const problemes: string[] = [];
-  if (relu.parcelles.length !== td.parcelles.length) {
-    problemes.push('Le fichier produit n’a pas le même nombre de parcelles.');
+  // Parcelles gardées, dans l'ordre : la i-ième du fichier produit est gardees[i].
+  const gardees = td.parcelles.map((_, i) => i).filter((i) => !estSupprimee(etat, i));
+  if (relu.parcelles.length !== gardees.length) {
+    problemes.push('Le fichier produit n’a pas le nombre de parcelles attendu.');
+    return problemes;
+  }
+  if (gardees.some((p, i) => relu.parcelles[i]!.id !== td.parcelles[p]!.id)) {
+    problemes.push('Les parcelles du fichier produit ne sont pas celles attendues.');
     return problemes;
   }
   const reluEtat = etatInitial(relu);
   for (const a of etat.anneaux) {
+    if (estSupprimee(etat, a.parcelle)) continue;
     const nom = td.parcelles[a.parcelle]!.nom;
-    const r = reluEtat.anneaux.find((x) => x.parcelle === a.parcelle && x.anneau === a.anneau);
+    const i = gardees.indexOf(a.parcelle);
+    const r = reluEtat.anneaux.find((x) => x.parcelle === i && x.anneau === a.anneau);
     const ferme = (pts: readonly { lat: number; lon: number }[]) =>
       pts.length > 1 && pts[0]!.lat === pts.at(-1)!.lat && pts[0]!.lon === pts.at(-1)!.lon;
     if (!r || r.sommets.length !== a.sommets.length) {
@@ -117,12 +129,13 @@ export function verifierRelecture(td: TaskData, etat: Etat, texte: string): stri
       problemes.push(`${nom} : un point du contour écrit n’est pas à la bonne place.`);
     } else if (
       ferme(td.parcelles[a.parcelle]!.anneaux[a.anneau]!.points) !==
-      ferme(relu.parcelles[a.parcelle]!.anneaux[a.anneau]!.points)
+      ferme(relu.parcelles[i]!.anneaux[a.anneau]!.points)
     ) {
       problemes.push(`${nom} : le contour écrit n’est plus fermé comme dans l’original.`);
     }
   }
-  if (relu.segmentsIgnores.length !== (etat.guidages?.length ?? 0)) {
+  const lignes = (etat.guidages ?? []).filter((g) => !estSupprimee(etat, g.parcelle)).length;
+  if (relu.segmentsIgnores.length !== lignes) {
     problemes.push('Les lignes de guidage écrites ne correspondent pas à celles de l’éditeur.');
   }
   return problemes;

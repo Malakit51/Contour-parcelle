@@ -464,3 +464,21 @@ export function remplacerContour(etat: Etat, anneau: number, points: LatLon[]): 
     anneaux: etat.anneaux.map((x, i) => (i === anneau ? { ...a, sommets } : x)),
   };
 }
+
+/** Retire la parcelle `p` du fichier (avec ses lignes de guidage). Annulable comme le reste. */
+export function supprimerParcelle(etat: Etat, p: number): Etat {
+  if (etat.supprimees?.includes(p)) return etat;
+  return {
+    ...etat,
+    supprimees: [...(etat.supprimees ?? []), p].sort((a, b) => a - b),
+    guidages: (etat.guidages ?? []).filter((g) => g.parcelle !== p),
+  };
+}
+
+/** Remet une parcelle retirée (son contour tel qu'il était). */
+export function remettreParcelle(etat: Etat, p: number): Etat {
+  if (!etat.supprimees?.includes(p)) return etat;
+  const supprimees = etat.supprimees.filter((x) => x !== p);
+  const { supprimees: _, ...reste } = etat;
+  return supprimees.length ? { ...reste, supprimees } : reste;
+}

@@ -18,6 +18,50 @@ export interface Changements {
     parcelle: Parcelle;
     lignes: ReadonlyArray<{ nom: string; points: ReadonlyArray<{ lat: number; lon: number }> }>;
   }>;
+  /** Parcelles retirées du fichier, avec les tâches (TSK) qui s'y rapportent. */
+  parcellesRetirees?: ReadonlyArray<Parcelle>;
+}
+
+/** Étend une plage aux lignes entières qu'elle occupe (fin de ligne comprise). */
+function lignesDe(texte: string, plage: Plage): Plage {
+  const debut = texte.lastIndexOf('\n', plage.debut - 1) + 1;
+  const n = texte.indexOf('\n', plage.fin);
+  return { debut, fin: n < 0 ? texte.length : n + 1 };
+}
+
+/** Fin de l'élément ouvert par la balise `debut..finBalise` (`<X …/>` ou jusqu'à `</X>`). */
+function finElement(texte: string, nom: string, finBalise: number): number {
+  if (texte[finBalise - 2] === '/') return finBalise;
+  const f = texte.indexOf(`</${nom}>`, finBalise);
+  if (f < 0) throw new Error(`Élément ${nom} non fermé.`);
+  return f + nom.length + 3;
+}
+
+/**
+ * Bloc d'une parcelle (son PFD, lignes entières) et des tâches qui s'y rapportent (TSK dont
+ * l'attribut E est l'identifiant de la parcelle), avec le nom de chaque tâche.
+ */
+export function blocsDeParcelle(
+  texte: string,
+  id: string,
+): { pfd: Plage | null; taches: { plage: Plage; nom: string }[] } {
+  const echappe = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let pfd: Plage | null = null;
+  const ouvrant = new RegExp(`<PFD\\b[^>]*\\sA="${echappe}"[^>]*>`).exec(texte);
+  if (ouvrant) {
+    const fin = finElement(texte, 'PFD', ouvrant.index + ouvrant[0].length);
+    pfd = lignesDe(texte, { debut: ouvrant.index, fin });
+  }
+  const taches: { plage: Plage; nom: string }[] = [];
+  for (const m of texte.matchAll(/<TSK\b[^>]*>/g)) {
+    if (!new RegExp(`\\sE="${echappe}"`).test(m[0])) continue;
+    const fin = finElement(texte, 'TSK', m.index + m[0].length);
+    taches.push({
+      plage: lignesDe(texte, { debut: m.index, fin }),
+      nom: /\sB="([^"]*)"/.exec(m[0])?.[1] ?? '',
+    });
+  }
+  return { pfd, taches };
 }
 
 const echapper = (s: string) =>
@@ -144,5 +188,17 @@ export function exporterTaskData(td: TaskData, changements: Changements = {}): s
     const p = parcelle.debutContour;
     remplacements.push({ plage: { debut: p, fin: p }, texte: texteGuidages(lignes, finDeLigne) });
   }
-  return remplacer(td.texte, remplacements);
+  // Parcelles retirées : leur bloc et leurs tâches disparaissent, avec tout ce qu'on allait
+  // modifier à l'intérieur.
+  const retraits: Plage[] = [];
+  for (const parcelle of changements.parcellesRetirees ?? []) {
+    const { pfd, taches } = blocsDeParcelle(td.texte, parcelle.id);
+    if (!pfd) throw new Error(`${parcelle.nom} : parcelle introuvable dans le fichier.`);
+    retraits.push(pfd, ...taches.map((t) => t.plage));
+  }
+  const dedans = (p: Plage) => retraits.some((r) => p.debut >= r.debut && p.fin <= r.fin);
+  return remplacer(td.texte, [
+    ...remplacements.filter((x) => !dedans(x.plage)),
+    ...retraits.map((plage) => ({ plage, texte: '' })),
+  ]);
 }

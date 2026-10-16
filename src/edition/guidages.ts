@@ -52,6 +52,7 @@ export function numeroSuivant(etat: Etat, p: number, base: string): number {
  * moins COTE_MIN_M mètres, droite AB si le côté est droit, sinon courbe.
  */
 export function lignesDeParcelle(etat: Etat, p: number, r: ReglagesGuidage): LignesParcelle | null {
+  if (etat.supprimees?.includes(p)) return null;
   const a = etat.anneaux.find((x) => x.parcelle === p && x.type === 1);
   if (!a) return null;
   const plan = planLocal(latLon(a.sommets[0]!));

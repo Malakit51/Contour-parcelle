@@ -284,6 +284,7 @@ export function afficher(): void {
   choixParcelle.append(el('option', { value: '' }, 'Toutes les parcelles'));
   s.td.parcelles
     .map((p, i) => ({ nom: p.nom, i }))
+    .filter(({ i }) => !s.etat.supprimees?.includes(i))
     .sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { numeric: true }))
     .forEach(({ nom, i }) => {
       const o = el('option', { value: String(i) }, nom);
@@ -322,7 +323,7 @@ export function afficher(): void {
             ]
               .filter(Boolean)
               .join(' · ')
-          : `${s.td.parcelles.length} parcelles`,
+          : `${s.td.parcelles.length - (s.etat.supprimees?.length ?? 0)} parcelles`,
       ),
     ),
     icone('chevron', 20),

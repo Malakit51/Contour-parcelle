@@ -21,6 +21,8 @@ export interface SessionEnregistree {
   suivi?: Suivi;
   /** Lignes de guidage créées dans l'éditeur. */
   guidages?: Guidage[];
+  /** Parcelles retirées du fichier (indices). */
+  supprimees?: number[];
 }
 
 export class ErreurSession extends Error {
@@ -53,6 +55,7 @@ export function enregistrerSession(
       };
     }),
     ...(etat.guidages?.length ? { guidages: [...etat.guidages] } : {}),
+    ...(etat.supprimees?.length ? { supprimees: [...etat.supprimees] } : {}),
     ...(suivi ? { suivi } : {}),
   };
 }
@@ -88,10 +91,15 @@ export function relireSession(sauvegarde: unknown): {
     };
   });
   const guidages = (s.guidages ?? []).filter((g) => td.parcelles[g.parcelle]);
+  const supprimees = (s.supprimees ?? []).filter((p) => td.parcelles[p]);
   return {
     td,
     nom: s.fichier.nom,
-    etat: guidages.length ? { anneaux, guidages } : { anneaux },
+    etat: {
+      anneaux,
+      ...(guidages.length ? { guidages } : {}),
+      ...(supprimees.length ? { supprimees } : {}),
+    },
     session: s,
   };
 }

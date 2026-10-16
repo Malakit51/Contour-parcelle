@@ -8,6 +8,7 @@ import {
   verifierRelecture,
 } from '../edition/export';
 import { comparer } from '../isoxml/comparaison';
+import { blocsDeParcelle } from '../isoxml/ecriture';
 import { encoder } from '../isoxml/octets';
 import { cleParcelle, VERSION_DE_DEPART, versionSuivante } from '../suivi/suivi';
 import { el } from '../ui/dom';
@@ -24,7 +25,8 @@ import {
 import { CLE_DOSSIER_SAUVEGARDES, type Session, ui } from './etat';
 import { afficher } from './mise-en-page';
 import { ecrireStockage } from './stockage';
-import { majSuivi } from './travail';
+import { majSuivi, modifier } from './travail';
+import { remettreParcelle } from '../edition/operations';
 
 /** Écart de surface en hectares, signé, à 4 décimales : « +0,0395 ». */
 export const haSigne = (m2: number) =>
@@ -275,42 +277,70 @@ export function panneauExport(s: Session): HTMLElement[] {
         'Changer le numéro',
       ),
     ),
-    parcelles.length === 0
+    // Parcelles retirées : rappelées ici, avec de quoi les remettre.
+    ...(s.etat.supprimees ?? []).map((p) => {
+      const n = blocsDeParcelle(s.td.texte, s.td.parcelles[p]!.id).taches.length;
+      return el(
+        'div',
+        { class: 'rangee' },
+        el(
+          'span',
+          { class: 'erreur', style: 'flex:1' },
+          `${s.td.parcelles[p]!.nom} : retirée du fichier${n > 0 ? `, avec ${n} tâche(s)` : ''}`,
+        ),
+        el(
+          'button',
+          {
+            class: 'petit',
+            onclick: () =>
+              modifier(
+                () => remettreParcelle(ui.session!.etat, p),
+                `${s.td.parcelles[p]!.nom} remise dans le fichier`,
+                false,
+              ),
+          },
+          'Remettre',
+        ),
+      );
+    }),
+    parcelles.length === 0 && !(s.etat.supprimees?.length ?? 0)
       ? el('div', { class: 'doux' }, `Aucun changement par rapport à ${s.nomFichier}.`)
-      : el(
-          'div',
-          {},
-          el(
+      : parcelles.length === 0
+        ? false
+        : el(
             'div',
-            { class: 'doux' },
-            `Par rapport à ${s.nomFichier} : ${modifiees.size} contour(s) modifié(s), ${guidages.length} ligne(s) de guidage.`,
-          ),
-          el(
-            'table',
             {},
             el(
-              'tr',
-              {},
-              el('th', {}, 'Parcelle'),
-              el('th', {}, 'surface (ha)'),
-              el('th', {}, 'écart (ha)'),
-              el('th', {}, 'lignes'),
+              'div',
+              { class: 'doux' },
+              `Par rapport à ${s.nomFichier} : ${modifiees.size} contour(s) modifié(s), ${guidages.length} ligne(s) de guidage.`,
             ),
-            ...parcelles.map((p) => {
-              const avant = Number(s.td.parcelles[p]!.surface?.texte ?? NaN);
-              const apres = nouvelleSurface(s.td, s.etat, p) ?? NaN;
-              const n = guidages.filter((g) => g.parcelle === p).length;
-              return el(
+            el(
+              'table',
+              {},
+              el(
                 'tr',
                 {},
-                el('td', {}, s.td.parcelles[p]!.nom),
-                el('td', {}, ha(Math.round(apres))),
-                el('td', {}, modifiees.has(p) ? haSigne(Math.round(apres) - avant) : '—'),
-                el('td', {}, n > 0 ? String(n) : '—'),
-              );
-            }),
+                el('th', {}, 'Parcelle'),
+                el('th', {}, 'surface (ha)'),
+                el('th', {}, 'écart (ha)'),
+                el('th', {}, 'lignes'),
+              ),
+              ...parcelles.map((p) => {
+                const avant = Number(s.td.parcelles[p]!.surface?.texte ?? NaN);
+                const apres = nouvelleSurface(s.td, s.etat, p) ?? NaN;
+                const n = guidages.filter((g) => g.parcelle === p).length;
+                return el(
+                  'tr',
+                  {},
+                  el('td', {}, s.td.parcelles[p]!.nom),
+                  el('td', {}, ha(Math.round(apres))),
+                  el('td', {}, modifiees.has(p) ? haSigne(Math.round(apres) - avant) : '—'),
+                  el('td', {}, n > 0 ? String(n) : '—'),
+                );
+              }),
+            ),
           ),
-        ),
   );
   // 3. Où ça part : emplacement retenu, autre façon d'exporter.
   const ou = el(

@@ -40,6 +40,20 @@ export interface Etat {
   readonly anneaux: readonly AnneauEdite[];
   /** Lignes de guidage créées dans l'éditeur (celles du fichier sont toujours retirées). */
   readonly guidages?: readonly Guidage[];
+  /**
+   * Parcelles retirées du fichier (indices dans `TaskData.parcelles`). Leurs anneaux restent dans
+   * `anneaux` (les indices ne bougent pas) mais ne comptent plus : ni carte, ni calculs, ni export.
+   */
+  readonly supprimees?: readonly number[];
+}
+
+export const estSupprimee = (etat: Etat, parcelle: number) =>
+  etat.supprimees?.includes(parcelle) ?? false;
+
+/** Le même état sans les anneaux des parcelles retirées (pour les contrôles). */
+export function sansSupprimees(etat: Etat): Etat {
+  if (!etat.supprimees?.length) return etat;
+  return { ...etat, anneaux: etat.anneaux.filter((a) => !estSupprimee(etat, a.parcelle)) };
 }
 
 export interface RefSommet {
@@ -93,6 +107,8 @@ export function distanceM(a: LatLon, b: LatLon): number {
 export function sommetsEn(etat: Etat, p: LatLon, tolerance = TOLERANCE_PARTAGE_M): RefSommet[] {
   const refs: RefSommet[] = [];
   etat.anneaux.forEach((a, ia) => {
+    // Une parcelle retirée ne partage plus rien avec ses voisines.
+    if (estSupprimee(etat, a.parcelle)) return;
     a.sommets.forEach((s, is) => {
       if (distanceM(p, latLon(s)) <= tolerance) refs.push({ anneau: ia, sommet: is });
     });

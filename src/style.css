@@ -1102,3 +1102,9 @@ body {
   font-weight: 700;
   color: var(--etat-a-refaire);
 }
+
+/* Action qui retire quelque chose du fichier. */
+button.danger {
+  color: var(--etat-a-refaire);
+  border-color: var(--etat-a-refaire);
+}

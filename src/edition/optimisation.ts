@@ -29,7 +29,7 @@ export function optimiserParcelle(
   seuilCoins = 30,
 ): Optimisation | null {
   const ext = etat.anneaux.find((a) => a.parcelle === p && a.type === 1);
-  if (!ext || outil.largeur <= 0) return null;
+  if (!ext || outil.largeur <= 0 || etat.supprimees?.includes(p)) return null;
   const plan = planLocal(latLon(ext.sommets[0]!));
   const xy = (s: { lat: number; lon: number }) => plan.versXY([s.lat, s.lon]);
   const contour = ext.sommets.map(xy);
