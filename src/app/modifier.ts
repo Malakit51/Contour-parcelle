@@ -1,6 +1,6 @@
 // Onglet Modifier : limite, point, simplification, collage, Appliquer.
 
-import { type BilanCollage, collerBord } from '../edition/collage';
+import { type BilanCollage, collerBord, modeleLePlusProche } from '../edition/collage';
 import { type Etat, latLon, limitesJumelles, sommetsEn } from '../edition/etat';
 import { nouvelleSurface } from '../edition/export';
 import { ajouterGuidages } from '../edition/guidages';
@@ -333,6 +333,38 @@ export function panneauSimplification(s: Session): HTMLElement {
         `Écart avec l’origine : ${enCm(ecartOrigine)}` +
           (ecartOrigine > ui.tolerance ? ' (déjà simplifiée ?)' : ''),
       ),
+  );
+}
+
+/** Mode Bord : choix entre simplifier et coller sur le voisin (le bord choisi est gardé). */
+export function choixActionBord(): HTMLElement {
+  return el(
+    'div',
+    { class: 'rangee' },
+    ...(
+      [
+        ['simplifier', 'Simplifier'],
+        ['coller', 'Coller au voisin'],
+      ] as const
+    ).map(([v, t]) =>
+      el(
+        'button',
+        {
+          class: ui.mode === v ? 'actif' : '',
+          onclick: () => {
+            if (ui.mode === v) return;
+            ui.mode = v;
+            ui.actionBord = v;
+            if (v === 'simplifier' && (ui.bord || ui.bordDebut)) ui.porteeSimplif = 'bord';
+            if (v === 'coller' && ui.bord && ui.modele === null && ui.session) {
+              ui.modele = modeleLePlusProche(ui.session.etat, ui.bord);
+            }
+            afficher();
+          },
+        },
+        t,
+      ),
+    ),
   );
 }
 

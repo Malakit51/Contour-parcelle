@@ -56,6 +56,8 @@ export interface EtatInterface {
   /** Couleur des parcelles sur la carte : selon l'état du contour, ou pour distinguer les voisines. */
   couleursParEtat: boolean;
   mode: 'limite' | 'sommet' | 'simplifier' | 'guidage' | 'coller';
+  /** Mode Bord : dernière action choisie (Simplifier ou Coller), reprise au retour dans le mode. */
+  actionBord: 'simplifier' | 'coller';
   /** Mode Coller : anneau de la parcelle voisine qui sert de modèle. */
   modele: number | null;
   /** Ligne de guidage en préparation : droite AB ou courbe, vers l'intérieur ou l'extérieur. */
@@ -134,6 +136,7 @@ export const ui: EtatInterface = {
   couleursParEtat: true,
   mode: 'limite',
   modele: null,
+  actionBord: 'simplifier',
   typeGuidage: 'ab',
   guidageInterieur: true,
   porteeGuidage: 'bord',

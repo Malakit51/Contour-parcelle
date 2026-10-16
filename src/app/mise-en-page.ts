@@ -14,6 +14,7 @@ import { boiteMesure, majMesure } from './mesure';
 import {
   apercuCollage,
   apercuSimplification,
+  choixActionBord,
   appliquer,
   commandesSommet,
   panneauSelection,
@@ -385,19 +386,29 @@ export function afficher(): void {
     ),
   );
 
-  const modeBouton = (m: typeof ui.mode, texte: string) =>
-    el(
+  const modeBouton = (m: typeof ui.mode, texte: string) => {
+    // « Bord » regroupe Simplifier et Coller : on y revient sur la dernière action choisie.
+    const bord = m === 'simplifier' || m === 'coller';
+    const actif = bord ? ui.mode === 'simplifier' || ui.mode === 'coller' : ui.mode === m;
+    return el(
       'button',
       {
-        class: ui.mode === m ? 'principal' : '',
+        class: actif ? 'principal' : '',
         onclick: () => {
-          ui.mode = m;
+          if (actif) return;
+          ui.mode = bord ? ui.actionBord : m;
           effacerSelection();
           afficher();
         },
       },
       texte,
     );
+  };
+  // Raccourcis de distance : seulement quand une distance sert.
+  const distanceUtile =
+    (ui.mode === 'limite' && ui.selLimite !== null) ||
+    (ui.mode === 'sommet' && ui.selSommet !== null) ||
+    ui.mode === 'guidage';
 
   let contenu: (Node | null | false)[];
   switch (ui.onglet) {
@@ -408,10 +419,10 @@ export function afficher(): void {
           { class: 'modes' },
           modeBouton('limite', 'Limite'),
           modeBouton('sommet', 'Point'),
-          modeBouton('simplifier', 'Simplifier'),
+          modeBouton('simplifier', 'Bord'),
           modeBouton('guidage', 'Guidage'),
-          modeBouton('coller', 'Coller'),
         ),
+        (ui.mode === 'simplifier' || ui.mode === 'coller') && choixActionBord(),
         ui.mode === 'simplifier'
           ? panneauSimplification(s)
           : ui.mode === 'guidage'
@@ -419,8 +430,9 @@ export function afficher(): void {
             : ui.mode === 'coller'
               ? panneauCollage(s)
               : panneauSelection(s),
-        panneauRemplacement(s),
-        ui.mode !== 'coller' && raccourcis(),
+        // Recoller sur l'ancien TASKDATA se fait point par point : le remplacement est à côté.
+        ui.mode === 'sommet' && panneauRemplacement(s),
+        distanceUtile && raccourcis(),
       ];
       break;
     case 'suivi':
