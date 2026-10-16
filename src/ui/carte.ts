@@ -52,6 +52,28 @@ const ATTRIBUTION = '© IGN – Géoplateforme';
 
 const ll = (p: LatLon) => L.latLng(p[0], p[1]);
 
+/**
+ * Une tuile qui n'a pas pu être chargée est redemandée trois fois (après 1, 2 puis 4 s) au lieu
+ * de rester vide : une coupure du réseau mobile ou un refus passager du serveur ne dure pas.
+ */
+function avecReprises(couche: L.TileLayer): L.TileLayer {
+  couche.on('tileerror', (e: L.TileErrorEvent) => {
+    const img = e.tile as HTMLImageElement;
+    const n = Number(img.dataset.essais ?? 0);
+    if (n >= 3) return;
+    img.dataset.essais = String(n + 1);
+    const base = img.src.replace(/&essai=\d+$/, '');
+    setTimeout(
+      () => {
+        // Tuile retirée entre-temps (zoom ou déplacement) : plus rien à faire.
+        if (img.isConnected) img.src = `${base}&essai=${n + 1}`;
+      },
+      1000 * 2 ** n,
+    );
+  });
+  return couche;
+}
+
 export class Carte {
   readonly element: HTMLDivElement;
   private readonly carte: L.Map;
@@ -82,9 +104,17 @@ export class Carte {
       zoomSnap: 0.25,
     });
     this.carte.attributionControl.setPrefix(false);
-    const options = { maxNativeZoom: 19, maxZoom: 22, attribution: ATTRIBUTION };
+    const photo = wmts('ORTHOIMAGERY.ORTHOPHOTOS', 'image/jpeg');
+    // Sous la photo, la même photo en moins détaillé (une tuile pour 16×16 au zoom 19) : une
+    // tuile qui n'arrive pas (réseau du téléphone, serveur de l'IGN) laisse voir la photo floue
+    // au lieu d'un carré blanc.
     const fonds = {
-      Photo: L.tileLayer(wmts('ORTHOIMAGERY.ORTHOPHOTOS', 'image/jpeg'), options),
+      Photo: L.layerGroup([
+        avecReprises(L.tileLayer(photo, { maxNativeZoom: 15, maxZoom: 22, keepBuffer: 4 })),
+        avecReprises(
+          L.tileLayer(photo, { maxNativeZoom: 19, maxZoom: 22, attribution: ATTRIBUTION }),
+        ),
+      ]),
       // Aucune tuile : on ne voit que les contours, sur le fond blanc de la carte.
       'Fond blanc': L.layerGroup(),
     };
