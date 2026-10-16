@@ -77,9 +77,21 @@ export function panneauSuiviGeneral(s: Session): HTMLElement {
     .sort((a, b) => a.p.nom.localeCompare(b.p.nom, 'fr', { numeric: true }));
   const compte = (e: EtatContour) => parcelles.filter((x) => x.f.etat === e).length;
   const journal = [...ui.suivi.journal].reverse().slice(0, 50);
-  const telechargerCsv = async (texte: string, nom: string) => {
-    const ou = await enregistrerSauvegarde(encoder(texte), nom, 'text/csv');
-    ui.message = { texte: `${ou}.`, erreur: ou.startsWith('Dossier') };
+  // Un seul bouton : le suivi et le journal partent ensemble, en deux fichiers CSV.
+  const exporterCsv = async () => {
+    const ou = [
+      await enregistrerSauvegarde(
+        encoder(csvSuivi(ui.suivi, s.td.parcelles)),
+        `suivi-contours-${aujourdhui()}.csv`,
+        'text/csv',
+      ),
+      await enregistrerSauvegarde(
+        encoder(csvJournal(ui.suivi)),
+        `journal-contours-${aujourdhui()}.csv`,
+        'text/csv',
+      ),
+    ];
+    ui.message = { texte: `${ou.join('. ')}.`, erreur: ou.some((t) => t.startsWith('Dossier')) };
     afficher();
   };
   const bloc = el(
@@ -92,6 +104,12 @@ export function panneauSuiviGeneral(s: Session): HTMLElement {
     ),
     ui.suiviNonEnregistre &&
       el('div', { class: 'erreur' }, 'Suivi non enregistré sur cet appareil.'),
+    el(
+      'div',
+      { class: 'rangee' },
+      el('button', { onclick: () => void exporterCsv() }, 'Exporter en CSV'),
+      boutonImportCsv(s),
+    ),
     el(
       'table',
       {},
@@ -131,30 +149,6 @@ export function panneauSuiviGeneral(s: Session): HTMLElement {
         return ligne;
       }),
     ),
-    el(
-      'div',
-      { class: 'rangee' },
-      el(
-        'button',
-        {
-          onclick: () =>
-            void telechargerCsv(
-              csvSuivi(ui.suivi, s.td.parcelles),
-              `suivi-contours-${aujourdhui()}.csv`,
-            ),
-        },
-        'Suivi en CSV',
-      ),
-      el(
-        'button',
-        {
-          onclick: () =>
-            void telechargerCsv(csvJournal(ui.suivi), `journal-contours-${aujourdhui()}.csv`),
-        },
-        'Journal en CSV',
-      ),
-      boutonImportCsv(s),
-    ),
     el('strong', {}, 'Journal'),
     ...journal.map((e) =>
       el(
@@ -174,37 +168,47 @@ export function panneauSuiviGeneral(s: Session): HTMLElement {
 /** Reprend un CSV du suivi ou du journal (après un effacement des données de Chrome…). */
 function boutonImportCsv(s: Session): HTMLElement {
   const choix = el('label', { class: 'bouton-fichier secondaire' }, 'Charger un CSV');
-  const input = el('input', { type: 'file', accept: '.csv,text/csv,text/plain' });
+  // Plusieurs fichiers à la fois : le suivi et le journal se reprennent d'un coup.
+  const input = el('input', { type: 'file', accept: '.csv,text/csv,text/plain', multiple: '' });
   input.addEventListener('change', async () => {
-    const f = input.files?.[0];
+    const fichiers = [...(input.files ?? [])];
     input.value = '';
-    if (!f) return;
-    try {
-      const r = importerCsv(ui.suivi, await f.text(), s.td.parcelles);
-      majSuivi(r.suivi);
-      const b = r.bilan;
-      const quoi =
-        b.type === 'suivi'
-          ? `Suivi repris : ${b.ajouts} parcelle(s) mise(s) à jour`
-          : `Journal repris : ${b.ajouts} ligne(s) ajoutée(s)`;
-      const deja =
-        b.dejaLa > 0
-          ? b.type === 'suivi'
-            ? `, ${b.dejaLa} déjà à jour ou plus récente(s) sur l’appareil`
-            : `, ${b.dejaLa} déjà présente(s)`
-          : '';
-      const inconnues =
-        b.inconnues.length > 0
-          ? b.type === 'suivi'
-            ? `. Absentes du fichier ouvert : ${b.inconnues.join(', ')}`
-            : `. Illisibles : ${b.inconnues.join(', ')}`
-          : '';
-      ui.message = { texte: `${quoi}${deja}${inconnues}.`, erreur: b.inconnues.length > 0 };
-    } catch (e) {
-      ui.message = { texte: `CSV non repris : ${(e as Error).message}`, erreur: true };
-    }
+    const messages: { texte: string; erreur: boolean }[] = [];
+    for (const f of fichiers) messages.push(await reprendreCsv(s, f));
+    if (messages.length === 0) return;
+    ui.message = {
+      texte: messages.map((m) => m.texte).join(' '),
+      erreur: messages.some((m) => m.erreur),
+    };
     afficher();
   });
   choix.append(input);
   return choix;
+}
+
+async function reprendreCsv(s: Session, f: File): Promise<{ texte: string; erreur: boolean }> {
+  try {
+    const r = importerCsv(ui.suivi, await f.text(), s.td.parcelles);
+    majSuivi(r.suivi);
+    const b = r.bilan;
+    const quoi =
+      b.type === 'suivi'
+        ? `Suivi repris : ${b.ajouts} parcelle(s) mise(s) à jour`
+        : `Journal repris : ${b.ajouts} ligne(s) ajoutée(s)`;
+    const deja =
+      b.dejaLa > 0
+        ? b.type === 'suivi'
+          ? `, ${b.dejaLa} déjà à jour ou plus récente(s) sur l’appareil`
+          : `, ${b.dejaLa} déjà présente(s)`
+        : '';
+    const inconnues =
+      b.inconnues.length > 0
+        ? b.type === 'suivi'
+          ? `. Absentes du fichier ouvert : ${b.inconnues.join(', ')}`
+          : `. Illisibles : ${b.inconnues.join(', ')}`
+        : '';
+    return { texte: `${quoi}${deja}${inconnues}.`, erreur: b.inconnues.length > 0 };
+  } catch (e) {
+    return { texte: `${f.name} non repris : ${(e as Error).message}`, erreur: true };
+  }
 }
