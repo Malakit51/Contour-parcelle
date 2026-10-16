@@ -179,6 +179,9 @@ export function evaluerDirection(
   // Coordonnée s des droites : on travaille avec s absolu (n·x) pour couper les anneaux.
   const s0Abs = direction.a[0] * n[0] + direction.a[1] * n[1];
   const sMax = Math.max(...contour.map(s));
+  // La parcelle peut déborder derrière le côté (côté pris dans un creux, ou côté redressé) : les
+  // passages continuent alors de l'autre côté de la ligne AB.
+  const sMin = Math.min(...contour.map(s));
 
   // Obstacles hors tournière : seuls eux comptent pour caler les passages.
   const places = obstacles.map((o) => {
@@ -219,7 +222,10 @@ export function evaluerDirection(
   let longueurPassages = 0;
   let passagesCourts = 0;
   const lignes: [XY, XY][] = [];
-  for (let k = 0; ; k++) {
+  // Premier passage utile : celui qui couvre encore plus de 50 cm au-delà de la tournière, en
+  // partant du côté le plus éloigné derrière la ligne AB.
+  const kMin = Math.min(0, Math.floor((sMin + H + 0.5 - W / 2 - premier - delta) / W) + 1);
+  for (let k = kMin; ; k++) {
     const sk = premier + delta + k * W;
     // Dernier passage : celui qui couvre encore une partie de ce qui reste avant la tournière.
     if (sk - W / 2 >= sMax - H) break;

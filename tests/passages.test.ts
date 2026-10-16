@@ -264,3 +264,34 @@ describe('passages parallèles à un côté touché', () => {
     expect(o.propositions[0]!.demiTours).toBe(4);
   });
 });
+
+describe('passages des deux côtés de la ligne AB', () => {
+  it('parcelle en L, côté du creux : les passages couvrent aussi la partie derrière la ligne AB', () => {
+    const L: XY[] = [
+      [0, 0],
+      [200, 0],
+      [200, 50],
+      [100, 50],
+      [100, 100],
+      [0, 100],
+    ];
+    const d = directionDuSegment(L, 3);
+    const p = evaluerDirection(L, [], d, [], { largeur: 20, tourniere: 0 });
+    // 5 passages de 100 m à gauche du creux, 5 de 50 m à droite.
+    expect(p.passages).toBe(10);
+    expect(p.longueurPassages).toBeCloseTo(750, 3);
+    const xs = p.lignes.map(([a]) => Math.round(a[0])).sort((x, y) => x - y);
+    expect(xs).toEqual([10, 30, 50, 70, 90, 110, 130, 150, 170, 190]);
+  });
+
+  it('obstacle qui pousse les passages vers l’intérieur : la bande laissée après la tournière est couverte', () => {
+    const [longue] = directionsDesCotes(R);
+    // Tournière de 20 m, poteau à 45 m du bord Sud : passages décalés de +5 m (centres à 35, 55,
+    // 75) ; la bande de 20 à 25 m serait oubliée sans un passage de plus, centré à 15 m.
+    const a = evaluerDirection(R, [], longue!, [[100, 45]], { largeur: 20, tourniere: 20 });
+    expect(a.decalage).toBeCloseTo(5, 2);
+    expect(a.obstacles[0]!.distanceBout).toBeCloseTo(0, 2);
+    const ys = a.lignes.map(([p]) => Math.round(p[1] * 100) / 100);
+    expect(ys).toEqual([15, 35, 55, 75]);
+  });
+});
