@@ -45,7 +45,8 @@ export function enregistrerSession(
     appareil,
     fichier: { nom, texte: td.texte },
     anneaux: etat.anneaux.map((a) => {
-      const points = td.parcelles[a.parcelle]!.anneaux[a.anneau]!.points;
+      // Zone exclue créée dans l'éditeur (anneau -1) : aucun point d'origine.
+      const points = td.parcelles[a.parcelle]!.anneaux[a.anneau]?.points ?? [];
       return {
         parcelle: a.parcelle,
         anneau: a.anneau,
@@ -76,6 +77,18 @@ export function relireSession(sauvegarde: unknown): {
   }
   const td = lireTaskData(s.fichier.texte);
   const anneaux: AnneauEdite[] = s.anneaux.map((a) => {
+    if (a.anneau === -1) {
+      if (!td.parcelles[a.parcelle] || a.sommets.length < 3) {
+        throw new ErreurSession('La sauvegarde ne correspond pas à son fichier.');
+      }
+      return {
+        parcelle: a.parcelle,
+        anneau: -1,
+        type: 2,
+        nbOrigine: 0,
+        sommets: a.sommets.map(([lat, lon]): Sommet => ({ lat, lon, origine: null })),
+      };
+    }
     const anneauLu = td.parcelles[a.parcelle]?.anneaux[a.anneau];
     if (!anneauLu) throw new ErreurSession('La sauvegarde ne correspond pas à son fichier.');
     const premier = anneauLu.points[0]!;

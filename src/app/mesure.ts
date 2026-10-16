@@ -45,8 +45,8 @@ export function majMesure(): void {
         {},
         t.mode === 'points'
           ? n === 0
-            ? 'Zone : touche les coins sur la carte.'
-            : `Zone : ${n} coin(s)${n >= 3 ? ` · ${texteSurface(surfaceZone(t.points))}` : ''}`
+            ? `${t.pour === 'exclue' ? 'Zone exclue' : 'Zone'} : touche les coins sur la carte.`
+            : `${t.pour === 'exclue' ? 'Zone exclue' : 'Zone'} : ${n} coin(s)${n >= 3 ? ` · ${texteSurface(surfaceZone(t.points))}` : ''}`
           : `En marchant : ${n} point(s)` +
               (t.precision !== null ? ` · GPS ± ${Math.round(t.precision)} m` : ' · GPS…') +
               (n >= 3 ? ` · ${texteSurface(surfaceZone(t.points))}` : ''),

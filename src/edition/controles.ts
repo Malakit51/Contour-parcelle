@@ -1,6 +1,12 @@
 // Contrôles avant export, et repérage des sommets presque communs au chargement.
 
-import { distancePointSegment, planLocal, type Plan, type XY } from '../geometrie/plan';
+import {
+  distancePointSegment,
+  planLocal,
+  pointDansPolygone,
+  type Plan,
+  type XY,
+} from '../geometrie/plan';
 import type { TaskData } from '../isoxml/lecture';
 import {
   distanceM,
@@ -102,6 +108,27 @@ export function controler(td: TaskData, etatComplet: Etat, parcelles: readonly n
             return;
           }
         }
+      }
+    });
+  }
+  // Zones exclues : entièrement dans le contour de leur parcelle, sans toucher les autres zones.
+  for (const i of concernes) {
+    if (etat.anneaux[i]!.type !== 2) continue;
+    const a = anneaux[i]!;
+    const p = etat.anneaux[i]!.parcelle;
+    etat.anneaux.forEach((x, j) => {
+      if (j === i || x.parcelle !== p) return;
+      const b = anneaux[j]!;
+      const dehors = x.type === 1 && !pointDansPolygone(a.pts[0]!, b.pts);
+      const dedans = x.type === 2 && j < i && pointDansPolygone(a.pts[0]!, b.pts);
+      const croise = a.pts.some((_, k) =>
+        b.pts.some((__, m) => seCroisent(...segment(a, k), ...segment(b, m))),
+      );
+      if (dehors || dedans || croise) {
+        alertes.push({
+          grave: true,
+          message: `${a.nom} : une zone exclue sort du contour ou touche une autre zone exclue.`,
+        });
       }
     });
   }

@@ -1,10 +1,11 @@
 // Tracé de la zone d'une note : coins touchés sur la carte, ou tour de la zone à pied avec le
 // GPS du téléphone (l'écran reste allumé pendant le tracé).
 
-import { ajouterPointTrace, pointInterieur } from '../suivi/zones';
+import { ajouterZoneExclue } from '../edition/zones-exclues';
+import { ajouterPointTrace, pointInterieur, surfaceZone, texteSurface } from '../suivi/zones';
 import { ui } from './etat';
 import { afficher } from './mise-en-page';
-import { arreterOutilsCarte } from './travail';
+import { arreterOutilsCarte, modifier } from './travail';
 
 let suivi: number | null = null;
 let verrouEcran: { release(): Promise<void> } | null = null;
@@ -16,12 +17,19 @@ function arreterGps(): void {
   verrouEcran = null;
 }
 
-/** Commence le tracé : au doigt (un toucher = un coin) ou en marchant (GPS). */
-export function commencerTrace(mode: 'points' | 'gps'): void {
+/**
+ * Commence le tracé : au doigt (un toucher = un coin) ou en marchant (GPS), pour la zone de la
+ * note en cours ou pour une nouvelle zone exclue de la parcelle `parcelle`.
+ */
+export function commencerTrace(
+  mode: 'points' | 'gps',
+  pour: 'note' | 'exclue' = 'note',
+  parcelle: number | null = null,
+): void {
   arreterOutilsCarte();
   arreterGps();
   ui.placementNote = false;
-  ui.traceZone = { mode, points: [], precision: null };
+  ui.traceZone = { mode, pour, parcelle, points: [], precision: null };
   if (mode === 'gps') {
     if (!('geolocation' in navigator)) {
       ui.traceZone = null;
@@ -86,16 +94,43 @@ export function annulerTrace(): void {
 /** Termine le tracé : la zone devient l'endroit de la note en cours. */
 export function terminerTrace(): void {
   const t = ui.traceZone;
-  if (!t || !ui.noteEnCours) return annulerTrace();
+  if (!t || (t.pour === 'note' && !ui.noteEnCours)) return annulerTrace();
   if (t.points.length < 3) {
     ui.message = { texte: 'Il faut au moins 3 points pour faire une zone.', erreur: true };
     afficher();
     return;
   }
-  arreterGps();
   const zone = t.points.map((p): [number, number] => [p[0], p[1]]);
-  ui.noteEnCours.zone = zone;
-  ui.noteEnCours.position = pointInterieur(zone);
+  if (t.pour === 'exclue') {
+    const s = ui.session;
+    if (!s || t.parcelle === null) return annulerTrace();
+    const p = t.parcelle;
+    let refusee = false;
+    modifier(
+      () => {
+        try {
+          return ajouterZoneExclue(s.etat, p, zone);
+        } catch (e) {
+          refusee = true;
+          throw e;
+        }
+      },
+      `Zone exclue de ${texteSurface(surfaceZone(zone))} ajoutée à ${s.td.parcelles[p]!.nom}`,
+      false,
+    );
+    // Refusée (hors de la parcelle…) : le tracé reste, pour retirer ou ajouter des points.
+    if (!refusee) {
+      arreterGps();
+      ui.traceZone = null;
+    }
+    afficher();
+    return;
+  }
+  arreterGps();
+  if (ui.noteEnCours) {
+    ui.noteEnCours.zone = zone;
+    ui.noteEnCours.position = pointInterieur(zone);
+  }
   ui.traceZone = null;
   afficher();
 }

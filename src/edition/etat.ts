@@ -17,7 +17,7 @@ export interface Sommet {
 export interface AnneauEdite {
   /** Indice de la parcelle dans `TaskData.parcelles`. */
   readonly parcelle: number;
-  /** Indice de l'anneau dans `Parcelle.anneaux`. */
+  /** Indice de l'anneau dans `Parcelle.anneaux` ; -1 pour une zone exclue créée dans l'éditeur. */
   readonly anneau: number;
   readonly type: 1 | 2;
   /** Sommets sans répétition du premier à la fin. */
@@ -48,6 +48,9 @@ export interface Etat {
   /** Zones exclues retirées (indices dans `anneaux`, anneaux de type 2) : la parcelle les reprend. */
   readonly zonesRetirees?: readonly number[];
 }
+
+/** Zone exclue créée dans l'éditeur (pas dans le fichier d'origine). */
+export const estNouvelAnneau = (a: AnneauEdite) => a.anneau < 0;
 
 /** Anneau qui ne compte plus : parcelle retirée, ou zone exclue retirée. */
 export const anneauIgnore = (etat: Etat, i: number) =>

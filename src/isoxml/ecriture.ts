@@ -22,6 +22,15 @@ export interface Changements {
   parcellesRetirees?: ReadonlyArray<Parcelle>;
   /** Zones exclues retirées : lignes entières de leur LSG. */
   zonesRetirees?: ReadonlyArray<Plage>;
+  /**
+   * Zones exclues créées (LSG A="2"), écrites à la position `apres` (fin des lignes du dernier
+   * anneau de la parcelle), sur le modèle des points du contour de la parcelle.
+   */
+  zonesAjoutees?: ReadonlyArray<{
+    parcelle: Parcelle;
+    apres: number;
+    zones: ReadonlyArray<ReadonlyArray<{ lat: number; lon: number }>>;
+  }>;
 }
 
 /** Étend une plage aux lignes entières qu'elle occupe (fin de ligne comprise). */
@@ -92,6 +101,32 @@ export function texteGuidages(
         `</LSG>${finDeLigne}`,
     )
     .join('');
+}
+
+/**
+ * Zone exclue au format du fichier : `<LSG A="2">`, puis une ligne par point sur le modèle du
+ * premier point du contour (mêmes attributs, autant de décimales), le premier marqué B="start",
+ * le dernier répétant le premier avec B="end", comme la zone de 13 Jard ; `</LSG>`.
+ */
+export function texteZoneExclue(
+  texte: string,
+  modele: Point,
+  zone: ReadonlyArray<{ lat: number; lon: number }>,
+  finDeLigne: string,
+): string {
+  const balise = texte.slice(modele.balise.debut, modele.balise.fin).replace(/\sB="[^"]*"/, '');
+  const ligne = (p: { lat: number; lon: number }, b: string | null) =>
+    balise
+      .replace(/(\sC=")[^"]*"/, `$1${formaterComme(p.lat, modele.latBrute)}"`)
+      .replace(/(\sD=")[^"]*"/, `$1${formaterComme(p.lon, modele.lonBrute)}"`)
+      .replace(/^<PNT(\s+A="[^"]*")?/, (m) => (b ? `${m} B="${b}"` : m)) + finDeLigne;
+  const premier = zone[0]!;
+  return (
+    `<LSG A="2">${finDeLigne}` +
+    zone.map((p, k) => ligne(p, k === 0 ? 'start' : null)).join('') +
+    ligne(premier, 'end') +
+    `</LSG>${finDeLigne}`
+  );
 }
 
 interface Remplacement {
@@ -190,6 +225,14 @@ export function exporterTaskData(td: TaskData, changements: Changements = {}): s
     const p = parcelle.debutContour;
     remplacements.push({ plage: { debut: p, fin: p }, texte: texteGuidages(lignes, finDeLigne) });
   }
+  for (const { parcelle, apres, zones } of changements.zonesAjoutees ?? []) {
+    const modele = parcelle.anneaux[0]?.points[0];
+    if (!modele) throw new Error(`${parcelle.nom} : contour sans point, zone exclue impossible.`);
+    remplacements.push({
+      plage: { debut: apres, fin: apres },
+      texte: zones.map((z) => texteZoneExclue(td.texte, modele, z, finDeLigne)).join(''),
+    });
+  }
   // Parcelles retirées : leur bloc et leurs tâches disparaissent, avec tout ce qu'on allait
   // modifier à l'intérieur.
   const retraits: Plage[] = [];
@@ -199,7 +242,15 @@ export function exporterTaskData(td: TaskData, changements: Changements = {}): s
     retraits.push(pfd, ...taches.map((t) => t.plage));
   }
   retraits.push(...(changements.zonesRetirees ?? []));
-  const dedans = (p: Plage) => retraits.some((r) => p.debut >= r.debut && p.fin <= r.fin);
+  // Une insertion posée pile au bord d'un retrait (zone créée juste avant une zone retirée) n'est
+  // pas dedans.
+  const dedans = (p: Plage) =>
+    retraits.some(
+      (r) =>
+        p.debut >= r.debut &&
+        p.fin <= r.fin &&
+        !(p.debut === p.fin && (p.debut === r.debut || p.debut === r.fin)),
+    );
   return remplacer(td.texte, [
     ...remplacements.filter((x) => !dedans(x.plage)),
     ...retraits.map((plage) => ({ plage, texte: '' })),

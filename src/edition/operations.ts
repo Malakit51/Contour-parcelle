@@ -489,6 +489,11 @@ export function supprimerZone(etat: Etat, anneau: number): Etat {
     throw new ErreurEdition('Ce n’est pas une zone exclue.');
   }
   if (etat.zonesRetirees?.includes(anneau)) return etat;
+  // Zone créée dans l'éditeur : elle n'est pas dans le fichier, on la retire simplement (elle est
+  // après les anneaux du fichier, les indices de `zonesRetirees` ne bougent pas).
+  if (etat.anneaux[anneau]!.anneau < 0) {
+    return { ...etat, anneaux: etat.anneaux.filter((_, i) => i !== anneau) };
+  }
   return { ...etat, zonesRetirees: [...(etat.zonesRetirees ?? []), anneau].sort((a, b) => a - b) };
 }
 

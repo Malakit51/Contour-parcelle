@@ -15,6 +15,7 @@ import {
   apercuCollage,
   apercuSimplification,
   boutonSupprimerParcelle,
+  cadreZoneExclue,
   choixActionLimite,
   appliquer,
   commandesSommet,
@@ -463,6 +464,7 @@ export function afficher(): void {
         // Recoller sur l'ancien TASKDATA se fait point par point : le remplacement est à côté.
         ui.mode === 'sommet' && panneauRemplacement(s),
         distanceUtile && raccourcis(),
+        (ui.mode === 'limite' || ui.mode === 'sommet') && cadreZoneExclue(s),
         boutonSupprimerParcelle(s),
       ];
       break;

@@ -37,8 +37,13 @@ export function majSuivi(nouveau: Suivi): void {
 /** Parcelles dont le contour diffère entre deux états. */
 export function parcellesChangees(a: Etat, b: Etat): number[] {
   const changees = new Set<number>();
+  // Une zone exclue créée ou retirée dans l'éditeur : un anneau de plus d'un côté.
+  for (const x of [...a.anneaux.slice(b.anneaux.length), ...b.anneaux.slice(a.anneaux.length)]) {
+    changees.add(x.parcelle);
+  }
   a.anneaux.forEach((r, i) => {
-    const q = b.anneaux[i]!;
+    const q = b.anneaux[i];
+    if (!q) return;
     if (
       r.sommets.length !== q.sommets.length ||
       r.sommets.some((u, k) => u.lat !== q.sommets[k]!.lat || u.lon !== q.sommets[k]!.lon)

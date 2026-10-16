@@ -21,6 +21,10 @@ export function parcellesModifiees(etat: Etat): number[] {
   }
   for (const [i, a] of etat.anneaux.entries()) {
     if (anneauIgnore(etat, i)) continue;
+    if (a.anneau < 0) {
+      modifiees.add(a.parcelle);
+      continue;
+    }
     const supprime = a.sommets.filter((s) => s.origine).length < a.nbOrigine;
     if (
       supprime ||
@@ -50,7 +54,7 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
   const insertions: { apres: Point; points: { lat: number; lon: number }[] }[] = [];
   const suppressions: Point[] = [];
   for (const [i, a] of etat.anneaux.entries()) {
-    if (anneauIgnore(etat, i)) continue;
+    if (anneauIgnore(etat, i) || a.anneau < 0) continue;
     const anneau = td.parcelles[a.parcelle]!.anneaux[a.anneau]!;
     // Points du fichier qui ne sont plus utilisés (hors répétition finale du premier).
     const utilises = new Set(a.sommets.map((s) => s.origine));
@@ -104,7 +108,35 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
       if (!plage) throw new Error('Zone exclue introuvable dans le fichier.');
       return plage;
     });
-  return { points, insertions, suppressions, surfaces, guidages, parcellesRetirees, zonesRetirees };
+  // Zones exclues créées dans l'éditeur : écrites après le dernier anneau gardé de la parcelle.
+  const zonesAjoutees = td.parcelles.flatMap((parcelle, p) => {
+    const nouvelles = etat.anneaux.filter(
+      (a, i) => a.parcelle === p && a.anneau < 0 && !anneauIgnore(etat, i),
+    );
+    if (nouvelles.length === 0) return [];
+    const gardes = etat.anneaux.filter(
+      (a, i) => a.parcelle === p && a.anneau >= 0 && !anneauIgnore(etat, i),
+    );
+    const dernier = parcelle.anneaux[gardes.at(-1)?.anneau ?? -1];
+    if (!dernier?.plage) throw new Error(`${parcelle.nom} : contour introuvable dans le fichier.`);
+    return [
+      {
+        parcelle,
+        apres: dernier.plage.fin,
+        zones: nouvelles.map((a) => a.sommets.map((s) => ({ lat: s.lat, lon: s.lon }))),
+      },
+    ];
+  });
+  return {
+    points,
+    insertions,
+    suppressions,
+    surfaces,
+    guidages,
+    parcellesRetirees,
+    zonesRetirees,
+    zonesAjoutees,
+  };
 }
 
 export function exporterEtat(td: TaskData, etat: Etat): string {
@@ -140,12 +172,16 @@ export function verifierRelecture(td: TaskData, etat: Etat, texte: string): stri
     if (anneauIgnore(etat, k)) continue;
     const nom = td.parcelles[a.parcelle]!.nom;
     const i = gardees.indexOf(a.parcelle);
-    // Rang de l'anneau dans le fichier produit : les zones retirées avant lui ne comptent plus.
-    const rang =
-      a.anneau -
-      (etat.zonesRetirees ?? []).filter(
-        (z) => etat.anneaux[z]!.parcelle === a.parcelle && etat.anneaux[z]!.anneau < a.anneau,
-      ).length;
+    // Rang de l'anneau dans le fichier produit : les anneaux gardés de la parcelle, dans l'ordre
+    // (ceux du fichier, puis les zones créées dans l'éditeur, écrites après).
+    const rang = etat.anneaux
+      .map((x, j) => ({ x, j }))
+      .filter(({ x, j }) => x.parcelle === a.parcelle && !anneauIgnore(etat, j))
+      .sort(
+        (u, v) =>
+          (u.x.anneau < 0 ? 1e9 + u.j : u.x.anneau) - (v.x.anneau < 0 ? 1e9 + v.j : v.x.anneau),
+      )
+      .findIndex(({ j }) => j === k);
     const r = reluEtat.anneaux.find((x) => x.parcelle === i && x.anneau === rang);
     const ferme = (pts: readonly { lat: number; lon: number }[]) =>
       pts.length > 1 && pts[0]!.lat === pts.at(-1)!.lat && pts[0]!.lon === pts.at(-1)!.lon;
@@ -154,7 +190,7 @@ export function verifierRelecture(td: TaskData, etat: Etat, texte: string): stri
     } else if (r.sommets.some((s, i) => distanceM(latLon(s), latLon(a.sommets[i]!)) > 0.02)) {
       problemes.push(`${nom} : un point du contour écrit n’est pas à la bonne place.`);
     } else if (
-      ferme(td.parcelles[a.parcelle]!.anneaux[a.anneau]!.points) !==
+      (a.anneau < 0 ? true : ferme(td.parcelles[a.parcelle]!.anneaux[a.anneau]!.points)) !==
       ferme(relu.parcelles[i]!.anneaux[rang]!.points)
     ) {
       problemes.push(`${nom} : le contour écrit n’est plus fermé comme dans l’original.`);

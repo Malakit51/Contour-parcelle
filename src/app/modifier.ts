@@ -2,7 +2,7 @@
 
 import { type BilanCollage, collerBord, modeleLePlusProche } from '../edition/collage';
 import { remplacerLignesOutil } from '../edition/optimisation';
-import { type Etat, latLon, limitesJumelles, sommetsEn } from '../edition/etat';
+import { type Etat, latLon, limitesJumelles, parcelleContenant, sommetsEn } from '../edition/etat';
 import { nouvelleSurface } from '../edition/export';
 import { ajouterGuidages } from '../edition/guidages';
 import {
@@ -21,6 +21,9 @@ import { blocsDeParcelle } from '../isoxml/ecriture';
 import { planLocal } from '../geometrie/plan';
 import { ecartMaximal } from '../geometrie/simplification';
 import { el } from '../ui/dom';
+import { ajouterZoneExclue } from '../edition/zones-exclues';
+import { surfaceZone, texteSurface } from '../suivi/zones';
+import { commencerTrace } from './trace-zone';
 import { icone } from '../ui/icones';
 import { type Session, TOLERANCES, ui } from './etat';
 import { apercuGuidages, baseNomLignes, optimisationCourante, outilCourant } from './guidage';
@@ -292,7 +295,8 @@ export function panneauSimplification(s: Session): HTMLElement {
   // Écart avec le contour du fichier d'origine : il s'additionne si on simplifie plusieurs fois.
   const ecartOrigine = Math.max(
     ...r.etat.anneaux.flatMap((a, i) => {
-      if (a.parcelle !== p) return [];
+      // Zone exclue créée dans l'éditeur : pas de contour d'origine.
+      if (a.parcelle !== p || !s.initial.anneaux[i]) return [];
       const plan = planLocal(latLon(s.initial.anneaux[i]!.sommets[0]!));
       const versXY = (ss: readonly { lat: number; lon: number }[]) =>
         ss.map((x) => plan.versXY([x.lat, x.lon]));
@@ -644,6 +648,68 @@ export function raccourcis(): HTMLElement {
           },
         },
         v > 0 ? `+${enMetres(v)}` : `−${enMetres(-v)}`,
+      ),
+    ),
+  );
+}
+
+/**
+ * Créer une zone exclue dans la parcelle choisie : la dessiner au doigt, en faire le tour à pied,
+ * ou reprendre la zone dessinée d'une note de la parcelle (mare, bosquet…).
+ */
+export function cadreZoneExclue(s: Session): HTMLElement | null {
+  const i = ui.parcelleCourante;
+  if (i === null || ui.selLimite || ui.selSommet) return null;
+  const p = s.td.parcelles[i]!;
+  const notes = (ui.suivi.notes ?? []).filter(
+    (n) => !n.supprimee && n.zone && n.position && parcelleContenant(s.etat, n.position) === i,
+  );
+  const t = ui.traceZone?.pour === 'exclue' ? ui.traceZone : null;
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, `Ajouter une zone exclue à ${p.nom}`),
+    el(
+      'div',
+      { class: 'doux' },
+      'Trou dans la parcelle (mare, bosquet, poteau) : retiré de la surface, passages coupés autour.',
+    ),
+    el(
+      'div',
+      { class: 'rangee' },
+      el(
+        'button',
+        {
+          class: t?.mode === 'points' ? 'actif' : '',
+          onclick: () => commencerTrace('points', 'exclue', i),
+        },
+        'Dessiner au doigt',
+      ),
+      el(
+        'button',
+        {
+          class: t?.mode === 'gps' ? 'actif' : '',
+          onclick: () => commencerTrace('gps', 'exclue', i),
+        },
+        'Tracer en marchant',
+      ),
+    ),
+    ...notes.map((n) =>
+      el(
+        'div',
+        { class: 'rangee' },
+        el(
+          'button',
+          {
+            onclick: () =>
+              modifier(
+                () => ajouterZoneExclue(s.etat, i, n.zone!),
+                `Zone « ${n.type || n.texte} » (${texteSurface(surfaceZone(n.zone!))}) exclue de ${p.nom}`,
+                false,
+              ),
+          },
+          `Exclure la zone « ${n.type || n.texte || 'note'} » (${texteSurface(surfaceZone(n.zone!))})`,
+        ),
       ),
     ),
   );

@@ -146,7 +146,14 @@ export interface EtatInterface {
    * Zone de la note en cours de tracé : coins touchés sur la carte (« points »), ou positions
    * GPS enregistrées en faisant le tour à pied (« gps »). null : aucun tracé.
    */
-  traceZone: { mode: 'points' | 'gps'; points: LatLon[]; precision: number | null } | null;
+  traceZone: {
+    mode: 'points' | 'gps';
+    /** Zone d'une note, ou nouvelle zone exclue de la parcelle `parcelle`. */
+    pour: 'note' | 'exclue';
+    parcelle: number | null;
+    points: LatLon[];
+    precision: number | null;
+  } | null;
   /** Le prochain toucher sur la carte donne l'endroit de la note en cours. */
   placementNote: boolean;
   /** Ligne de guidage montrée sur la carte (touchée dans la liste « Lignes déjà créées »). */
