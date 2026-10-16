@@ -20,6 +20,7 @@ import {
 import { el } from '../ui/dom';
 import { COULEURS_ETAT, couleurNote, type Session, ui } from './etat';
 import { parcelleContenant } from '../edition/etat';
+import { nouvelleSurface } from '../edition/export';
 import { enregistrerSauvegarde } from './exporter';
 import { afficher } from './mise-en-page';
 import { arreterOutilsCarte, dateFr, effacerSelection, majSuivi, quandFr } from './travail';
@@ -139,6 +140,10 @@ function panneauSuiviParcelle(s: Session): HTMLElement | null {
     derniere && el('div', { class: 'doux' }, `${quandFr(derniere.quand)} · ${derniere.action}`),
   );
 }
+
+/** Surface en hectares, deux décimales (« 22,60 ha »). */
+const ha = (m2: number | null) =>
+  m2 === null ? '' : `${(m2 / 10000).toFixed(2).replace('.', ',')} ha`;
 
 // ---------- Notes sur la parcelle ----------
 
@@ -442,6 +447,13 @@ function panneauToutes(s: Session): HTMLElement[] {
     ),
   );
   const visibles = parcelles.filter((x) => ui.filtreSuivi === null || x.f.etat === ui.filtreSuivi);
+  // Surface actuelle (celle écrite dans D à l'export) et notes sans endroit : celles-là n'ont pas
+  // d'épingle sur la carte, la coche dit qu'il y en a.
+  const surfaces = new Map(visibles.map(({ i }) => [i, nouvelleSurface(s.td, s.etat, i)]));
+  const sansEndroit = new Set(
+    (ui.suivi.notes ?? []).filter((n) => !n.supprimee && !n.position).map((n) => n.cle),
+  );
+  const total = [...surfaces.values()].reduce((a: number, m) => a + (m ?? 0), 0);
   // Un appui sur une ligne choisit la parcelle et montre sa fiche (portée Parcelle).
   const liste = el(
     'div',
@@ -466,9 +478,24 @@ function panneauToutes(s: Session): HTMLElement[] {
           el('span', { class: 'ligne-suivi-nom' }, p.nom),
           f.remarque && el('span', { class: 'doux' }, f.remarque),
         ),
-        el('span', { class: 'doux' }, f.date ? dateFr(f.date) : ''),
+        el('span', { class: 'ligne-suivi-surface' }, ha(surfaces.get(i) ?? null)),
+        el(
+          'span',
+          { class: 'ligne-suivi-note', title: 'Note sans épingle' },
+          sansEndroit.has(cleParcelle(p)) ? '✓' : '',
+        ),
+        el('span', { class: 'doux ligne-suivi-date' }, f.date ? dateFr(f.date) : ''),
       ),
     ),
+  );
+  const entete = el(
+    'div',
+    { class: 'ligne-suivi entete' },
+    el('span', { class: 'pastille' }),
+    el('span', { class: 'ligne-suivi-texte' }, 'Parcelle'),
+    el('span', { class: 'ligne-suivi-surface' }, 'Surface'),
+    el('span', { class: 'ligne-suivi-note' }, 'Note'),
+    el('span', { class: 'ligne-suivi-date' }, 'Date'),
   );
   return [
     el(
@@ -483,7 +510,16 @@ function panneauToutes(s: Session): HTMLElement[] {
           { class: 'doux' },
           `Seulement « ${LIBELLES[ui.filtreSuivi].toLowerCase()} » : touche encore le compteur pour tout revoir.`,
         ),
+      visibles.length > 0 && entete,
       visibles.length > 0 ? liste : el('div', { class: 'doux' }, 'Aucune parcelle.'),
+      visibles.length > 0 &&
+        el(
+          'div',
+          { class: 'doux total-suivi' },
+          `${visibles.length} parcelle(s) · ${ha(total)}`,
+          el('br'),
+          'Note : une note sans épingle sur la carte (toute la parcelle).',
+        ),
     ),
     el(
       'div',
