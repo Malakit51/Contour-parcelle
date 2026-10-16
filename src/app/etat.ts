@@ -31,9 +31,10 @@ export interface Session {
   couleurs: number[];
 }
 
-export type Onglet = 'modifier' | 'suivi' | 'export' | 'fichier';
+export type Onglet = 'modifier' | 'guidage' | 'suivi' | 'export' | 'fichier';
 export const ONGLETS: Record<Onglet, string> = {
   modifier: 'Modifier',
+  guidage: 'Guidage',
   suivi: 'Suivi',
   export: 'Export',
   fichier: 'Fichier',
@@ -56,6 +57,8 @@ export interface EtatInterface {
   /** Couleur des parcelles sur la carte : selon l'état du contour, ou pour distinguer les voisines. */
   couleursParEtat: boolean;
   mode: 'limite' | 'sommet' | 'simplifier' | 'guidage' | 'coller';
+  /** Mode de l'onglet Modifier, repris en revenant de l'onglet Guidage. */
+  modeModifier: 'limite' | 'sommet' | 'simplifier' | 'coller';
   /** Mode Bord : dernière action choisie (Simplifier ou Coller), reprise au retour dans le mode. */
   actionBord: 'simplifier' | 'coller';
   /** Mode Coller : anneau de la parcelle voisine qui sert de modèle. */
@@ -136,6 +139,7 @@ export const ui: EtatInterface = {
   couleursParEtat: true,
   mode: 'limite',
   modele: null,
+  modeModifier: 'limite',
   actionBord: 'simplifier',
   typeGuidage: 'ab',
   guidageInterieur: true,
@@ -189,6 +193,9 @@ export const RAYON_TOUCHER_PX = 26;
 
 export const SEUILS_COINS = [20, 30, 45, 60];
 export const TOLERANCES = [0.1, 0.25, 0.5, 1];
+
+/** Onglet qui correspond au mode : Guidage pour les lignes, Modifier pour le reste. */
+export const ongletDuMode = (): Onglet => (ui.mode === 'guidage' ? 'guidage' : 'modifier');
 
 /** Choix d'un bord, du premier au dernier sommet (simplification d'un bord, ligne de guidage, collage). */
 export const choixDeBord = () =>

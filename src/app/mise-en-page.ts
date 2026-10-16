@@ -363,6 +363,7 @@ export function afficher(): void {
 
   const ICONES_ONGLETS: Record<Onglet, Icone> = {
     modifier: 'modifier',
+    guidage: 'lignes',
     suivi: 'suivi',
     export: 'export',
     fichier: 'fichier',
@@ -376,6 +377,15 @@ export function afficher(): void {
           class: o === ui.onglet ? 'onglet choisi' : 'onglet',
           onclick: () => {
             ui.onglet = o;
+            // Guidage et Modifier ont chacun leurs modes : on passe de l'un à l'autre.
+            if (o === 'guidage' && ui.mode !== 'guidage') {
+              ui.modeModifier = ui.mode;
+              ui.mode = 'guidage';
+              effacerSelection();
+            } else if (o === 'modifier' && ui.mode === 'guidage') {
+              ui.mode = ui.modeModifier;
+              effacerSelection();
+            }
             zones.panneau.scrollTop = 0;
             afficher();
           },
@@ -420,7 +430,6 @@ export function afficher(): void {
           modeBouton('limite', 'Limite'),
           modeBouton('sommet', 'Point'),
           modeBouton('simplifier', 'Bord'),
-          modeBouton('guidage', 'Guidage'),
         ),
         (ui.mode === 'simplifier' || ui.mode === 'coller') && choixActionBord(),
         ui.mode === 'simplifier'
@@ -434,6 +443,9 @@ export function afficher(): void {
         ui.mode === 'sommet' && panneauRemplacement(s),
         distanceUtile && raccourcis(),
       ];
+      break;
+    case 'guidage':
+      contenu = [panneauGuidage(s), raccourcis()];
       break;
     case 'suivi':
       contenu = [

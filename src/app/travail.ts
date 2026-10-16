@@ -23,7 +23,7 @@ import {
   type Suivi,
 } from '../suivi/suivi';
 import { programmerSauvegardeDrive } from './drive';
-import { CLE_SESSION_ILLISIBLE, type Session, ui } from './etat';
+import { CLE_SESSION_ILLISIBLE, type Session, ui, ongletDuMode } from './etat';
 import { afficher } from './mise-en-page';
 import { ecrireStockage, nomAppareil, stockage } from './stockage';
 import { cadrerTout, colorier } from './vue';
@@ -135,7 +135,7 @@ export function ouvrir(
     couleurs: colorier(initial, td.parcelles.length),
   };
   ui.parcelleCourante = null;
-  ui.onglet = 'modifier';
+  ui.onglet = ongletDuMode();
   effacerSelection();
   ui.message = { texte: texteMessage, erreur: false };
   garderSession(nouveau);

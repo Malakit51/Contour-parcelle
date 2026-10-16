@@ -94,7 +94,7 @@ export function panneauSauvegardeFichier(): HTMLElement {
   return el(
     'div',
     { class: 'info' },
-    el('strong', {}, 'Sauvegarde'),
+    el('strong', {}, 'Sauvegarde dans un fichier'),
     el(
       'div',
       { class: 'rangee' },
@@ -123,9 +123,42 @@ export function boutonFichier(): HTMLElement {
 }
 
 export function contenuFichier(s: Session | null): Node[] {
+  const section = (titre: string) => el('h2', { class: 'titre-section' }, titre);
   const contenu: Node[] = [
     ...(s ? [] : [el('h1', {}, 'Contours parcelles')]),
-    el('div', { class: 'rangee' }, boutonFichier()),
+    // Fichier ouvert : ouvrir, référence, réinitialiser, fermer.
+    section('Fichier ouvert'),
+    el(
+      'div',
+      { class: 'info' },
+      s && el('strong', {}, s.nomFichier),
+      el('div', { class: 'rangee' }, boutonFichier()),
+      s &&
+        el(
+          'div',
+          { class: 'rangee' },
+          el(
+            'button',
+            { onclick: reinitialiser, ...(travailEnCours(s.etat) ? {} : { disabled: '' }) },
+            'Réinitialiser',
+          ),
+          el('button', { onclick: fermerFichier }, 'Fermer le fichier'),
+        ),
+      s &&
+        ui.sessionNonGardee &&
+        el('div', { class: 'erreur' }, 'Travail non enregistré sur cet appareil.'),
+    ),
+    ...(s && s.alertesChargement.length > 0
+      ? [
+          el(
+            'div',
+            { class: 'info' },
+            el('strong', {}, 'Remarques sur le fichier'),
+            ...s.alertesChargement.map((a) => el('div', {}, a)),
+          ),
+        ]
+      : []),
+    ...(s ? [panneauReference()] : []),
     ...(ui.sessionIllisible
       ? [
           el(
@@ -163,9 +196,12 @@ export function contenuFichier(s: Session | null): Node[] {
           ),
         ]
       : []),
-    ...(s ? [panneauReference()] : []),
+    // Sauvegarde : fichier, partage, Drive.
+    section('Sauvegarde'),
     panneauSauvegardeFichier(),
     panneauDrive(),
+    // Réglages : mise en page, version de l'application.
+    section('Réglages'),
     el(
       'div',
       { class: 'info' },
@@ -193,35 +229,8 @@ export function contenuFichier(s: Session | null): Node[] {
           ),
         ),
       ),
+      el('div', { class: 'doux' }, TEXTE_VERSION),
     ),
   ];
-  if (s) {
-    contenu.push(
-      el(
-        'div',
-        { class: 'rangee' },
-        el(
-          'button',
-          { onclick: reinitialiser, ...(travailEnCours(s.etat) ? {} : { disabled: '' }) },
-          'Réinitialiser',
-        ),
-        el('button', { onclick: fermerFichier }, 'Fermer le fichier'),
-      ),
-      ...(ui.sessionNonGardee
-        ? [el('div', { class: 'erreur' }, 'Travail non enregistré sur cet appareil.')]
-        : []),
-    );
-    if (s.alertesChargement.length > 0) {
-      contenu.push(
-        el(
-          'div',
-          { class: 'info' },
-          el('strong', {}, 'Remarques sur le fichier'),
-          ...s.alertesChargement.map((a) => el('div', {}, a)),
-        ),
-      );
-    }
-  }
-  contenu.push(el('div', { class: 'doux' }, TEXTE_VERSION));
   return contenu;
 }

@@ -5,7 +5,7 @@ import { precedent } from '../edition/etat';
 import { ajouterPoint, bordLePlusCourt, placerSommet } from '../edition/operations';
 import { type LatLon, pointDansPolygone, positionSurSegment, type XY } from '../geometrie/plan';
 import { type VersEcran } from '../ui/carte';
-import { choixDeBord, RAYON_TOUCHER_PX, ui } from './etat';
+import { choixDeBord, RAYON_TOUCHER_PX, ui, ongletDuMode } from './etat';
 import { afficher } from './mise-en-page';
 import { effacerSelection, enregistrerModification, modifier } from './travail';
 import { anneauxLL, nomParcelle, pointSousLeDoigt } from './vue';
@@ -129,7 +129,7 @@ export function toucher(
         ui.limiteGlisse = { anneau: ref.anneau, debut: bordTouche.debut };
         ui.sensGlisse = null;
         ui.message = null;
-        ui.onglet = 'modifier';
+        ui.onglet = ongletDuMode();
         afficher();
         return;
       }
@@ -165,7 +165,7 @@ export function toucher(
     if (touche >= 0) {
       ui.modele = touche;
       ui.message = null;
-      ui.onglet = 'modifier';
+      ui.onglet = ongletDuMode();
       afficher();
       return;
     }
@@ -207,12 +207,12 @@ export function toucher(
     } else {
       ui.bordDebut = { anneau: choix.anneau, sommet: choix.indice };
     }
-    ui.onglet = 'modifier';
+    ui.onglet = ongletDuMode();
   } else if (choix) {
     ui.parcelleCourante = s.etat.anneaux[choix.anneau]!.parcelle;
     if (ui.mode === 'limite') ui.selLimite = { anneau: choix.anneau, debut: choix.indice };
     else if (ui.mode === 'sommet') ui.selSommet = { anneau: choix.anneau, sommet: choix.indice };
-    ui.onglet = 'modifier';
+    ui.onglet = ongletDuMode();
   } else {
     // Toucher à l'intérieur d'une parcelle (loin de ses limites) : on la sélectionne.
     const dedans = anneaux.findIndex(

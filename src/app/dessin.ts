@@ -5,7 +5,7 @@ import { jeuDe } from '../edition/guidages';
 import { cotesLimite, repereLeLong, sommetsDuBord } from '../edition/operations';
 import { fiche } from '../suivi/suivi';
 import { type Dessin } from '../ui/carte';
-import { choixDeBord, COULEURS, COULEURS_ETAT, SEL, type Session, ui } from './etat';
+import { choixDeBord, COULEURS, COULEURS_ETAT, SEL, type Session, ui, ongletDuMode } from './etat';
 import { apercuGuidages, coinsGuidage } from './guidage';
 import { afficher } from './mise-en-page';
 import { apercuCollage, apercuSimplification } from './modifier';
@@ -86,7 +86,7 @@ export function dessin(s: Session): Dessin {
       choisie: ui.sensLimite === sens,
       action: () => {
         ui.sensLimite = sens;
-        ui.onglet = 'modifier';
+        ui.onglet = ongletDuMode();
         afficher();
       },
     }));

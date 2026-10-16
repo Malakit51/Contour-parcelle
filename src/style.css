@@ -360,6 +360,15 @@ button.petit {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+/* Titres des groupes de l'onglet Fichier. */
+.titre-section {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--doux);
+  margin: 14px 4px 6px;
+}
 h1 {
   font-size: 1.3rem;
   margin: 8px 0 12px;
