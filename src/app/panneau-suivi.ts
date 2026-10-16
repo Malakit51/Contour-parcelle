@@ -8,6 +8,7 @@ import {
   csvSuivi,
   type EtatContour,
   fiche,
+  importerCsv,
   LIBELLES,
 } from '../suivi/suivi';
 import { el } from '../ui/dom';
@@ -139,6 +140,7 @@ export function panneauSuiviGeneral(s: Session): HTMLElement {
         { onclick: () => telechargerCsv(csvJournal(ui.suivi), 'journal-contours.csv') },
         'Journal en CSV',
       ),
+      boutonImportCsv(s),
     ),
     el('strong', {}, 'Journal'),
     ...journal.map((e) =>
@@ -154,4 +156,42 @@ export function panneauSuiviGeneral(s: Session): HTMLElement {
   );
   bloc.addEventListener('toggle', () => (ui.suiviOuvert = bloc.open));
   return bloc;
+}
+
+/** Reprend un CSV du suivi ou du journal (après un effacement des données de Chrome…). */
+function boutonImportCsv(s: Session): HTMLElement {
+  const choix = el('label', { class: 'bouton-fichier secondaire' }, 'Charger un CSV');
+  const input = el('input', { type: 'file', accept: '.csv,text/csv,text/plain' });
+  input.addEventListener('change', async () => {
+    const f = input.files?.[0];
+    input.value = '';
+    if (!f) return;
+    try {
+      const r = importerCsv(ui.suivi, await f.text(), s.td.parcelles);
+      majSuivi(r.suivi);
+      const b = r.bilan;
+      const quoi =
+        b.type === 'suivi'
+          ? `Suivi repris : ${b.ajouts} parcelle(s) mise(s) à jour`
+          : `Journal repris : ${b.ajouts} ligne(s) ajoutée(s)`;
+      const deja =
+        b.dejaLa > 0
+          ? b.type === 'suivi'
+            ? `, ${b.dejaLa} déjà à jour ou plus récente(s) sur l’appareil`
+            : `, ${b.dejaLa} déjà présente(s)`
+          : '';
+      const inconnues =
+        b.inconnues.length > 0
+          ? b.type === 'suivi'
+            ? `. Absentes du fichier ouvert : ${b.inconnues.join(', ')}`
+            : `. Illisibles : ${b.inconnues.join(', ')}`
+          : '';
+      ui.message = { texte: `${quoi}${deja}${inconnues}.`, erreur: b.inconnues.length > 0 };
+    } catch (e) {
+      ui.message = { texte: `CSV non repris : ${(e as Error).message}`, erreur: true };
+    }
+    afficher();
+  });
+  choix.append(input);
+  return choix;
 }

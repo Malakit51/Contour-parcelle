@@ -186,3 +186,168 @@ export function fusionner(a: Suivi, b: Suivi): Suivi {
   const derniereVersion = versions.sort(comparerVersions).at(-1);
   return { version: 1, fiches, journal, ...(derniereVersion ? { derniereVersion } : {}) };
 }
+
+// ---------- Import d'un CSV (restauration du suivi ou du journal) ----------
+
+/** Découpe un CSV (« ; » ou « , », guillemets doublés) en lignes de champs. */
+export function lireCsv(texte: string): string[][] {
+  const t = texte.replace(/^﻿/, '');
+  const premiere = t.split(/\r?\n/, 1)[0] ?? '';
+  const sep = premiere.includes(';') ? ';' : ',';
+  const lignes: string[][] = [];
+  let ligne: string[] = [];
+  let champ = '';
+  let guillemets = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i]!;
+    if (guillemets) {
+      if (c === '"' && t[i + 1] === '"') {
+        champ += '"';
+        i++;
+      } else if (c === '"') guillemets = false;
+      else champ += c;
+    } else if (c === '"') guillemets = true;
+    else if (c === sep) {
+      ligne.push(champ);
+      champ = '';
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && t[i + 1] === '\n') i++;
+      ligne.push(champ);
+      if (ligne.some((x) => x.trim() !== '')) lignes.push(ligne);
+      ligne = [];
+      champ = '';
+    } else champ += c;
+  }
+  ligne.push(champ);
+  if (ligne.some((x) => x.trim() !== '')) lignes.push(ligne);
+  return lignes;
+}
+
+/** « 2026-10-16 » ou « 16/10/2026 » (date réécrite par un tableur) → « 2026-10-16 » ; sinon null. */
+function dateIso(v: string): string | null {
+  const s = v.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+  return m ? `${m[3]}-${m[2]!.padStart(2, '0')}-${m[1]!.padStart(2, '0')}` : null;
+}
+
+const sansAccents = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+
+function etatDe(libelle: string): EtatContour | null {
+  const l = sansAccents(libelle);
+  return (
+    (Object.keys(LIBELLES) as EtatContour[]).find((e) => sansAccents(LIBELLES[e]) === l) ?? null
+  );
+}
+
+function nombre(v: string): number | null {
+  const s = v.replace(/[\s  ]/g, '').replace(',', '.');
+  if (s === '') return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+export interface BilanImport {
+  type: 'suivi' | 'journal';
+  /** Fiches restaurées, ou lignes de journal ajoutées. */
+  ajouts: number;
+  /** Lignes ignorées : déjà présentes, ou fiche plus récente sur l'appareil. */
+  dejaLa: number;
+  /** Noms de parcelles absents du fichier ouvert (suivi), ou lignes illisibles. */
+  inconnues: string[];
+}
+
+/**
+ * Reprend un CSV produit par « Suivi en CSV » ou « Journal en CSV » (même retouché dans un
+ * tableur). Suivi : les parcelles sont retrouvées par leur nom dans le fichier ouvert ; une fiche
+ * du CSV remplace celle de l'appareil si elle est au moins aussi récente. Journal : les lignes
+ * déjà présentes (même minute, même parcelle, même action) ne sont pas ajoutées deux fois.
+ */
+export function importerCsv(
+  suivi: Suivi,
+  texte: string,
+  parcelles: readonly Parcelle[],
+): { suivi: Suivi; bilan: BilanImport } {
+  const [entete, ...lignes] = lireCsv(texte);
+  const titres = (entete ?? []).map(sansAccents);
+  const parNom = new Map(parcelles.map((p) => [p.nom.trim(), p]));
+  if (titres[0] === 'parcelle' && titres[1] === 'etat') {
+    const fiches = { ...suivi.fiches };
+    const bilan: BilanImport = { type: 'suivi', ajouts: 0, dejaLa: 0, inconnues: [] };
+    for (const [nom = '', libelle = '', date = '', remarque = ''] of lignes) {
+      const p = parNom.get(nom.trim());
+      const etat = etatDe(libelle);
+      if (!p || !etat) {
+        bilan.inconnues.push(nom.trim() || '(sans nom)');
+        continue;
+      }
+      const jour = dateIso(date) ?? '';
+      // Parcelle jamais suivie (à confirmer, sans date ni remarque) : rien à restaurer.
+      if (!jour && etat === 'a-confirmer' && !remarque.trim()) continue;
+      const cle = cleParcelle(p);
+      const actuelle = fiches[cle];
+      if (actuelle && actuelle.date > jour) {
+        bilan.dejaLa++;
+        continue;
+      }
+      if (
+        actuelle &&
+        actuelle.etat === etat &&
+        actuelle.date === jour &&
+        actuelle.remarque === remarque
+      ) {
+        bilan.dejaLa++;
+        continue;
+      }
+      fiches[cle] = { nom: p.nom, etat, date: jour, remarque };
+      bilan.ajouts++;
+    }
+    return { suivi: { ...suivi, fiches }, bilan };
+  }
+  if (titres[0] === 'date' && titres[1] === 'heure' && titres[2] === 'parcelle') {
+    const bilan: BilanImport = { type: 'journal', ajouts: 0, dejaLa: 0, inconnues: [] };
+    const z = (n: number) => String(n).padStart(2, '0');
+    const minute = (quand: string) => {
+      const d = new Date(quand);
+      return `${aujourdhui(d)} ${z(d.getHours())}:${z(d.getMinutes())}`;
+    };
+    const presentes = new Set(
+      suivi.journal.map((e) => `${minute(e.quand)}|${e.parcelle}|${e.action}`),
+    );
+    const nouvelles: EntreeJournal[] = [];
+    lignes.forEach(
+      ([date = '', heure = '', parcelle = '', action = '', avant = '', apres = ''], i) => {
+        const jour = dateIso(date);
+        const h = /^(\d{1,2}):(\d{2})/.exec(heure.trim());
+        if (!jour || !h || !action.trim()) {
+          bilan.inconnues.push(`ligne ${i + 2}`);
+          return;
+        }
+        const [a, m, j] = jour.split('-').map(Number) as [number, number, number];
+        const quand = new Date(a, m - 1, j, Number(h[1]), Number(h[2])).toISOString();
+        const nom = parcelle.trim();
+        const id = `${minute(quand)}|${nom}|${action}`;
+        if (presentes.has(id)) {
+          bilan.dejaLa++;
+          return;
+        }
+        presentes.add(id);
+        const p = parNom.get(nom);
+        nouvelles.push({
+          quand,
+          cle: nom === '—' ? 'export' : p ? cleParcelle(p) : `nom:${nom}`,
+          parcelle: nom,
+          action,
+          surfaceAvant: nombre(avant),
+          surfaceApres: nombre(apres),
+        });
+        bilan.ajouts++;
+      },
+    );
+    const journal = [...suivi.journal, ...nouvelles].sort((x, y) => x.quand.localeCompare(y.quand));
+    return { suivi: { ...suivi, journal }, bilan };
+  }
+  throw new Error(
+    'Ce fichier n’est ni un CSV du suivi (Parcelle ; État…) ni un CSV du journal (Date ; Heure ; Parcelle…).',
+  );
+}

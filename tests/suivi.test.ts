@@ -9,6 +9,7 @@ import {
   enregistrer,
   fiche,
   fusionner,
+  importerCsv,
   suiviVide,
   versionSuivante,
 } from '../src/suivi/suivi';
@@ -140,5 +141,82 @@ describe('numéro de version des exports', () => {
     expect(fusionner(a, b).derniereVersion).toBe('0.10');
     expect(fusionner(b, a).derniereVersion).toBe('0.10');
     expect(fusionner(suiviVide(), suiviVide()).derniereVersion).toBeUndefined();
+  });
+});
+
+describe('restaurer le suivi depuis un CSV', () => {
+  const jour = new Date(2026, 9, 13, 15, 30);
+  let complet = changerFiche(
+    suiviVide(),
+    bois!,
+    { etat: 'verifie', remarque: 'bord ; "net"' },
+    jour,
+  );
+  complet = changerFiche(complet, jard!, { etat: 'a-refaire' }, jour);
+  complet = {
+    ...complet,
+    journal: [
+      {
+        quand: jour.toISOString(),
+        cle: cleParcelle(bois!),
+        parcelle: 'Le Bois',
+        action: 'Limite Sud décalée de +0,5 m',
+        surfaceAvant: 10000,
+        surfaceApres: 10049.6,
+      },
+      {
+        quand: new Date(2026, 9, 13, 16, 0).toISOString(),
+        cle: 'export',
+        parcelle: '—',
+        action: 'Exporté (version 0.12)',
+        surfaceAvant: null,
+        surfaceApres: null,
+      },
+    ],
+  };
+
+  it('aller-retour : le suivi exporté puis réimporté sur un appareil vide redonne les fiches', () => {
+    const r = importerCsv(suiviVide(), csvSuivi(complet, td.parcelles), td.parcelles);
+    expect(r.bilan).toEqual({ type: 'suivi', ajouts: 2, dejaLa: 0, inconnues: [] });
+    expect(r.suivi.fiches).toEqual(complet.fiches);
+    // Une deuxième fois : rien de nouveau.
+    const r2 = importerCsv(r.suivi, csvSuivi(complet, td.parcelles), td.parcelles);
+    expect(r2.bilan.ajouts).toBe(0);
+  });
+
+  it('une fiche plus récente sur l’appareil n’est pas écrasée', () => {
+    const recent = changerFiche(suiviVide(), bois!, { etat: 'a-confirmer' }, new Date(2026, 9, 15));
+    const r = importerCsv(recent, csvSuivi(complet, td.parcelles), td.parcelles);
+    expect(fiche(r.suivi, bois!).etat).toBe('a-confirmer');
+    expect(fiche(r.suivi, jard!).etat).toBe('a-refaire');
+    expect(r.bilan).toMatchObject({ ajouts: 1, dejaLa: 1 });
+  });
+
+  it('CSV retouché dans un tableur (dates JJ/MM/AAAA, sans accents) et nom inconnu', () => {
+    const texte =
+      'Parcelle;Etat;Date;Remarque\r\nLe Bois;verifie;13/10/2026;ok\r\nInconnue;Vérifié;;\r\n';
+    const r = importerCsv(suiviVide(), texte, td.parcelles);
+    expect(fiche(r.suivi, bois!)).toMatchObject({
+      etat: 'verifie',
+      date: '2026-10-13',
+      remarque: 'ok',
+    });
+    expect(r.bilan.inconnues).toEqual(['Inconnue']);
+  });
+
+  it('journal : réimporté sur un appareil vide, puis sans doublon', () => {
+    const r = importerCsv(suiviVide(), csvJournal(complet), td.parcelles);
+    expect(r.bilan).toEqual({ type: 'journal', ajouts: 2, dejaLa: 0, inconnues: [] });
+    expect(r.suivi.journal.map((e) => [e.cle, e.action, e.surfaceApres])).toEqual([
+      [cleParcelle(bois!), 'Limite Sud décalée de +0,5 m', 10050],
+      ['export', 'Exporté (version 0.12)', null],
+    ]);
+    expect(r.suivi.journal[0]!.quand).toBe(complet.journal[0]!.quand);
+    // Sur l'appareil qui a encore son journal : rien n'est ajouté.
+    expect(importerCsv(complet, csvJournal(complet), td.parcelles).bilan.dejaLa).toBe(2);
+  });
+
+  it('refuse un autre fichier', () => {
+    expect(() => importerCsv(suiviVide(), 'a;b\r\n1;2\r\n', td.parcelles)).toThrow(/ni un CSV/);
   });
 });
