@@ -39,6 +39,9 @@ export function changerMasques(masques: Set<string>): void {
   afficher();
 }
 
+/** Défilement de la liste des jeux, gardé quand le menu est redessiné (après chaque case). */
+let defilementJeux = 0;
+
 /** Bouton « Lignes » en haut à droite de la carte, avec la liste des jeux à cocher. */
 export function commandesLignes(s: Session): HTMLElement | null {
   const noms = jeux(s.etat.guidages ?? []);
@@ -56,37 +59,70 @@ export function commandesLignes(s: Session): HTMLElement | null {
     `Lignes ${visibles}/${noms.length}`,
   );
   if (!ui.menuLignesOuvert) return el('div', {}, bouton);
-  return el(
+  // « Tout masquer » en tête, puis la liste, qui défile si elle dépasse le bas de la carte.
+  const liste = el(
     'div',
-    {},
-    bouton,
-    el(
-      'div',
-      { class: 'menu-lignes' },
-      ...noms.map((n) =>
-        el(
-          'button',
-          {
-            class: ui.jeuxMasques.has(n) ? '' : 'coche',
-            onclick: () => {
-              const m = new Set(ui.jeuxMasques);
-              if (m.has(n)) m.delete(n);
-              else m.add(n);
-              changerMasques(m);
-            },
-          },
-          `${ui.jeuxMasques.has(n) ? '☐' : '☑'} ${n}`,
-        ),
-      ),
+    { class: 'liste-jeux' },
+    ...noms.map((n) =>
       el(
         'button',
         {
+          class: ui.jeuxMasques.has(n) ? '' : 'coche',
+          onclick: () => {
+            const m = new Set(ui.jeuxMasques);
+            if (m.has(n)) m.delete(n);
+            else m.add(n);
+            changerMasques(m);
+          },
+        },
+        `${ui.jeuxMasques.has(n) ? '☐' : '☑'} ${n}`,
+      ),
+    ),
+  );
+  const menu = el(
+    'div',
+    { class: 'menu-lignes' },
+    el(
+      'div',
+      { class: 'menu-lignes-tete' },
+      el(
+        'button',
+        {
+          class: 'tout',
           onclick: () => changerMasques(visibles > 0 ? new Set(noms) : new Set()),
         },
         visibles > 0 ? 'Tout masquer' : 'Tout afficher',
       ),
+      el(
+        'button',
+        {
+          class: 'fermer',
+          'aria-label': 'Fermer la liste des lignes',
+          onclick: () => {
+            ui.menuLignesOuvert = false;
+            afficher();
+          },
+        },
+        '✕',
+      ),
     ),
+    liste,
   );
+  // Le menu prend toute la hauteur visible de la carte, à gauche des boutons ronds (sous la barre
+  // du haut et au-dessus du volet s'ils sont posés sur la carte).
+  requestAnimationFrame(() => {
+    const r = carte.element.getBoundingClientRect();
+    const haut = r.top + carte.margeHaut + 8;
+    menu.style.top = `${haut}px`;
+    menu.style.right = `${window.innerWidth - r.right + 64}px`;
+    menu.style.maxHeight = `${Math.max(120, r.bottom - carte.margeBas - 8 - haut)}px`;
+    liste.scrollTop = defilementJeux;
+  });
+  // Une liste retirée de la page envoie encore un défilement à 0 : on l’ignore.
+  liste.addEventListener('scroll', () => {
+    if (liste.isConnected) defilementJeux = liste.scrollTop;
+  });
+  return el('div', {}, bouton, menu);
 }
 
 // Nom des lignes (outil, largeur…) : « Semoir 4 m » donne « Semoir 4 m 1 », « Semoir 4 m 2 »…

@@ -984,7 +984,43 @@ body {
   flex-direction: column;
   align-items: stretch;
   gap: 4px;
-  margin-top: 4px;
+  position: fixed;
+  z-index: 1002;
+  max-width: 60vw;
+  padding: 6px;
+  border-radius: var(--rayon);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--ombre-flottante);
+}
+/* Liste des jeux : défile dans le menu (le doigt fait défiler la liste, pas la carte). */
+.menu-lignes .liste-jeux {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 2px 4px 6px;
+  margin: 0 -4px;
+}
+.menu-lignes .liste-jeux button {
+  flex: none;
+}
+.menu-lignes-tete {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+.menu-lignes button.tout {
+  flex: 1;
+  font-weight: 700;
+}
+.menu-lignes button.fermer {
+  flex: none;
+  width: 44px;
+  padding: 0;
+  justify-content: center;
 }
 .menu-lignes button {
   justify-content: flex-start;
