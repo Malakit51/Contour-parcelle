@@ -138,6 +138,8 @@ export interface EtatInterface {
   } | null;
   /** Le prochain toucher sur la carte donne l'endroit de la note en cours. */
   placementNote: boolean;
+  /** Ligne de guidage montrée sur la carte (touchée dans la liste « Lignes déjà créées »). */
+  ligneVue: { parcelle: number; nom: string } | null;
   /** Note montrée sur la carte (nom affiché sous l'épingle). */
   noteVue: string | null;
   /** Jeux de lignes de guidage masqués à l'écran. */
@@ -219,6 +221,7 @@ export const ui: EtatInterface = {
   noteEnCours: null,
   placementNote: false,
   noteVue: null,
+  ligneVue: null,
   emplacementConnu: null,
   dossierSauvegardes: lireStockage(CLE_DOSSIER_SAUVEGARDES),
   suiviOuvert: true,

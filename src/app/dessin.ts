@@ -129,6 +129,20 @@ export function dessin(s: Session): Dessin {
       rayon: 9,
     });
   }
+  // Ligne de guidage touchée dans la liste : en violet épais, ses deux bouts marqués.
+  const vue =
+    ui.onglet === 'guidage' && ui.ligneVue
+      ? (s.etat.guidages ?? []).find(
+          (g) => g.parcelle === ui.ligneVue!.parcelle && g.nom === ui.ligneVue!.nom,
+        )
+      : undefined;
+  if (vue && vue.points.length > 1) {
+    vue.points.forEach((p, k) => {
+      if (k > 0) d.traits.push({ a: vue.points[k - 1]!, b: p, couleur: SEL, epaisseur: 7 });
+    });
+    d.points.push({ p: vue.points[0]!, couleur: SEL, rayon: 8 });
+    d.points.push({ p: vue.points.at(-1)!, couleur: SEL, rayon: 8 });
+  }
   // Optimisation : passages de la proposition choisie, en traits fins sous la ligne AB.
   const optim = enEdition ? optimisationCourante(s) : null;
   const prop = optim?.optimisation.propositions[ui.propositionChoisie];
@@ -152,7 +166,7 @@ export function dessin(s: Session): Dessin {
         p: n.position!,
         couleur: couleurNote(n.type),
         lettre: (n.type || n.texte || '?').trim().charAt(0).toUpperCase(),
-        titre: n.type || n.texte,
+        titre: `${n.type || n.texte} · ${n.parcelle}`,
         choisie: ui.noteVue === n.id,
         obstacle: !!n.obstacle,
         action: () => {

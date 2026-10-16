@@ -17,7 +17,7 @@ import { CLE_JEUX_MASQUES, type Session, SEUILS_COINS, ui } from './etat';
 import { afficher } from './mise-en-page';
 import { ecrireStockage, lireStockage } from './stockage';
 import { metres, modifier } from './travail';
-import { cadrerParcelle } from './vue';
+import { cadrerParcelle, carte } from './vue';
 import {
   lignesOptimisees,
   lignesTourniere,
@@ -334,9 +334,14 @@ export function panneauGuidage(s: Session): HTMLElement {
               ),
             )
         : null;
-  const lignes = (s.etat.guidages ?? []).filter((g) => g.parcelle === ui.parcelleCourante);
   if (ui.porteeGuidage === 'optimiser') {
-    return el('div', { class: 'panneau-guidage' }, portee, ...panneauOptimisation(s));
+    return el(
+      'div',
+      { class: 'panneau-guidage' },
+      portee,
+      ...panneauOptimisation(s),
+      cadreLignes(s),
+    );
   }
   return el(
     'div',
@@ -385,51 +390,7 @@ export function panneauGuidage(s: Session): HTMLElement {
         ),
     ),
     ui.porteeGuidage === 'toutes' && panneauToutes(s),
-    lignes.length > 0 &&
-      el(
-        'div',
-        { class: 'info' },
-        el(
-          'div',
-          { class: 'entete-selection' },
-          el('strong', {}, `Lignes déjà créées (${lignes.length})`),
-          lignes.length > 1 &&
-            el(
-              'button',
-              {
-                class: 'petit',
-                onclick: () =>
-                  modifier(
-                    () => retirerGuidages(s.etat, ui.parcelleCourante),
-                    `${lignes.length} lignes de guidage de ${s.td.parcelles[ui.parcelleCourante!]!.nom} supprimées`,
-                    true,
-                  ),
-              },
-              'Tout supprimer',
-            ),
-        ),
-        ...lignes.map((g) =>
-          el(
-            'div',
-            { class: 'rangee' },
-            el('span', { style: 'flex:1' }, g.nom),
-            el('span', { class: 'doux' }, g.type === 'ab' ? 'droite' : 'courbe'),
-            el(
-              'button',
-              {
-                class: 'petit',
-                onclick: () =>
-                  modifier(
-                    () => ({ ...s.etat, guidages: (s.etat.guidages ?? []).filter((x) => x !== g) }),
-                    `Ligne « ${g.nom} » supprimée`,
-                    true,
-                  ),
-              },
-              'Supprimer',
-            ),
-          ),
-        ),
-      ),
+    cadreLignes(s),
   );
 }
 
@@ -679,4 +640,71 @@ function panneauOptimisation(s: Session): (HTMLElement | false)[] {
       `Règle la console sur ${m(outil.largeur)} exactement : un écart se cumule à chaque passage. Lignes « ${nomLigneAB(outil)} »${ui.lignesTourniere && outil.tourniere > 0 ? `, « ${nomFourriere(outil, 1)} », « ${nomFourriere(outil, 2)} »…` : ''} ; elles remplacent celles déjà créées pour cet outil sur la parcelle.`,
     ),
   ];
+}
+
+/** Cadre « Lignes déjà créées » de la parcelle courante : toucher un nom montre la ligne. */
+function cadreLignes(s: Session): HTMLElement | false {
+  const lignes = (s.etat.guidages ?? []).filter((g) => g.parcelle === ui.parcelleCourante);
+  return (
+    lignes.length > 0 &&
+    el(
+      'div',
+      { class: 'info' },
+      el(
+        'div',
+        { class: 'entete-selection' },
+        el('strong', {}, `Lignes déjà créées (${lignes.length})`),
+        lignes.length > 1 &&
+          el(
+            'button',
+            {
+              class: 'petit',
+              onclick: () =>
+                modifier(
+                  () => retirerGuidages(s.etat, ui.parcelleCourante),
+                  `${lignes.length} lignes de guidage de ${s.td.parcelles[ui.parcelleCourante!]!.nom} supprimées`,
+                  true,
+                ),
+            },
+            'Tout supprimer',
+          ),
+      ),
+      ...lignes.map((g) =>
+        el(
+          'div',
+          {
+            class: `rangee ligne-creee${ui.ligneVue?.parcelle === g.parcelle && ui.ligneVue.nom === g.nom ? ' choisie' : ''}`,
+          },
+          // Toucher le nom : la ligne est montrée (en violet) et la carte se cale dessus.
+          el(
+            'button',
+            {
+              class: 'nom-ligne',
+              onclick: () => {
+                const vue = ui.ligneVue?.parcelle === g.parcelle && ui.ligneVue.nom === g.nom;
+                ui.ligneVue = vue ? null : { parcelle: g.parcelle, nom: g.nom };
+                afficher();
+                if (!vue) carte.cadrer([...g.points]);
+              },
+            },
+            g.nom,
+          ),
+          el('span', { class: 'doux' }, g.type === 'ab' ? 'droite' : 'courbe'),
+          el(
+            'button',
+            {
+              class: 'petit',
+              onclick: () =>
+                modifier(
+                  () => ({ ...s.etat, guidages: (s.etat.guidages ?? []).filter((x) => x !== g) }),
+                  `Ligne « ${g.nom} » supprimée`,
+                  true,
+                ),
+            },
+            'Supprimer',
+          ),
+        ),
+      ),
+    )
+  );
 }

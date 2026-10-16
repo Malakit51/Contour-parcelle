@@ -315,6 +315,7 @@ export function panneauNotes(s: Session): HTMLElement | null {
           'span',
           {},
           el('strong', {}, n.type || 'Note'),
+          el('span', { class: 'parcelle-note' }, ` · ${n.parcelle}`),
           n.obstacle ? el('span', { class: 'badge-obstacle' }, ' obstacle') : '',
           n.texte ? ` — ${n.texte}` : '',
           el(

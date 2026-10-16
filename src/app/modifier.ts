@@ -190,7 +190,7 @@ export function appliquer(): void {
         ? optimisationCourante(s)?.optimisation.propositions[ui.propositionChoisie]
         : null;
       quoi = prop
-        ? `Ligne AB « ${gs[0]!.nom} » optimisée sur ${nom} (cap ${Math.round(prop.cap)}°, ${prop.demiTours} demi-tours)` +
+        ? `« ${gs[0]!.nom} » optimisée sur ${nom} (cap ${Math.round(prop.cap)}°, ${prop.demiTours} demi-tours)` +
           (gs.length > 1 ? ` et ${gs.length - 1} ligne(s) de fourrière` : '')
         : ui.porteeGuidage === 'bord'
           ? `Ligne ${gs[0]!.type === 'ab' ? 'AB' : 'courbe'} « ${gs[0]!.nom} » ajoutée à ${nom} (${cote})`
