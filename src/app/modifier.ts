@@ -20,7 +20,7 @@ import { el } from '../ui/dom';
 import { icone } from '../ui/icones';
 import { type Session, TOLERANCES, ui } from './etat';
 import { apercuGuidages, baseNomLignes } from './guidage';
-import { afficher } from './mise-en-page';
+import { afficher, croixDansLeVolet } from './mise-en-page';
 import { effacerSelection, enMetres, enregistrerModification, metres, modifier } from './travail';
 import { coteLimite, effetsLimite, longueur, nomParcelle } from './vue';
 
@@ -506,31 +506,72 @@ export function panneauSelection(s: Session): HTMLElement {
       .map((r) => nomParcelle(s, r.anneau))
       .filter((n) => n !== nomParcelle(s, ref.anneau)),
   );
-  const glisse = !ui.limiteGlisse
-    ? null
-    : !ui.sensGlisse
-      ? 'Choisis une flèche.'
-      : ui.sensGlisse === 'vers'
-        ? 'Le bord raccourcit.'
-        : 'Le bord s’allonge.';
+  const v = s.etat.anneaux[ref.anneau]!.sommets[ref.sommet]!;
+  // À droite de la croix : glisser le long d'un bord (deux cartes, comme les flèches de la carte).
+  const carteGlisse = (sens: 'vers' | 'oppose') =>
+    el(
+      'button',
+      {
+        class: `carte-sens${ui.sensGlisse === sens ? ' choisie' : ''}`,
+        onclick: () => {
+          ui.sensGlisse = sens;
+          afficher();
+        },
+      },
+      el(
+        'span',
+        { class: 'carte-sens-titre' },
+        sens === 'vers' ? 'Vers l’autre bout' : 'Dans le prolongement',
+      ),
+      el(
+        'span',
+        { class: 'carte-sens-effet' },
+        sens === 'vers' ? 'le bord raccourcit' : 'le bord s’allonge',
+      ),
+    );
+  const coordonnees = el(
+    'div',
+    { class: 'doux coordonnees' },
+    `${v.lat.toFixed(7)}, ${v.lon.toFixed(7)}`,
+  );
+  const glisse = ui.limiteGlisse
+    ? el(
+        'div',
+        { class: 'glisse-point' },
+        coordonnees,
+        el('div', { class: 'doux' }, 'Le long du bord :'),
+        carteGlisse('vers'),
+        carteGlisse('oppose'),
+      )
+    : el(
+        'div',
+        { class: 'glisse-point' },
+        coordonnees,
+        el(
+          'div',
+          { class: 'doux' },
+          'Pour le faire glisser le long d’un bord, touche ce bord sur la carte.',
+        ),
+      );
   return el(
     'div',
-    { class: 'info' },
+    { class: 'selection-limite' },
     el(
       'div',
-      {},
-      el('strong', {}, `Sommet de ${nomParcelle(s, ref.anneau)}`),
-      autres.size > 0 ? ` · commun avec ${[...autres].join(', ')}` : '',
+      { class: 'entete-selection' },
+      el(
+        'span',
+        {},
+        el('strong', {}, `Sommet de ${nomParcelle(s, ref.anneau)}`),
+        autres.size > 0
+          ? el('span', { class: 'doux' }, ` · commun avec ${[...autres].join(', ')}`)
+          : '',
+      ),
     ),
-    el(
-      'div',
-      { class: 'doux' },
-      (() => {
-        const v = s.etat.anneaux[ref.anneau]!.sommets[ref.sommet]!;
-        return `${v.lat.toFixed(7)}, ${v.lon.toFixed(7)}`;
-      })(),
-    ),
-    glisse && el('div', { class: 'sens' }, glisse),
+    // La croix est ici quand le volet est ouvert ; sinon elle reste sur la carte.
+    croixDansLeVolet()
+      ? el('div', { class: 'commandes-point' }, commandesSommet(), glisse)
+      : glisse,
     el('div', { class: 'rangee' }, el('button', { onclick: supprimer }, 'Supprimer'), boutonAjout),
   );
 }

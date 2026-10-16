@@ -195,6 +195,40 @@ body {
   background: var(--choix);
   color: #fff;
 }
+/* Croix de flèches dans le panneau (mode Point). */
+.commandes-point {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  margin: 0 0 10px;
+}
+.commandes-point .croix {
+  display: grid;
+  grid-template-columns: repeat(3, 46px);
+  grid-template-rows: repeat(3, 46px);
+  gap: 6px;
+}
+.commandes-point .croix button {
+  min-height: 0;
+  padding: 0;
+  font-size: 1.5rem;
+  border-radius: 14px;
+}
+.commandes-point .croix button.actif {
+  background: var(--choix);
+  border-color: var(--choix);
+  color: #fff;
+}
+.glisse-point {
+  display: grid;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+.coordonnees {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
 /* Flèches du sens, posées sur la carte : blanches, violettes une fois choisies. */
 .fleche-limite {
   position: absolute;

@@ -135,6 +135,12 @@ export const volet = el(
 export const voletVisible = () =>
   ui.voletActif && app.classList.contains('avec-volet') && poignee.offsetHeight > 0;
 
+/**
+ * Croix de flèches du mode Point dans le volet ouvert (place suffisante) ; sinon sur la carte :
+ * mise en page classique (panneau trop bas), paysage, ou volet replié.
+ */
+export const croixDansLeVolet = () => voletVisible() && ui.cran !== 'replie';
+
 /** Hauteur (px) de chaque cran : replié = poignée, onglets et barre du bas ; plein = sous la barre du haut. */
 export function hauteurs(): Record<Cran, number> {
   // Poignée (marge −12) + onglets + barre du bas, deux espaces de 8 px et la marge du bas (zone
@@ -215,7 +221,9 @@ export function rendreGlissant(zone: HTMLElement, appuiChangeDeCran: boolean): v
       );
     }
     ecrireStockage(CLE_HAUTEUR_VOLET, ui.cran);
-    poserVolet();
+    // Replié ou non : la croix de flèches du mode Point change de place.
+    if (ui.mode === 'sommet' && ui.selSommet) afficher();
+    else poserVolet();
   };
   zone.addEventListener('pointerdown', (e) => {
     if (!voletVisible()) return;
@@ -507,7 +515,10 @@ export function afficher(): void {
     )),
   );
   if (document.activeElement !== champDistance) champDistance.value = ui.saisie;
-  carte.definirCommandes(ui.mode === 'sommet' && ui.selSommet ? commandesSommet() : null);
+  // Croix de flèches : dans le volet ouvert, sinon sur la carte.
+  carte.definirCommandes(
+    ui.mode === 'sommet' && ui.selSommet && !croixDansLeVolet() ? commandesSommet() : null,
+  );
   carte.definirCommandesDroite(boutonsCarte);
   majMesure();
   poserVolet();
