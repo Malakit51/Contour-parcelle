@@ -141,3 +141,41 @@ describe('export de la console (anonymisé)', () => {
     }
   });
 });
+
+describe('passages à dessiner', () => {
+  it('rectangle : 5 segments horizontaux de 200 m, à 10, 30, 50, 70, 90 m du côté Sud', () => {
+    const [longue] = directionsDesCotes(R);
+    const a = evaluerDirection(R, [], longue!, [], { largeur: 20, tourniere: 0 });
+    expect(a.lignes).toHaveLength(5);
+    a.lignes.forEach(([p, q], k) => {
+      expect(p[1]).toBeCloseTo(10 + 20 * k, 6);
+      expect(q[1]).toBeCloseTo(10 + 20 * k, 6);
+      expect(Math.abs(q[0] - p[0])).toBeCloseTo(200, 6);
+    });
+  });
+});
+
+describe('optimisation sur une parcelle de l’éditeur', () => {
+  it('rectangle avec un poteau : ligne AB dans le long côté, poteau en bout d’outil', async () => {
+    const { preparer, plan } = await import('./outils');
+    const { optimiserParcelle, ligneDeProposition } = await import('../src/edition/optimisation');
+    const { etat } = preparer({ R });
+    const poteau = plan.versLatLon([50, 37]);
+    const dehors = plan.versLatLon([500, 37]);
+    const o = optimiserParcelle(etat, 0, [poteau, dehors], {
+      nom: 'Pulvé 20 m',
+      largeur: 20,
+      tourniere: 0,
+    })!;
+    expect(o.obstacles).toEqual([poteau]);
+    const meilleure = o.propositions[0]!;
+    expect(meilleure.demiTours).toBe(4);
+    expect(meilleure.obstacles[0]!.distanceBout).toBeCloseTo(0, 2);
+    const g = ligneDeProposition(0, meilleure, o.plan, 'Pulvé 20 m 1');
+    expect(g).toMatchObject({ parcelle: 0, type: 'ab', nom: 'Pulvé 20 m 1' });
+    // Premier passage à 10 − 3 = 7 m du côté Sud.
+    const [a, b] = g.points.map((q) => plan.versXY(q));
+    expect(a![1]).toBeCloseTo(7, 1);
+    expect(b![1]).toBeCloseTo(7, 1);
+  });
+});

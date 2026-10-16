@@ -19,7 +19,7 @@ import { ecartMaximal } from '../geometrie/simplification';
 import { el } from '../ui/dom';
 import { icone } from '../ui/icones';
 import { type Session, TOLERANCES, ui } from './etat';
-import { apercuGuidages, baseNomLignes } from './guidage';
+import { apercuGuidages, baseNomLignes, optimisationCourante, outilCourant } from './guidage';
 import { afficher, croixDansLeVolet } from './mise-en-page';
 import { effacerSelection, enMetres, enregistrerModification, metres, modifier } from './travail';
 import { coteLimite, effetsLimite, longueur, nomParcelle } from './vue';
@@ -175,11 +175,16 @@ export function appliquer(): void {
     } else if (ui.mode === 'guidage' && apercuGuidages(s).length > 0) {
       const gs = apercuGuidages(s);
       const cote = `${enMetres(Math.abs(d))} m ${ui.guidageInterieur ? 'à l’intérieur' : 'à l’extérieur'}`;
-      const base = baseNomLignes();
+      const optim = ui.porteeGuidage === 'optimiser';
+      const base = optim ? outilCourant()!.nom : baseNomLignes();
       const touchees = new Set(gs.map((g) => g.parcelle));
       const nom = s.td.parcelles[gs[0]!.parcelle]!.nom;
-      quoi =
-        ui.porteeGuidage === 'bord'
+      const prop = optim
+        ? optimisationCourante(s)?.optimisation.propositions[ui.propositionChoisie]
+        : null;
+      quoi = prop
+        ? `Ligne AB « ${gs[0]!.nom} » optimisée sur ${nom} (cap ${Math.round(prop.cap)}°, ${prop.demiTours} demi-tours)`
+        : ui.porteeGuidage === 'bord'
           ? `Ligne ${gs[0]!.type === 'ab' ? 'AB' : 'courbe'} « ${gs[0]!.nom} » ajoutée à ${nom} (${cote})`
           : ui.porteeGuidage === 'parcelle'
             ? `${gs.length} lignes « ${base} » sur ${nom} (${cote})`

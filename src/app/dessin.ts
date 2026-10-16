@@ -15,7 +15,7 @@ import {
   type Session,
   ui,
 } from './etat';
-import { apercuGuidages, coinsGuidage } from './guidage';
+import { apercuGuidages, coinsGuidage, optimisationCourante } from './guidage';
 import { afficher } from './mise-en-page';
 import { apercuCollage, apercuSimplification } from './modifier';
 import { anneauxLL } from './vue';
@@ -121,8 +121,22 @@ export function dessin(s: Session): Dessin {
       rayon: 9,
     });
   }
-  // Notes de toutes les parcelles, dans l'onglet Suivi (épingles de la couleur de leur type).
-  if (ui.onglet === 'suivi') {
+  // Optimisation : passages de la proposition choisie, en traits fins sous la ligne AB.
+  const optim = optimisationCourante(s);
+  const prop = optim?.optimisation.propositions[ui.propositionChoisie];
+  if (optim && prop) {
+    for (const [a, b] of prop.lignes) {
+      d.traits.push({
+        a: optim.optimisation.plan.versLatLon(a),
+        b: optim.optimisation.plan.versLatLon(b),
+        couleur: '#ffd600',
+        epaisseur: 2,
+      });
+    }
+  }
+  // Notes de toutes les parcelles, dans l'onglet Suivi (épingles de la couleur de leur type), et
+  // pendant l'optimisation du guidage (pour voir où tombent les obstacles).
+  if (ui.onglet === 'suivi' || optim) {
     const parCle = new Map(s.td.parcelles.map((p, i) => [cleParcelle(p), i]));
     d.notes = (ui.suivi.notes ?? [])
       .filter((n) => !n.supprimee && n.position && parCle.has(n.cle))

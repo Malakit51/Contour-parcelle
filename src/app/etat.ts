@@ -6,6 +6,7 @@
 import { type Alerte } from '../edition/controles';
 import { type Etat, type RefLimite, type RefSommet } from '../edition/etat';
 import { type Bord } from '../edition/operations';
+import { type Outil } from '../edition/optimisation';
 import { type LatLon, type Plan } from '../geometrie/plan';
 import { type TaskData } from '../isoxml/lecture';
 import { type FichierDrive } from '../sauvegarde/drive';
@@ -48,6 +49,8 @@ export const CLE_SESSION_ILLISIBLE = 'contour-parcelle/session-illisible';
 export const CLE_JEUX_MASQUES = 'contour-parcelle/jeux-masques';
 export const CLE_MISE_EN_PAGE = 'contour-parcelle/mise-en-page';
 export const CLE_HAUTEUR_VOLET = 'contour-parcelle/hauteur-volet';
+export const CLE_OUTILS = 'contour-parcelle/outils';
+export const CLE_OUTIL_CHOISI = 'contour-parcelle/outil-choisi';
 export const CLE_DOSSIER_SAUVEGARDES = 'contour-parcelle/dossier-sauvegardes';
 
 export interface EtatInterface {
@@ -68,7 +71,12 @@ export interface EtatInterface {
   typeGuidage: 'ab' | 'courbe';
   guidageInterieur: boolean;
   /** Une ligne sur un bord choisi, une par côté de la parcelle, ou pour toutes les parcelles. */
-  porteeGuidage: 'bord' | 'parcelle' | 'toutes';
+  porteeGuidage: 'bord' | 'parcelle' | 'toutes' | 'optimiser';
+  /** Outils retenus sur l'appareil (optimisation du guidage) et celui choisi. */
+  outils: Outil[];
+  outilChoisi: number;
+  /** Proposition d'optimisation choisie (0 = la meilleure). */
+  propositionChoisie: number;
   /** Angle à partir duquel un sommet est un coin (lignes de toute la parcelle). */
   seuilCoins: number;
   /** Tolérance de simplification choisie (m). */
@@ -147,6 +155,15 @@ export interface EtatInterface {
   cran: Cran;
 }
 
+function outilsGardes(): Outil[] {
+  try {
+    const l = JSON.parse(lireStockage(CLE_OUTILS) ?? '[]') as Outil[];
+    return Array.isArray(l) ? l.filter((o) => o && o.nom && o.largeur > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
 function jeuxMasquesGardes(): Set<string> {
   try {
     return new Set(JSON.parse(lireStockage(CLE_JEUX_MASQUES) ?? '[]') as string[]);
@@ -167,6 +184,9 @@ export const ui: EtatInterface = {
   typeGuidage: 'ab',
   guidageInterieur: true,
   porteeGuidage: 'bord',
+  outils: outilsGardes(),
+  outilChoisi: Number(lireStockage(CLE_OUTIL_CHOISI) ?? 0) || 0,
+  propositionChoisie: 0,
   seuilCoins: 30,
   tolerance: 0.25,
   porteeSimplif: 'parcelle',

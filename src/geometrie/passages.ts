@@ -48,6 +48,8 @@ export interface Proposition {
   longueurTotale: number;
   /** Passages de moins de deux largeurs de long (pointes). */
   passagesCourts: number;
+  /** Les passages eux-mêmes (segments dans la parcelle, tournière déduite), pour les dessiner. */
+  lignes: [XY, XY][];
   obstacles: PlaceObstacle[];
 }
 
@@ -191,11 +193,15 @@ export function evaluerDirection(
   let passages = 0;
   let longueurPassages = 0;
   let passagesCourts = 0;
+  const lignes: [XY, XY][] = [];
   for (let k = 0; ; k++) {
     const sk = premier + delta + k * W;
     // Dernier passage : celui qui couvre encore une partie de ce qui reste avant la tournière.
     if (sk - W / 2 >= sMax - H) break;
     for (const [d, f] of morceaux(anneaux, u, n, s0Abs + sk, H)) {
+      const sa = s0Abs + sk;
+      const point = (t: number): XY => [n[0] * sa + u[0] * t, n[1] * sa + u[1] * t];
+      lignes.push([point(d), point(f)]);
       passages++;
       longueurPassages += f - d;
       if (f - d < 2 * W) passagesCourts++;
@@ -228,6 +234,7 @@ export function evaluerDirection(
     longueurPassages,
     longueurTotale,
     passagesCourts,
+    lignes,
     obstacles: places.map((p) => ({
       distanceBout: p.dansTourniere ? 0 : Math.max(0, distanceBout(p.s, delta)),
       dansTourniere: p.dansTourniere,

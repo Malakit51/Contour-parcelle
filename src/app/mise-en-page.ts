@@ -53,6 +53,7 @@ function texteAppliquer(): string {
   if (ui.mode === 'sommet' && ui.limiteGlisse) return `Déplacer${d}`;
   if (ui.mode === 'guidage' && ui.session) {
     const n = apercuGuidages(ui.session).length;
+    if (ui.porteeGuidage === 'optimiser') return n > 0 ? 'Créer la ligne AB' : 'Appliquer';
     return n > 1 ? `Créer ${n} lignes` : 'Créer la ligne';
   }
   if (ui.mode === 'simplifier') return 'Simplifier';
@@ -457,7 +458,7 @@ export function afficher(): void {
       ];
       break;
     case 'guidage':
-      contenu = [panneauGuidage(s), raccourcis()];
+      contenu = [panneauGuidage(s), ui.porteeGuidage !== 'optimiser' && raccourcis()];
       break;
     case 'suivi':
       contenu = [
@@ -491,6 +492,8 @@ export function afficher(): void {
 
   // Onglet Export : le bouton principal écrit l'export (sur la clé, ou en téléchargement).
   const enExport = ui.onglet === 'export';
+  // Pas de distance à saisir pour l'optimisation du guidage (la largeur vient de l'outil).
+  const sansDistance = enExport || (ui.onglet === 'guidage' && ui.porteeGuidage === 'optimiser');
   const peutAppliquer = enExport
     ? exportAJour() !== null
     : (ui.mode === 'limite' && ui.selLimite !== null && ui.sensLimite !== null) ||
@@ -517,7 +520,7 @@ export function afficher(): void {
       icone('annuler', 24),
     ),
     // Pas de distance à l'export : le bouton prend la place.
-    !enExport && el('label', { class: 'case-distance' }, champDistance, el('span', {}, 'm')),
+    !sansDistance && el('label', { class: 'case-distance' }, champDistance, el('span', {}, 'm')),
     (boutonAppliquer = el(
       'button',
       {

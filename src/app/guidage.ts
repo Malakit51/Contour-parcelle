@@ -18,6 +18,10 @@ import { afficher } from './mise-en-page';
 import { ecrireStockage, lireStockage } from './stockage';
 import { metres, modifier } from './travail';
 import { cadrerParcelle } from './vue';
+import { ligneDeProposition, optimiserParcelle, type Outil } from '../edition/optimisation';
+import { cleParcelle } from '../suivi/suivi';
+import { CLE_OUTIL_CHOISI, CLE_OUTILS } from './etat';
+import { type Proposition } from '../geometrie/passages';
 
 // ---------- Lignes de guidage : masquer ou afficher un jeu ----------
 //
@@ -115,6 +119,13 @@ export function apercuGuidages(s: Session): Guidage[] {
     return g ? [g] : [];
   }
   if (ui.porteeGuidage === 'parcelle') return coinsGuidage(s)?.lignes ?? [];
+  if (ui.porteeGuidage === 'optimiser') {
+    const o = optimisationCourante(s);
+    const prop = o?.optimisation.propositions[ui.propositionChoisie];
+    return o && prop
+      ? [ligneDeProposition(o.parcelle, prop, o.optimisation.plan, `${o.outil.nom} 1`)]
+      : [];
+  }
   return s.td.parcelles.flatMap((_, p) => lignesParcelle(s, p)?.lignes ?? []);
 }
 
@@ -211,6 +222,7 @@ export function panneauGuidage(s: Session): HTMLElement {
         ['bord', 'Un bord'],
         ['parcelle', 'Parcelle'],
         ['toutes', 'Toutes'],
+        ['optimiser', 'Optimiser'],
       ] as const
     ).map(([v, t]) =>
       el(
@@ -308,6 +320,9 @@ export function panneauGuidage(s: Session): HTMLElement {
             )
         : null;
   const lignes = (s.etat.guidages ?? []).filter((g) => g.parcelle === ui.parcelleCourante);
+  if (ui.porteeGuidage === 'optimiser') {
+    return el('div', { class: 'panneau-guidage' }, portee, ...panneauOptimisation(s));
+  }
   return el(
     'div',
     { class: 'panneau-guidage' },
@@ -401,4 +416,217 @@ export function panneauGuidage(s: Session): HTMLElement {
         ),
       ),
   );
+}
+
+// ---------- Optimisation : outils et propositions ----------
+
+export function outilCourant(): Outil | null {
+  return ui.outils[ui.outilChoisi] ?? ui.outils[0] ?? null;
+}
+
+function garderOutils(): void {
+  ecrireStockage(CLE_OUTILS, ui.outils.length ? JSON.stringify(ui.outils) : null);
+  ecrireStockage(CLE_OUTIL_CHOISI, String(ui.outilChoisi));
+}
+
+/** « 38 », « 0,5 » → nombre ; null si la saisie n'est pas un nombre positif ou nul. */
+function lireMetres(texte: string | null): number | null {
+  if (texte === null) return null;
+  const v = Number(texte.trim().replace(',', '.'));
+  return Number.isFinite(v) && v >= 0 ? v : null;
+}
+
+/** Nom, largeur et tournière demandés l'un après l'autre (rare : une fois par outil). */
+function saisirOutil(depart?: Outil): Outil | null {
+  const nom = prompt('Nom de l’outil (devient le nom des lignes)', depart?.nom ?? 'Pulvé')?.trim();
+  if (!nom) return null;
+  const largeur = lireMetres(
+    prompt(
+      'Largeur de travail en mètres, exactement comme sur la console',
+      String(depart?.largeur ?? ''),
+    ),
+  );
+  if (!largeur) {
+    alert('Largeur non valable.');
+    return null;
+  }
+  const tourniere = lireMetres(
+    prompt(
+      'Largeur de la tournière en mètres (0 sans tournière)',
+      String(depart?.tourniere ?? largeur),
+    ),
+  );
+  if (tourniere === null) {
+    alert('Tournière non valable.');
+    return null;
+  }
+  return { nom, largeur, tourniere };
+}
+
+const m = (v: number) => `${String(Math.round(v * 100) / 100).replace('.', ',')} m`;
+
+/** Optimisation de la parcelle courante avec l'outil choisi et les obstacles notés dessus. */
+export function optimisationCourante(s: Session): {
+  parcelle: number;
+  outil: Outil;
+  optimisation: NonNullable<ReturnType<typeof optimiserParcelle>>;
+} | null {
+  const outil = outilCourant();
+  const p = ui.parcelleCourante;
+  if (ui.mode !== 'guidage' || ui.porteeGuidage !== 'optimiser' || !outil || p === null)
+    return null;
+  const cle = cleParcelle(s.td.parcelles[p]!);
+  const obstacles = (ui.suivi.notes ?? [])
+    .filter((n) => n.obstacle && !n.supprimee && n.position && n.cle === cle)
+    .map((n) => n.position!);
+  const optimisation = optimiserParcelle(s.etat, p, obstacles, outil, ui.seuilCoins);
+  if (!optimisation || optimisation.propositions.length === 0) return null;
+  if (ui.propositionChoisie >= optimisation.propositions.length) ui.propositionChoisie = 0;
+  return { parcelle: p, outil, optimisation };
+}
+
+function texteObstacles(prop: Proposition): string {
+  if (prop.obstacles.length === 0) return 'pas d’obstacle noté';
+  return prop.obstacles
+    .map((o, i) => {
+      const nom = prop.obstacles.length > 1 ? `obstacle ${i + 1}` : 'obstacle';
+      return o.dansTourniere
+        ? `${nom} dans la tournière`
+        : o.distanceBout < 0.05
+          ? `${nom} en bout d’outil`
+          : `${nom} à ${m(o.distanceBout)} du bout`;
+    })
+    .join(', ');
+}
+
+function panneauOptimisation(s: Session): HTMLElement[] {
+  const outil = outilCourant();
+  // Outils : un bouton par outil, et de quoi en ajouter, modifier ou retirer.
+  const outils = el(
+    'div',
+    { class: 'info reglages-guidage' },
+    el(
+      'div',
+      { class: 'rangee' },
+      ...ui.outils.map((o, i) =>
+        el(
+          'button',
+          {
+            class: o === outil ? 'actif' : '',
+            onclick: () => {
+              ui.outilChoisi = i;
+              ui.propositionChoisie = 0;
+              garderOutils();
+              afficher();
+            },
+          },
+          o.nom,
+        ),
+      ),
+      el(
+        'button',
+        {
+          class: 'petit',
+          onclick: () => {
+            const o = saisirOutil();
+            if (!o) return;
+            ui.outils = [...ui.outils, o];
+            ui.outilChoisi = ui.outils.length - 1;
+            ui.propositionChoisie = 0;
+            garderOutils();
+            afficher();
+          },
+        },
+        'Ajouter un outil',
+      ),
+    ),
+    outil &&
+      el(
+        'div',
+        { class: 'rangee' },
+        el(
+          'span',
+          { class: 'doux', style: 'flex:1' },
+          `Largeur ${m(outil.largeur)} · tournière ${m(outil.tourniere)}`,
+        ),
+        el(
+          'button',
+          {
+            class: 'petit',
+            onclick: () => {
+              const o = saisirOutil(outil);
+              if (!o) return;
+              ui.outils = ui.outils.map((x) => (x === outil ? o : x));
+              garderOutils();
+              afficher();
+            },
+          },
+          'Modifier',
+        ),
+        el(
+          'button',
+          {
+            class: 'petit',
+            onclick: () => {
+              if (!confirm(`Retirer l’outil « ${outil.nom} » ?`)) return;
+              ui.outils = ui.outils.filter((x) => x !== outil);
+              ui.outilChoisi = 0;
+              garderOutils();
+              afficher();
+            },
+          },
+          'Retirer',
+        ),
+      ),
+  );
+  if (!outil) {
+    return [outils, el('div', { class: 'sens' }, 'Ajoute ton outil : nom, largeur, tournière.')];
+  }
+  if (ui.parcelleCourante === null)
+    return [outils, el('div', { class: 'sens' }, 'Touche une parcelle.')];
+  const o = optimisationCourante(s);
+  const nom = s.td.parcelles[ui.parcelleCourante]!.nom;
+  if (!o) {
+    return [outils, el('div', { class: 'erreur' }, `Aucun côté droit d’au moins 20 m sur ${nom}.`)];
+  }
+  const propositions = o.optimisation.propositions.slice(0, 3).map((prop, i) =>
+    el(
+      'button',
+      {
+        class: `carte-sens${i === ui.propositionChoisie ? ' choisie' : ''}`,
+        onclick: () => {
+          ui.propositionChoisie = i;
+          afficher();
+        },
+      },
+      el(
+        'span',
+        { class: 'carte-sens-titre' },
+        `${i + 1} · cap ${Math.round(prop.cap)}° · ${prop.demiTours} demi-tours`,
+      ),
+      el(
+        'span',
+        { class: 'carte-sens-effet' },
+        `${(prop.longueurTotale / 1000).toFixed(1).replace('.', ',')} km estimés · ${prop.passages} passages` +
+          (prop.passagesCourts > 0 ? ` (${prop.passagesCourts} courts)` : '') +
+          ` · ${texteObstacles(prop)}` +
+          (Math.abs(prop.decalage) >= 0.01 ? ` · décalé de ${m(Math.abs(prop.decalage))}` : ''),
+      ),
+    ),
+  );
+  return [
+    outils,
+    el(
+      'div',
+      { class: 'entete-selection' },
+      el('strong', {}, `Passages sur ${nom}`),
+      el('span', { class: 'doux' }, `${o.optimisation.propositions.length} direction(s)`),
+    ),
+    el('div', { class: 'propositions' }, ...propositions),
+    el(
+      'div',
+      { class: 'doux' },
+      `Règle la console sur ${m(outil.largeur)} exactement : un écart se cumule à chaque passage. Ligne créée : « ${outil.nom} 1 » (remplace la précédente du même nom).`,
+    ),
+  ];
 }
