@@ -99,7 +99,16 @@ export interface EtatInterface {
   /** Distance en mètres telle que tapée, avec une virgule décimale (« 0,35 »). */
   saisie: string;
   message: { texte: string; erreur: boolean } | null;
-  exportPrepare: { texte: string; alertes: Alerte[]; resume: string; details: string } | null;
+  /** Export préparé pour l'état `etat` (refait s'il a changé depuis). */
+  exportPrepare: {
+    texte: string;
+    alertes: Alerte[];
+    resume: string;
+    details: string;
+    etat: Etat;
+  } | null;
+  /** Pourquoi l'export n'a pas pu être préparé, ou null. */
+  erreurExport: string | null;
   /** État du GPS (allumé ou non) lors du dernier affichage des boutons. */
   gpsAffiche: boolean;
   minuterieDrive: ReturnType<typeof setTimeout> | undefined;
@@ -164,6 +173,7 @@ export const ui: EtatInterface = {
   saisie: '',
   message: null,
   exportPrepare: null,
+  erreurExport: null,
   gpsAffiche: false,
   minuterieDrive: undefined,
   driveConflit: null,

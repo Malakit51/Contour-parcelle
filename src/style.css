@@ -985,3 +985,26 @@ body {
   color: var(--bleu-lignes);
   font-weight: 600;
 }
+
+/* ---------- Onglet Export : résultat du contrôle ---------- */
+.controle-export {
+  border-left-width: 6px;
+}
+.controle-export.ok {
+  border-left-color: var(--etat-verifie);
+}
+.controle-export.ok > strong {
+  color: var(--vert);
+}
+.controle-export.alerte {
+  border-left-color: var(--etat-a-confirmer);
+}
+.controle-export.grave {
+  border-left-color: var(--etat-a-refaire);
+}
+.controle-export.grave > strong {
+  color: var(--etat-a-refaire);
+}
+.controle-export details {
+  margin-top: 6px;
+}

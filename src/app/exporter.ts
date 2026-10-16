@@ -32,6 +32,10 @@ export const haSigne = (m2: number) =>
 
 // ---------- Export ----------
 
+/**
+ * Prépare l'export du travail en cours : texte du fichier, contrôles, différences avec l'original.
+ * Fait tout seul à l'ouverture de l'onglet Export (et refait après chaque modification).
+ */
 export function preparerExport(): void {
   if (!ui.session) return;
   const s = ui.session;
@@ -40,10 +44,10 @@ export function preparerExport(): void {
     texte = exporterEtat(s.td, s.etat);
   } catch (e) {
     ui.exportPrepare = null;
-    ui.message = { texte: `Export impossible : ${(e as Error).message}`, erreur: true };
-    afficher();
+    ui.erreurExport = (e as Error).message;
     return;
   }
+  ui.erreurExport = null;
   const alertes: Alerte[] = [
     ...verifierRelecture(s.td, s.etat, texte).map((m) => ({ grave: true, message: m })),
     ...controler(s.td, s.etat, parcellesModifiees(s.etat)),
@@ -52,7 +56,7 @@ export function preparerExport(): void {
   const modifiees = diffs.filter((d) => d.avant !== null && d.apres !== null).length;
   const ajoutees = diffs.filter((d) => d.avant === null).length;
   const retirees = diffs.filter((d) => d.apres === null).length;
-  const resume = `${modifiees} ligne(s) modifiée(s), ${ajoutees} ajoutée(s), ${retirees} retirée(s).`;
+  const resume = `${modifiees} ligne(s) modifiée(s), ${ajoutees} ajoutée(s), ${retirees} retirée(s)`;
   const details = diffs
     .map((d) =>
       d.avant !== null && d.apres !== null
@@ -62,9 +66,23 @@ export function preparerExport(): void {
           : `ligne ajoutée (${d.ligneApres}) : ${d.apres!.trimEnd()}`,
     )
     .join('\n');
-  ui.exportPrepare = { texte, alertes, resume, details };
-  afficher();
+  ui.exportPrepare = { texte, alertes, resume, details, etat: s.etat };
 }
+
+/** Export prêt pour le travail en cours (préparé si besoin). */
+export function exportAJour(): typeof ui.exportPrepare {
+  if (!ui.session) return null;
+  if (!ui.exportPrepare || ui.exportPrepare.etat !== ui.session.etat) preparerExport();
+  return ui.exportPrepare;
+}
+
+/** Bouton principal de l'onglet Export (barre du bas) : écrire sur la clé, ou télécharger. */
+export const exporterVersCle = () =>
+  void telecharger(ecritureDossierPossible() ? 'dossier' : 'xml');
+export const texteBoutonExport = () =>
+  ecritureDossierPossible()
+    ? `Enregistrer « ${nomDossierVersion(prochaineVersion())} »`
+    : `Télécharger ${NOM_FICHIER}`;
 
 export function enregistrer(octets: Uint8Array, nom: string, type: string): void {
   const blob = new Blob([octets as BlobPart], { type });
@@ -115,14 +133,22 @@ export function prochaineVersion(): string {
 }
 
 export async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
-  if (!ui.exportPrepare || !ui.session) return;
+  const prepare = exportAJour();
+  if (!prepare || !ui.session) {
+    ui.message = {
+      texte: `Export impossible : ${ui.erreurExport ?? 'aucun fichier ouvert'}`,
+      erreur: true,
+    };
+    afficher();
+    return;
+  }
   if (
-    ui.exportPrepare.alertes.some((a) => a.grave) &&
+    prepare.alertes.some((a) => a.grave) &&
     !confirm('Des problèmes graves ont été trouvés. Exporter quand même ?')
   ) {
     return;
   }
-  const xml = encoder(ui.exportPrepare.texte);
+  const xml = encoder(prepare.texte);
   const version = prochaineVersion();
   let destination: string;
   if (quoi === 'dossier') {
@@ -180,70 +206,58 @@ export async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
 }
 
 /**
- * Récapitulatif de la version qui sera exportée : ce qui change par rapport au fichier ouvert
- * (contours modifiés avec leur surface, lignes de guidage créées).
+ * Onglet Export : contrôle (fait tout seul), version et ce qui change par rapport au fichier ouvert.
+ * Le bouton principal (« Enregistrer « TASKDATA 0.12 » ») est dans la barre du bas.
  */
-export function tableauVersion(s: Session): HTMLElement {
+export function panneauExport(s: Session): HTMLElement[] {
+  const prepare = exportAJour();
+  const graves = prepare?.alertes.filter((a) => a.grave) ?? [];
+  // 1. Contrôle du fichier produit.
+  const controle = !prepare
+    ? el(
+        'div',
+        { class: 'info' },
+        el('strong', { class: 'erreur' }, '✗ Export impossible'),
+        el('div', {}, ui.erreurExport ?? ''),
+      )
+    : el(
+        'div',
+        {
+          class: `info controle-export${graves.length > 0 ? ' grave' : prepare.alertes.length > 0 ? ' alerte' : ' ok'}`,
+        },
+        el(
+          'strong',
+          {},
+          graves.length > 0
+            ? `✗ ${graves.length} problème(s) grave(s)`
+            : prepare.alertes.length > 0
+              ? `⚠ ${prepare.alertes.length} point(s) à regarder`
+              : '✓ Prêt pour la console : aucun problème',
+        ),
+        ...prepare.alertes.map((a) =>
+          el('div', { class: a.grave ? 'erreur' : '' }, (a.grave ? '✗ ' : '⚠ ') + a.message),
+        ),
+        el(
+          'details',
+          {},
+          el('summary', { class: 'doux' }, `Fichier : ${prepare.resume}`),
+          el('pre', {}, prepare.details || 'Identique au fichier ouvert.'),
+        ),
+      );
+  // 2. Version et ce qui change.
   const modifiees = new Set(parcellesModifiees(s.etat));
   const guidages = s.etat.guidages ?? [];
   const parcelles = [...new Set([...modifiees, ...guidages.map((g) => g.parcelle)])].sort((a, b) =>
     s.td.parcelles[a]!.nom.localeCompare(s.td.parcelles[b]!.nom, 'fr', { numeric: true }),
   );
-  const titre = el('strong', {}, `Version ${prochaineVersion()}`);
-  if (parcelles.length === 0) {
-    return el(
-      'div',
-      { class: 'info' },
-      titre,
-      el('div', { class: 'doux' }, `Aucun changement par rapport à ${s.nomFichier}.`),
-    );
-  }
   const ha = (m2: number) => (m2 / 10_000).toFixed(4).replace('.', ',');
-  return el(
-    'div',
-    { class: 'info' },
-    titre,
-    el(
-      'div',
-      { class: 'doux' },
-      `Par rapport à ${s.nomFichier} : ${modifiees.size} contour(s) modifié(s), ${guidages.length} ligne(s) de guidage.`,
-    ),
-    el(
-      'table',
-      {},
-      el(
-        'tr',
-        {},
-        el('th', {}, 'Parcelle'),
-        el('th', {}, 'surface (ha)'),
-        el('th', {}, 'écart (ha)'),
-        el('th', {}, 'lignes'),
-      ),
-      ...parcelles.map((p) => {
-        const avant = Number(s.td.parcelles[p]!.surface?.texte ?? NaN);
-        const apres = nouvelleSurface(s.td, s.etat, p) ?? NaN;
-        const n = guidages.filter((g) => g.parcelle === p).length;
-        return el(
-          'tr',
-          {},
-          el('td', {}, s.td.parcelles[p]!.nom),
-          el('td', {}, ha(Math.round(apres))),
-          el('td', {}, modifiees.has(p) ? haSigne(Math.round(apres) - avant) : '—'),
-          el('td', {}, n > 0 ? String(n) : '—'),
-        );
-      }),
-    ),
-  );
-}
-
-export function panneauExport(): HTMLElement {
-  const bloc = el(
+  const version = el(
     'div',
     { class: 'info' },
     el(
       'div',
-      { class: 'rangee' },
-      el('span', { class: 'doux', style: 'flex:1' }, `Numéro de version : ${prochaineVersion()}`),
+      { class: 'entete-selection' },
+      el('strong', {}, `Version ${prochaineVersion()}`),
       el(
         'button',
         {
@@ -258,77 +272,84 @@ export function panneauExport(): HTMLElement {
             afficher();
           },
         },
-        'Changer',
+        'Changer le numéro',
       ),
+    ),
+    parcelles.length === 0
+      ? el('div', { class: 'doux' }, `Aucun changement par rapport à ${s.nomFichier}.`)
+      : el(
+          'div',
+          {},
+          el(
+            'div',
+            { class: 'doux' },
+            `Par rapport à ${s.nomFichier} : ${modifiees.size} contour(s) modifié(s), ${guidages.length} ligne(s) de guidage.`,
+          ),
+          el(
+            'table',
+            {},
+            el(
+              'tr',
+              {},
+              el('th', {}, 'Parcelle'),
+              el('th', {}, 'surface (ha)'),
+              el('th', {}, 'écart (ha)'),
+              el('th', {}, 'lignes'),
+            ),
+            ...parcelles.map((p) => {
+              const avant = Number(s.td.parcelles[p]!.surface?.texte ?? NaN);
+              const apres = nouvelleSurface(s.td, s.etat, p) ?? NaN;
+              const n = guidages.filter((g) => g.parcelle === p).length;
+              return el(
+                'tr',
+                {},
+                el('td', {}, s.td.parcelles[p]!.nom),
+                el('td', {}, ha(Math.round(apres))),
+                el('td', {}, modifiees.has(p) ? haSigne(Math.round(apres) - avant) : '—'),
+                el('td', {}, n > 0 ? String(n) : '—'),
+              );
+            }),
+          ),
+        ),
+  );
+  // 3. Où ça part : emplacement retenu, autre façon d'exporter.
+  const ou = el(
+    'div',
+    { class: 'info' },
+    el(
+      'div',
+      { class: 'doux' },
+      ecritureDossierPossible()
+        ? ui.emplacementConnu
+          ? `Le bouton du bas écrit le dossier « ${nomDossierVersion(prochaineVersion())} » dans « ${ui.emplacementConnu} ».`
+          : `Le bouton du bas demande où écrire le dossier « ${nomDossierVersion(prochaineVersion())} » (la clé USB).`
+        : `Le bouton du bas télécharge ${NOM_FICHIER} : mets-le dans un dossier ${NOM_DOSSIER} sur la clé.`,
     ),
     el(
       'div',
       { class: 'rangee' },
-      el('button', { onclick: preparerExport }, 'Vérifier avant export'),
+      ecritureDossierPossible() &&
+        ui.emplacementConnu &&
+        el(
+          'button',
+          {
+            class: 'petit',
+            onclick: () => {
+              void oublierEmplacement().then(() => {
+                ui.emplacementConnu = null;
+                afficher();
+              });
+            },
+          },
+          'Changer d’emplacement',
+        ),
+      ecritureDossierPossible() &&
+        el(
+          'button',
+          { class: 'petit', onclick: () => void telecharger('xml') },
+          `Télécharger ${NOM_FICHIER} seul`,
+        ),
     ),
   );
-  if (ui.exportPrepare) {
-    const graves = ui.exportPrepare.alertes.filter((a) => a.grave);
-    bloc.append(
-      el(
-        'div',
-        {},
-        ui.exportPrepare.alertes.length === 0
-          ? el('div', { class: 'ok' }, '✓ Aucun problème')
-          : el(
-              'div',
-              {},
-              ...ui.exportPrepare.alertes.map((a) =>
-                el('div', { class: a.grave ? 'erreur' : '' }, (a.grave ? '✗ ' : '⚠ ') + a.message),
-              ),
-            ),
-        el(
-          'details',
-          {},
-          el('summary', {}, ui.exportPrepare.resume),
-          el('pre', {}, ui.exportPrepare.details),
-        ),
-        el(
-          'div',
-          { class: 'rangee' },
-          ecritureDossierPossible() &&
-            el(
-              'button',
-              { class: 'principal', onclick: () => void telecharger('dossier') },
-              `${graves.length > 0 ? 'Malgré tout : ' : ''}Enregistrer « ${nomDossierVersion(prochaineVersion())} »`,
-            ),
-          el(
-            'button',
-            {
-              class: ecritureDossierPossible() ? '' : 'principal',
-              onclick: () => void telecharger('xml'),
-            },
-            graves.length > 0 && !ecritureDossierPossible()
-              ? 'Télécharger malgré tout'
-              : `Télécharger ${NOM_FICHIER} seul`,
-          ),
-        ),
-        ui.emplacementConnu &&
-          el(
-            'div',
-            { class: 'rangee' },
-            el('span', { class: 'doux', style: 'flex:1' }, `Dans « ${ui.emplacementConnu} »`),
-            el(
-              'button',
-              {
-                class: 'petit',
-                onclick: () => {
-                  void oublierEmplacement().then(() => {
-                    ui.emplacementConnu = null;
-                    afficher();
-                  });
-                },
-              },
-              'Changer d’emplacement',
-            ),
-          ),
-      ),
-    );
-  }
-  return bloc;
+  return [controle, version, ou];
 }

@@ -7,7 +7,7 @@ import { icone, type Icone } from '../ui/icones';
 import { dessin } from './dessin';
 import { drive, driveEnAttente, reconnecterDrive } from './drive';
 import { CLE_HAUTEUR_VOLET, COULEURS_ETAT, type Cran, type Onglet, ONGLETS, ui } from './etat';
-import { panneauExport, tableauVersion } from './exporter';
+import { exporterVersCle, exportAJour, panneauExport, texteBoutonExport } from './exporter';
 import { contenuFichier } from './fichier';
 import { apercuGuidages, commandesLignes, panneauGuidage } from './guidage';
 import { boiteMesure, majMesure } from './mesure';
@@ -44,6 +44,10 @@ export const champDistance = el('input', {
 // Bouton principal de la barre du bas : son texte dit ce qu'il va faire (« Décaler 0,5 m »).
 let boutonAppliquer: HTMLButtonElement | null = null;
 function texteAppliquer(): string {
+  if (ui.onglet === 'export') {
+    const graves = exportAJour()?.alertes.some((a) => a.grave) ?? false;
+    return `${graves ? 'Malgré tout : ' : ''}${texteBoutonExport()}`;
+  }
   const d = metres() > 0 ? ` ${enMetres(metres())} m` : '';
   if (ui.mode === 'limite' && ui.selLimite) return `Décaler${d}`;
   if (ui.mode === 'sommet' && ui.limiteGlisse) return `Déplacer${d}`;
@@ -476,7 +480,7 @@ export function afficher(): void {
       ];
       break;
     case 'export':
-      contenu = [tableauVersion(s), panneauExport()];
+      contenu = panneauExport(s);
       break;
     case 'fichier':
       contenu = contenuFichier(s);
@@ -484,16 +488,20 @@ export function afficher(): void {
   }
   remplir(zones.panneau, msg, ...contenu);
 
-  const peutAppliquer =
-    (ui.mode === 'limite' && ui.selLimite !== null && ui.sensLimite !== null) ||
-    (ui.mode === 'sommet' &&
-      ui.selSommet !== null &&
-      ui.limiteGlisse !== null &&
-      ui.sensGlisse !== null) ||
-    (ui.mode === 'guidage' && apercuGuidages(s).length > 0) ||
-    (ui.mode === 'coller' && 'etat' in (apercuCollage(s) ?? {})) ||
-    (ui.mode === 'simplifier' &&
-      (apercuSimplification(s)?.bilan.some((b) => b.apres !== b.avant || b.ecartMax > 0) ?? false));
+  // Onglet Export : le bouton principal écrit l'export (sur la clé, ou en téléchargement).
+  const enExport = ui.onglet === 'export';
+  const peutAppliquer = enExport
+    ? exportAJour() !== null
+    : (ui.mode === 'limite' && ui.selLimite !== null && ui.sensLimite !== null) ||
+      (ui.mode === 'sommet' &&
+        ui.selSommet !== null &&
+        ui.limiteGlisse !== null &&
+        ui.sensGlisse !== null) ||
+      (ui.mode === 'guidage' && apercuGuidages(s).length > 0) ||
+      (ui.mode === 'coller' && 'etat' in (apercuCollage(s) ?? {})) ||
+      (ui.mode === 'simplifier' &&
+        (apercuSimplification(s)?.bilan.some((b) => b.apres !== b.avant || b.ecartMax > 0) ??
+          false));
   remplir(
     zones.bas,
     el(
@@ -507,10 +515,15 @@ export function afficher(): void {
       },
       icone('annuler', 24),
     ),
-    el('label', { class: 'case-distance' }, champDistance, el('span', {}, 'm')),
+    // Pas de distance à l'export : le bouton prend la place.
+    !enExport && el('label', { class: 'case-distance' }, champDistance, el('span', {}, 'm')),
     (boutonAppliquer = el(
       'button',
-      { class: 'principal', onclick: appliquer, ...(peutAppliquer ? {} : { disabled: '' }) },
+      {
+        class: enExport ? 'principal large' : 'principal',
+        onclick: enExport ? exporterVersCle : appliquer,
+        ...(peutAppliquer ? {} : { disabled: '' }),
+      },
       texteAppliquer(),
     )),
   );
