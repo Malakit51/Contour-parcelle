@@ -589,6 +589,16 @@ td.etats {
 .selection-limite {
   margin: 0 0 10px;
 }
+.panneau-guidage > * + * {
+  margin-top: 10px;
+}
+.reglages-guidage {
+  display: grid;
+  gap: 8px;
+}
+.reglages-guidage .rangee {
+  margin: 0;
+}
 .entete-selection {
   display: flex;
   align-items: baseline;

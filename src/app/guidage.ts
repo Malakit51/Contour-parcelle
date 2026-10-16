@@ -202,111 +202,80 @@ export function panneauToutes(s: Session): HTMLElement {
 }
 
 export function panneauGuidage(s: Session): HTMLElement {
-  const choix = <T extends string>(valeurs: [T, string][], actuel: T, changer: (v: T) => void) =>
+  // Portée : barre groupée, comme les modes de l'onglet Modifier.
+  const portee = el(
+    'div',
+    { class: 'modes' },
+    ...(
+      [
+        ['bord', 'Un bord'],
+        ['parcelle', 'Parcelle'],
+        ['toutes', 'Toutes'],
+      ] as const
+    ).map(([v, t]) =>
+      el(
+        'button',
+        {
+          class: ui.porteeGuidage === v ? 'principal' : '',
+          onclick: () => {
+            ui.porteeGuidage = v;
+            ui.bordDebut = null;
+            ui.bord = null;
+            afficher();
+          },
+        },
+        t,
+      ),
+    ),
+  );
+  // Deux choix côte à côte, en cartes (titre + effet), comme le sens d'une limite.
+  const cartes = <T extends string>(
+    valeurs: [T, string, string][],
+    actuel: T,
+    changer: (v: T) => void,
+  ) =>
     el(
       'div',
-      { class: 'rangee' },
-      ...valeurs.map(([v, t]) =>
+      { class: 'cartes-sens' },
+      ...valeurs.map(([v, titre, effet]) =>
         el(
           'button',
           {
-            class: v === actuel ? 'actif' : '',
+            class: `carte-sens${v === actuel ? ' choisie' : ''}`,
             onclick: () => {
               changer(v);
               afficher();
             },
           },
-          t,
+          el('span', { class: 'carte-sens-titre' }, titre),
+          el('span', { class: 'carte-sens-effet' }, effet),
         ),
       ),
     );
-  const lignes = (s.etat.guidages ?? []).filter((g) => g.parcelle === ui.parcelleCourante);
   const parcelle = ui.porteeGuidage === 'parcelle' ? coinsGuidage(s) : null;
-  return el(
-    'div',
-    { class: 'info' },
-    choix(
-      [
-        ['bord', 'Un bord'],
-        ['parcelle', 'Parcelle'],
-        ['toutes', 'Toutes'],
-      ],
-      ui.porteeGuidage,
-      (v) => {
-        ui.porteeGuidage = v;
-        ui.bordDebut = null;
-        ui.bord = null;
-      },
-    ),
-    el('label', { class: 'rangee' }, el('span', { class: 'doux' }, 'Nom'), champNomLignes),
-    ui.porteeGuidage === 'bord' &&
-      choix(
-        [
-          ['ab', 'Droite AB'],
-          ['courbe', 'Courbe'],
-        ],
-        ui.typeGuidage,
-        (v) => (ui.typeGuidage = v),
-      ),
-    choix(
-      [
-        ['int', 'Vers l’intérieur'],
-        ['ext', 'Vers l’extérieur'],
-      ],
-      ui.guidageInterieur ? 'int' : 'ext',
-      (v) => (ui.guidageInterieur = v === 'int'),
-    ),
-    ui.porteeGuidage !== 'bord' &&
-      el(
-        'div',
-        { class: 'rangee' },
-        el('span', { class: 'doux' }, 'Coins dès'),
-        ...SEUILS_COINS.map((v) =>
-          el(
-            'button',
-            {
-              class: `petit${v === ui.seuilCoins ? ' actif' : ''}`,
-              onclick: () => {
-                ui.seuilCoins = v;
-                afficher();
-              },
-            },
-            `${v}°`,
-          ),
-        ),
-      ),
-    ui.porteeGuidage === 'toutes'
-      ? panneauToutes(s)
-      : ui.porteeGuidage === 'parcelle'
-        ? !parcelle
-          ? el('div', { class: 'sens' }, 'Touche une parcelle.')
-          : el(
-              'div',
-              { class: 'doux' },
-              `${parcelle.coins.length} coins · ${parcelle.lignes.filter((g) => g.type === 'ab').length} droites AB, ${parcelle.lignes.filter((g) => g.type === 'courbe').length} courbes` +
-                (parcelle.ignores > 0
-                  ? ` · ${parcelle.ignores} côté(s) de moins de ${COTE_MIN_M} m sans ligne`
-                  : ''),
-            )
-        : !ui.bord
-          ? el(
-              'div',
-              { class: 'sens' },
-              ui.bordDebut
-                ? 'Touche le dernier sommet du bord.'
-                : 'Touche le premier sommet du bord.',
-            )
-          : el(
-              'div',
-              { class: 'rangee' },
-              el(
-                'span',
-                { class: 'doux', style: 'flex:1' },
-                `Bord : ${sommetsDuBord(s.etat, ui.bord).length} points`,
-              ),
+  // Ce qu'il reste à faire, ou ce qui sera créé.
+  const etape =
+    ui.porteeGuidage === 'bord'
+      ? !ui.bord
+        ? el(
+            'div',
+            { class: 'sens' },
+            ui.bordDebut
+              ? 'Touche le dernier sommet du bord.'
+              : 'Touche le premier sommet du bord.',
+          )
+        : el(
+            'div',
+            { class: 'entete-selection' },
+            el('strong', {}, `Bord de ${s.td.parcelles[ui.parcelleCourante!]!.nom}`),
+            el(
+              'span',
+              { class: 'rangee', style: 'margin:0' },
+              el('span', { class: 'doux' }, `${sommetsDuBord(s.etat, ui.bord).length} points`),
               el(
                 'button',
                 {
+                  class: 'petit',
                   onclick: () => {
                     if (ui.bord) ui.bord = { ...ui.bord, aRebours: !ui.bord.aRebours };
                     afficher();
@@ -315,38 +284,121 @@ export function panneauGuidage(s: Session): HTMLElement {
                 'Autre côté',
               ),
             ),
-    lignes.length > 1 &&
-      el(
-        'button',
-        {
-          onclick: () =>
-            modifier(
-              () => retirerGuidages(s.etat, ui.parcelleCourante),
-              `${lignes.length} lignes de guidage de ${s.td.parcelles[ui.parcelleCourante!]!.nom} supprimées`,
-              true,
-            ),
-        },
-        `Supprimer les ${lignes.length} lignes de la parcelle`,
+          )
+      : ui.porteeGuidage === 'parcelle'
+        ? !parcelle
+          ? el('div', { class: 'sens' }, 'Touche une parcelle.')
+          : el(
+              'div',
+              {},
+              el(
+                'div',
+                { class: 'entete-selection' },
+                el('strong', {}, `Lignes de ${s.td.parcelles[ui.parcelleCourante!]!.nom}`),
+                el('span', { class: 'doux' }, `${parcelle.coins.length} coins`),
+              ),
+              el(
+                'div',
+                { class: 'doux' },
+                `${parcelle.lignes.filter((g) => g.type === 'ab').length} droites AB, ${parcelle.lignes.filter((g) => g.type === 'courbe').length} courbes` +
+                  (parcelle.ignores > 0
+                    ? ` · ${parcelle.ignores} côté(s) de moins de ${COTE_MIN_M} m sans ligne`
+                    : ''),
+              ),
+            )
+        : null;
+  const lignes = (s.etat.guidages ?? []).filter((g) => g.parcelle === ui.parcelleCourante);
+  return el(
+    'div',
+    { class: 'panneau-guidage' },
+    portee,
+    etape,
+    ui.porteeGuidage === 'bord' &&
+      cartes(
+        [
+          ['ab', 'Droite AB', 'droite moyenne du bord'],
+          ['courbe', 'Courbe', 'suit le bord'],
+        ],
+        ui.typeGuidage,
+        (v) => (ui.typeGuidage = v),
       ),
-    ...lignes.map((g) =>
+    cartes(
+      [
+        ['int', 'Vers l’intérieur', 'ligne dans la parcelle'],
+        ['ext', 'Vers l’extérieur', 'ligne hors de la parcelle'],
+      ],
+      ui.guidageInterieur ? 'int' : 'ext',
+      (v) => (ui.guidageInterieur = v === 'int'),
+    ),
+    el(
+      'div',
+      { class: 'info reglages-guidage' },
+      el('label', { class: 'rangee' }, el('span', { class: 'doux' }, 'Nom'), champNomLignes),
+      ui.porteeGuidage !== 'bord' &&
+        el(
+          'div',
+          { class: 'rangee' },
+          el('span', { class: 'doux' }, 'Coins dès'),
+          ...SEUILS_COINS.map((v) =>
+            el(
+              'button',
+              {
+                class: `petit${v === ui.seuilCoins ? ' actif' : ''}`,
+                onclick: () => {
+                  ui.seuilCoins = v;
+                  afficher();
+                },
+              },
+              `${v}°`,
+            ),
+          ),
+        ),
+    ),
+    ui.porteeGuidage === 'toutes' && panneauToutes(s),
+    lignes.length > 0 &&
       el(
         'div',
-        { class: 'rangee' },
-        el('span', { style: 'flex:1' }, g.nom),
+        { class: 'info' },
         el(
-          'button',
-          {
-            class: 'petit',
-            onclick: () =>
-              modifier(
-                () => ({ ...s.etat, guidages: (s.etat.guidages ?? []).filter((x) => x !== g) }),
-                `Ligne « ${g.nom} » supprimée`,
-                true,
-              ),
-          },
-          'Supprimer',
+          'div',
+          { class: 'entete-selection' },
+          el('strong', {}, `Lignes déjà créées (${lignes.length})`),
+          lignes.length > 1 &&
+            el(
+              'button',
+              {
+                class: 'petit',
+                onclick: () =>
+                  modifier(
+                    () => retirerGuidages(s.etat, ui.parcelleCourante),
+                    `${lignes.length} lignes de guidage de ${s.td.parcelles[ui.parcelleCourante!]!.nom} supprimées`,
+                    true,
+                  ),
+              },
+              'Tout supprimer',
+            ),
+        ),
+        ...lignes.map((g) =>
+          el(
+            'div',
+            { class: 'rangee' },
+            el('span', { style: 'flex:1' }, g.nom),
+            el('span', { class: 'doux' }, g.type === 'ab' ? 'droite' : 'courbe'),
+            el(
+              'button',
+              {
+                class: 'petit',
+                onclick: () =>
+                  modifier(
+                    () => ({ ...s.etat, guidages: (s.etat.guidages ?? []).filter((x) => x !== g) }),
+                    `Ligne « ${g.nom} » supprimée`,
+                    true,
+                  ),
+              },
+              'Supprimer',
+            ),
+          ),
         ),
       ),
-    ),
   );
 }
