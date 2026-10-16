@@ -53,7 +53,8 @@ function texteAppliquer(): string {
   if (ui.mode === 'sommet' && ui.limiteGlisse) return `Déplacer${d}`;
   if (ui.mode === 'guidage' && ui.session) {
     const n = apercuGuidages(ui.session).length;
-    if (ui.porteeGuidage === 'optimiser') return n > 0 ? 'Créer la ligne AB' : 'Appliquer';
+    if (ui.porteeGuidage === 'optimiser')
+      return n > 1 ? `Créer ${n} lignes` : n > 0 ? 'Créer la ligne AB' : 'Appliquer';
     return n > 1 ? `Créer ${n} lignes` : 'Créer la ligne';
   }
   if (ui.mode === 'simplifier') return 'Simplifier';

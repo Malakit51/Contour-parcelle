@@ -18,7 +18,12 @@ import { afficher } from './mise-en-page';
 import { ecrireStockage, lireStockage } from './stockage';
 import { metres, modifier } from './travail';
 import { cadrerParcelle } from './vue';
-import { ligneDeProposition, optimiserParcelle, type Outil } from '../edition/optimisation';
+import {
+  lignesOptimisees,
+  lignesTourniere,
+  optimiserParcelle,
+  type Outil,
+} from '../edition/optimisation';
 import { cleParcelle } from '../suivi/suivi';
 import { CLE_OUTIL_CHOISI, CLE_OUTILS } from './etat';
 import { type Proposition } from '../geometrie/passages';
@@ -123,7 +128,15 @@ export function apercuGuidages(s: Session): Guidage[] {
     const o = optimisationCourante(s);
     const prop = o?.optimisation.propositions[ui.propositionChoisie];
     return o && prop
-      ? [ligneDeProposition(o.parcelle, prop, o.optimisation.plan, `${o.outil.nom} 1`)]
+      ? lignesOptimisees(
+          s.etat,
+          o.parcelle,
+          prop,
+          o.optimisation.plan,
+          o.outil,
+          ui.lignesTourniere,
+          ui.seuilCoins,
+        )
       : [];
   }
   return s.td.parcelles.flatMap((_, p) => lignesParcelle(s, p)?.lignes ?? []);
@@ -499,7 +512,7 @@ function texteObstacles(prop: Proposition): string {
     .join(', ');
 }
 
-function panneauOptimisation(s: Session): HTMLElement[] {
+function panneauOptimisation(s: Session): (HTMLElement | false)[] {
   const outil = outilCourant();
   // Outils : un bouton par outil, et de quoi en ajouter, modifier ou retirer.
   const outils = el(
@@ -623,10 +636,45 @@ function panneauOptimisation(s: Session): HTMLElement[] {
       el('span', { class: 'doux' }, `${o.optimisation.propositions.length} direction(s)`),
     ),
     el('div', { class: 'propositions' }, ...propositions),
+    // Tours de tournière : une ligne par côté, à une demi-largeur du bord (puis + une largeur).
+    outil.tourniere > 0 &&
+      (() => {
+        const n = lignesTourniere(s.etat, ui.parcelleCourante!, outil, ui.seuilCoins).length;
+        const tours = Math.max(1, Math.ceil(outil.tourniere / outil.largeur - 0.01));
+        const distances = Array.from({ length: tours }, (_, k) =>
+          m((k + 0.5) * outil.largeur),
+        ).join(', ');
+        return el(
+          'div',
+          { class: 'cartes-sens' },
+          ...([true, false] as const).map((avec) =>
+            el(
+              'button',
+              {
+                class: `carte-sens${ui.lignesTourniere === avec ? ' choisie' : ''}`,
+                onclick: () => {
+                  ui.lignesTourniere = avec;
+                  afficher();
+                },
+              },
+              el(
+                'span',
+                { class: 'carte-sens-titre' },
+                avec ? 'Avec la tournière' : 'Sans la tournière',
+              ),
+              el(
+                'span',
+                { class: 'carte-sens-effet' },
+                avec ? `${n} ligne(s) à ${distances} du bord` : 'seulement la ligne AB',
+              ),
+            ),
+          ),
+        );
+      })(),
     el(
       'div',
       { class: 'doux' },
-      `Règle la console sur ${m(outil.largeur)} exactement : un écart se cumule à chaque passage. Ligne créée : « ${outil.nom} 1 » (remplace la précédente du même nom).`,
+      `Règle la console sur ${m(outil.largeur)} exactement : un écart se cumule à chaque passage. Lignes « ${outil.nom} 1 » (AB des passages)${ui.lignesTourniere && outil.tourniere > 0 ? `, « ${outil.nom} 2 » et suivantes (tournière)` : ''} ; elles remplacent celles du même nom sur la parcelle.`,
     ),
   ];
 }

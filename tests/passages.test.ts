@@ -179,3 +179,38 @@ describe('optimisation sur une parcelle de l’éditeur', () => {
     expect(b![1]).toBeCloseTo(7, 1);
   });
 });
+
+describe('lignes de tournière', () => {
+  it('pulvé 38 m, tournière 38 m : un tour à 19 m du bord, une ligne par côté, après la ligne AB', async () => {
+    const { preparer, plan } = await import('./outils');
+    const { optimiserParcelle, lignesOptimisees, lignesTourniere } =
+      await import('../src/edition/optimisation');
+    const grand: XY[] = [
+      [0, 0],
+      [600, 0],
+      [600, 300],
+      [0, 300],
+    ];
+    const { etat } = preparer({ G: grand });
+    const outil = { nom: 'Pulvé 38 m', largeur: 38, tourniere: 38 };
+    const tour = lignesTourniere(etat, 0, outil);
+    expect(tour).toHaveLength(4);
+    // Chaque ligne est à 19 m du côté qu'elle longe.
+    const ys = tour.map((g) => g.points.map((q) => plan.versXY(q)));
+    expect(ys[0]!.every(([, y]) => Math.abs(y - 19) < 0.01)).toBe(true);
+    expect(ys[2]!.every(([, y]) => Math.abs(y - 281) < 0.01)).toBe(true);
+    const o = optimiserParcelle(etat, 0, [], outil)!;
+    const lignes = lignesOptimisees(etat, 0, o.propositions[0]!, o.plan, outil, true);
+    expect(lignes.map((g) => g.nom)).toEqual([
+      'Pulvé 38 m 1',
+      'Pulvé 38 m 2',
+      'Pulvé 38 m 3',
+      'Pulvé 38 m 4',
+      'Pulvé 38 m 5',
+    ]);
+    expect(lignesOptimisees(etat, 0, o.propositions[0]!, o.plan, outil, false)).toHaveLength(1);
+    // Semoir 4 m avec 12 m de tournière : 3 tours (à 2, 6 et 10 m).
+    expect(lignesTourniere(etat, 0, { nom: 'S', largeur: 4, tourniere: 12 })).toHaveLength(12);
+    expect(lignesTourniere(etat, 0, { nom: 'S', largeur: 4, tourniere: 0 })).toEqual([]);
+  });
+});

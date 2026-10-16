@@ -77,6 +77,8 @@ export interface EtatInterface {
   outilChoisi: number;
   /** Proposition d'optimisation choisie (0 = la meilleure). */
   propositionChoisie: number;
+  /** Optimisation : créer aussi les lignes des tours de tournière. */
+  lignesTourniere: boolean;
   /** Angle à partir duquel un sommet est un coin (lignes de toute la parcelle). */
   seuilCoins: number;
   /** Tolérance de simplification choisie (m). */
@@ -187,6 +189,7 @@ export const ui: EtatInterface = {
   outils: outilsGardes(),
   outilChoisi: Number(lireStockage(CLE_OUTIL_CHOISI) ?? 0) || 0,
   propositionChoisie: 0,
+  lignesTourniere: true,
   seuilCoins: 30,
   tolerance: 0.25,
   porteeSimplif: 'parcelle',
