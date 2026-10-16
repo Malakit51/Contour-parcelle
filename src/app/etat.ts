@@ -64,7 +64,8 @@ export interface EtatInterface {
   /** Mode de l'onglet Modifier, repris en revenant de l'onglet Guidage. */
   modeModifier: 'limite' | 'sommet' | 'simplifier' | 'coller';
   /** Mode Bord : dernière action choisie (Simplifier ou Coller), reprise au retour dans le mode. */
-  actionBord: 'simplifier' | 'coller';
+  /** Mode Limite : décaler la limite touchée, ou coller un bord sur la voisine. */
+  actionLimite: 'limite' | 'coller';
   /** Mode Coller : anneau de la parcelle voisine qui sert de modèle. */
   modele: number | null;
   /** Ligne de guidage en préparation : droite AB ou courbe, vers l'intérieur ou l'extérieur. */
@@ -189,7 +190,7 @@ export const ui: EtatInterface = {
   mode: 'limite',
   modele: null,
   modeModifier: 'limite',
-  actionBord: 'simplifier',
+  actionLimite: 'limite',
   typeGuidage: 'ab',
   guidageInterieur: true,
   porteeGuidage: 'bord',

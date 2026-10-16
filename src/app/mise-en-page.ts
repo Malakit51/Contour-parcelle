@@ -15,7 +15,7 @@ import {
   apercuCollage,
   apercuSimplification,
   boutonSupprimerParcelle,
-  choixActionBord,
+  choixActionLimite,
   appliquer,
   commandesSommet,
   panneauSelection,
@@ -417,16 +417,16 @@ export function afficher(): void {
   );
 
   const modeBouton = (m: typeof ui.mode, texte: string) => {
-    // « Bord » regroupe Simplifier et Coller : on y revient sur la dernière action choisie.
-    const bord = m === 'simplifier' || m === 'coller';
-    const actif = bord ? ui.mode === 'simplifier' || ui.mode === 'coller' : ui.mode === m;
+    // « Limite » regroupe Décaler et Coller au voisin : on y revient sur la dernière action choisie.
+    const limite = m === 'limite' || m === 'coller';
+    const actif = limite ? ui.mode === 'limite' || ui.mode === 'coller' : ui.mode === m;
     return el(
       'button',
       {
         class: actif ? 'principal' : '',
         onclick: () => {
           if (actif) return;
-          ui.mode = bord ? ui.actionBord : m;
+          ui.mode = limite ? ui.actionLimite : m;
           effacerSelection();
           arreterOutilsCarte();
           afficher();
@@ -450,9 +450,9 @@ export function afficher(): void {
           { class: 'modes' },
           modeBouton('limite', 'Limite'),
           modeBouton('sommet', 'Point'),
-          modeBouton('simplifier', 'Bord'),
+          modeBouton('simplifier', 'Simplifier'),
         ),
-        (ui.mode === 'simplifier' || ui.mode === 'coller') && choixActionBord(),
+        (ui.mode === 'limite' || ui.mode === 'coller') && choixActionLimite(),
         ui.mode === 'simplifier'
           ? panneauSimplification(s)
           : ui.mode === 'guidage'

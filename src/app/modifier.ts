@@ -352,14 +352,17 @@ export function panneauSimplification(s: Session): HTMLElement {
   );
 }
 
-/** Mode Bord : choix entre simplifier et coller sur le voisin (le bord choisi est gardé). */
-export function choixActionBord(): HTMLElement {
+/**
+ * Mode Limite : décaler la limite touchée, ou coller un bord sur la parcelle voisine. Une limite
+ * déjà touchée devient le bord à coller (on peut ensuite l'étendre en touchant ses deux bouts).
+ */
+export function choixActionLimite(): HTMLElement {
   return el(
     'div',
     { class: 'rangee' },
     ...(
       [
-        ['simplifier', 'Simplifier'],
+        ['limite', 'Décaler'],
         ['coller', 'Coller au voisin'],
       ] as const
     ).map(([v, t]) =>
@@ -369,10 +372,20 @@ export function choixActionBord(): HTMLElement {
           class: ui.mode === v ? 'actif' : '',
           onclick: () => {
             if (ui.mode === v) return;
+            const limite = ui.selLimite;
+            effacerSelection();
+            arreterOutilsCarte();
             ui.mode = v;
-            ui.actionBord = v;
-            if (v === 'simplifier' && (ui.bord || ui.bordDebut)) ui.porteeSimplif = 'bord';
-            if (v === 'coller' && ui.bord && ui.modele === null && ui.session) {
+            ui.actionLimite = v;
+            if (v === 'coller' && limite && ui.session) {
+              const n = ui.session.etat.anneaux[limite.anneau]!.sommets.length;
+              ui.bordDebut = { anneau: limite.anneau, sommet: limite.debut };
+              ui.bord = {
+                anneau: limite.anneau,
+                debut: limite.debut,
+                fin: (limite.debut + 1) % n,
+                aRebours: false,
+              };
               ui.modele = modeleLePlusProche(ui.session.etat, ui.bord);
             }
             afficher();
