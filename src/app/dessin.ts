@@ -138,7 +138,8 @@ export function dessin(s: Session): Dessin {
       : undefined;
   if (vue && vue.points.length > 1) {
     vue.points.forEach((p, k) => {
-      if (k > 0) d.traits.push({ a: vue.points[k - 1]!, b: p, couleur: SEL, epaisseur: 7 });
+      if (k > 0)
+        d.traits.push({ a: vue.points[k - 1]!, b: p, couleur: SEL, epaisseur: 7, dessus: true });
     });
     d.points.push({ p: vue.points[0]!, couleur: SEL, rayon: 8 });
     d.points.push({ p: vue.points.at(-1)!, couleur: SEL, rayon: 8 });

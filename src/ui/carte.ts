@@ -17,8 +17,8 @@ export interface AnneauDessin {
 
 export interface Dessin {
   anneaux: AnneauDessin[];
-  /** Segments surlignés (limite sélectionnée…). */
-  traits: { a: LatLon; b: LatLon; couleur: string; epaisseur: number }[];
+  /** Segments surlignés (limite sélectionnée…) ; `dessus` : tracés par-dessus les lignes de guidage. */
+  traits: { a: LatLon; b: LatLon; couleur: string; epaisseur: number; dessus?: boolean }[];
   /** Points surlignés (sommet sélectionné). */
   points: { p: LatLon; couleur: string; rayon: number }[];
   /** Contours affichés en pointillés (état actuel pendant un aperçu). */
@@ -227,13 +227,13 @@ export class Carte {
         interactive: false,
       }).addTo(this.calque);
     }
-    for (const t of dessin.traits) {
+    const tracer = (t: Dessin['traits'][number]) =>
       L.polyline([ll(t.a), ll(t.b)], {
         color: t.couleur,
         weight: t.epaisseur,
         interactive: false,
       }).addTo(this.calque);
-    }
+    for (const t of dessin.traits) if (!t.dessus) tracer(t);
     for (const g of dessin.guidages ?? []) {
       // Liseré blanc puis trait bleu : lisible sur la photo comme sur le fond blanc.
       for (const [couleur, epaisseur] of [
@@ -248,6 +248,8 @@ export class Carte {
         }).addTo(this.calque);
       }
     }
+    // Ligne de guidage touchée dans la liste : au-dessus des autres lignes, pour bien la voir.
+    for (const t of dessin.traits) if (t.dessus) tracer(t);
     for (const p of dessin.points) {
       L.circleMarker(ll(p.p), {
         radius: p.rayon,
