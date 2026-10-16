@@ -18,29 +18,109 @@ import {
   LIBELLES,
 } from '../suivi/suivi';
 import { el } from '../ui/dom';
-import { couleurNote, type Session, ui } from './etat';
+import { COULEURS_ETAT, couleurNote, type Session, ui } from './etat';
 import { parcelleContenant } from '../edition/etat';
 import { enregistrerSauvegarde } from './exporter';
 import { afficher } from './mise-en-page';
 import { arreterOutilsCarte, dateFr, effacerSelection, majSuivi, quandFr } from './travail';
 import { cadrerParcelle, carte } from './vue';
 
-/** État du contour de la parcelle courante : trois boutons et la remarque. */
-export function panneauSuiviParcelle(s: Session): HTMLElement | null {
+/** Choix de la portée de l'onglet : barre groupée, comme la portée du guidage. */
+function choixPortee(): HTMLElement {
+  return el(
+    'div',
+    { class: 'modes' },
+    ...(
+      [
+        ['parcelle', 'Parcelle'],
+        ['toutes', 'Toutes'],
+        ['journal', 'Journal'],
+      ] as const
+    ).map(([v, t]) =>
+      el(
+        'button',
+        {
+          class: ui.porteeSuivi === v ? 'principal' : '',
+          onclick: () => {
+            ui.porteeSuivi = v;
+            afficher();
+          },
+        },
+        t,
+      ),
+    ),
+  );
+}
+
+/** Contenu de l'onglet Suivi : Parcelle (état, remarque, notes), Toutes (liste) ou Journal. */
+export function panneauSuivi(s: Session): (HTMLElement | null | false)[] {
+  // Le formulaire d'une note reste devant, quelle que soit la portée.
+  if (ui.noteEnCours) return [formulaireNote(s, s.td.parcelles[ui.noteEnCours.parcelle]!.nom)];
+  switch (ui.porteeSuivi) {
+    case 'parcelle':
+      return [
+        choixPortee(),
+        panneauSuiviParcelle(s) ??
+          el(
+            'div',
+            { class: 'info doux' },
+            'Touche une parcelle sur la carte, ou choisis-la dans « Toutes ».',
+          ),
+        panneauNotes(s),
+      ];
+    case 'toutes':
+      return [choixPortee(), ...panneauToutes(s)];
+    case 'journal':
+      return [choixPortee(), ...panneauJournal(s)];
+  }
+}
+
+// Remarque tapée dans le panneau : champ créé une seule fois (le recréer fermerait le clavier),
+// enregistré quand on quitte le champ.
+const champRemarque = el('textarea', {
+  class: 'remarque',
+  rows: '2',
+  placeholder: 'Remarque (bord à revoir, haie arrachée…)',
+  'aria-label': 'Remarque',
+});
+let remarquePour: number | null = null;
+function garderRemarque(): void {
+  const s = ui.session;
+  if (!s || remarquePour === null) return;
+  const p = s.td.parcelles[remarquePour]!;
+  const remarque = champRemarque.value.trim();
+  if (remarque !== fiche(ui.suivi, p).remarque) majSuivi(changerFiche(ui.suivi, p, { remarque }));
+}
+// Gardée à chaque lettre (rien de perdu si l'application est fermée pendant la frappe) ; le
+// panneau n'est redessiné qu'en quittant le champ.
+champRemarque.addEventListener('input', garderRemarque);
+champRemarque.addEventListener('change', () => {
+  garderRemarque();
+  afficher();
+});
+
+/** État du contour de la parcelle courante : trois états en barre groupée et la remarque. */
+function panneauSuiviParcelle(s: Session): HTMLElement | null {
   if (ui.parcelleCourante === null) return null;
   const p = s.td.parcelles[ui.parcelleCourante]!;
   const f = fiche(ui.suivi, p);
   const derniere = [...ui.suivi.journal].reverse().find((e) => e.cle === cleParcelle(p));
+  if (remarquePour !== ui.parcelleCourante || document.activeElement !== champRemarque) {
+    remarquePour = ui.parcelleCourante;
+    champRemarque.value = f.remarque;
+  }
   return el(
     'div',
     { class: 'info' },
-    el('strong', {}, `Contour de ${p.nom}`),
-    f.date
-      ? el('span', { class: 'doux' }, ` · ${LIBELLES[f.etat].toLowerCase()} le ${dateFr(f.date)}`)
-      : '',
     el(
       'div',
-      { class: 'rangee' },
+      { class: 'entete-selection' },
+      el('strong', {}, `Contour de ${p.nom}`),
+      f.date ? el('span', { class: 'doux' }, `depuis le ${dateFr(f.date)}`) : '',
+    ),
+    el(
+      'div',
+      { class: 'modes etats-contour' },
       ...(Object.keys(LIBELLES) as EtatContour[]).map((e) =>
         el(
           'button',
@@ -55,23 +135,7 @@ export function panneauSuiviParcelle(s: Session): HTMLElement | null {
         ),
       ),
     ),
-    el(
-      'div',
-      { class: 'rangee' },
-      el('span', { style: 'flex:1' }, f.remarque),
-      el(
-        'button',
-        {
-          onclick: () => {
-            const r = prompt(`Remarque pour ${p.nom}`, f.remarque);
-            if (r === null) return;
-            majSuivi(changerFiche(ui.suivi, p, { remarque: r.trim() }));
-            afficher();
-          },
-        },
-        'Remarque',
-      ),
-    ),
+    champRemarque,
     derniere && el('div', { class: 'doux' }, `${quandFr(derniere.quand)} · ${derniere.action}`),
   );
 }
@@ -100,6 +164,7 @@ function ouvrirNote(
 ): void {
   ui.noteEnCours = { id, parcelle, position, obstacle };
   ui.placementNote = false;
+  ui.porteeSuivi = 'parcelle';
   champTypeNote.value = type;
   champTexteNote.value = texte;
   afficher();
@@ -256,7 +321,7 @@ function formulaireNote(s: Session, nom: string): HTMLElement {
 }
 
 /** Notes de la parcelle courante : liste, ou formulaire d'ajout ou de modification. */
-export function panneauNotes(s: Session): HTMLElement | null {
+function panneauNotes(s: Session): HTMLElement | null {
   // Le formulaire reste ouvert même si on touche une autre parcelle : la note garde la sienne.
   if (ui.noteEnCours) return formulaireNote(s, s.td.parcelles[ui.noteEnCours.parcelle]!.nom);
   if (ui.parcelleCourante === null) return null;
@@ -347,15 +412,113 @@ export function panneauNotes(s: Session): HTMLElement | null {
   );
 }
 
-/** Liste de toutes les parcelles avec leur état, journal et exports CSV. */
-export function panneauSuiviGeneral(s: Session): HTMLElement {
+/** Toutes les parcelles : compteurs (qui filtrent la liste), liste, couleurs de la carte. */
+function panneauToutes(s: Session): HTMLElement[] {
   const parcelles = s.td.parcelles
     .map((p, i) => ({ p, i, f: fiche(ui.suivi, p) }))
     .filter(({ i }) => !s.etat.supprimees?.includes(i))
     .sort((a, b) => a.p.nom.localeCompare(b.p.nom, 'fr', { numeric: true }));
-  const compte = (e: EtatContour) => parcelles.filter((x) => x.f.etat === e).length;
-  const journal = [...ui.suivi.journal].reverse().slice(0, 50);
-  // Un seul bouton : le suivi et le journal partent ensemble, en deux fichiers CSV.
+  const etats = Object.keys(LIBELLES) as EtatContour[];
+  const compteurs = el(
+    'div',
+    { class: 'compteurs-suivi' },
+    ...etats.map((e) =>
+      el(
+        'button',
+        {
+          class: `compteur etat-${e}${ui.filtreSuivi === e ? ' choisi' : ''}`,
+          onclick: () => {
+            ui.filtreSuivi = ui.filtreSuivi === e ? null : e;
+            afficher();
+          },
+        },
+        el(
+          'span',
+          { class: 'compteur-nombre' },
+          String(parcelles.filter((x) => x.f.etat === e).length),
+        ),
+        el('span', { class: 'compteur-libelle' }, LIBELLES[e]),
+      ),
+    ),
+  );
+  const visibles = parcelles.filter((x) => ui.filtreSuivi === null || x.f.etat === ui.filtreSuivi);
+  // Un appui sur une ligne choisit la parcelle et montre sa fiche (portée Parcelle).
+  const liste = el(
+    'div',
+    { class: 'liste-suivi' },
+    ...visibles.map(({ p, i, f }) =>
+      el(
+        'button',
+        {
+          class: `ligne-suivi${i === ui.parcelleCourante ? ' courante' : ''}`,
+          onclick: () => {
+            ui.parcelleCourante = i;
+            ui.porteeSuivi = 'parcelle';
+            effacerSelection();
+            afficher();
+            cadrerParcelle(i);
+          },
+        },
+        el('span', { class: 'pastille', style: `background:${COULEURS_ETAT[f.etat]}` }),
+        el(
+          'span',
+          { class: 'ligne-suivi-texte' },
+          el('span', { class: 'ligne-suivi-nom' }, p.nom),
+          f.remarque && el('span', { class: 'doux' }, f.remarque),
+        ),
+        el('span', { class: 'doux' }, f.date ? dateFr(f.date) : ''),
+      ),
+    ),
+  );
+  return [
+    el(
+      'div',
+      { class: 'info' },
+      ui.suiviNonEnregistre &&
+        el('div', { class: 'erreur' }, 'Suivi non enregistré sur cet appareil.'),
+      compteurs,
+      ui.filtreSuivi !== null &&
+        el(
+          'div',
+          { class: 'doux' },
+          `Seulement « ${LIBELLES[ui.filtreSuivi].toLowerCase()} » : touche encore le compteur pour tout revoir.`,
+        ),
+      visibles.length > 0 ? liste : el('div', { class: 'doux' }, 'Aucune parcelle.'),
+    ),
+    el(
+      'div',
+      { class: 'info' },
+      el('strong', {}, 'Couleurs de la carte'),
+      el(
+        'div',
+        { class: 'modes' },
+        ...(
+          [
+            [true, 'État du contour'],
+            [false, 'Voisines'],
+          ] as const
+        ).map(([v, t]) =>
+          el(
+            'button',
+            {
+              class: ui.couleursParEtat === v ? 'principal' : '',
+              onclick: () => {
+                ui.couleursParEtat = v;
+                afficher();
+              },
+            },
+            t,
+          ),
+        ),
+      ),
+    ),
+  ];
+}
+
+/** Journal des modifications, et les fichiers CSV (suivi, journal, notes). */
+function panneauJournal(s: Session): HTMLElement[] {
+  const journal = [...ui.suivi.journal].reverse().slice(0, 100);
+  // Un seul bouton : le suivi, le journal et les notes partent ensemble, en fichiers CSV.
   const exporterCsv = async () => {
     const ou = [
       await enregistrerSauvegarde(
@@ -381,75 +544,57 @@ export function panneauSuiviGeneral(s: Session): HTMLElement {
     ui.message = { texte: `${ou.join('. ')}.`, erreur: ou.some((t) => t.startsWith('Dossier')) };
     afficher();
   };
-  const bloc = el(
-    'details',
-    { class: 'info', ...(ui.suiviOuvert ? { open: '' } : {}) },
-    el(
-      'summary',
-      {},
-      `Suivi des contours : ${compte('verifie')} vérifiés, ${compte('a-confirmer')} à confirmer, ${compte('a-refaire')} à refaire`,
-    ),
-    ui.suiviNonEnregistre &&
-      el('div', { class: 'erreur' }, 'Suivi non enregistré sur cet appareil.'),
+  return [
     el(
       'div',
-      { class: 'rangee' },
-      el('button', { onclick: () => void exporterCsv() }, 'Exporter en CSV'),
-      boutonImportCsv(s),
-    ),
-    el(
-      'table',
-      {},
-      el('tr', {}, el('th', {}, 'Parcelle'), el('th', {}, 'État ✓ ? ✗'), el('th', {}, 'Date')),
-      ...parcelles.map(({ p, i, f }) => {
-        const nom = el('td', { class: 'cliquable' }, p.nom);
-        nom.addEventListener('click', () => {
-          ui.parcelleCourante = i;
-          effacerSelection();
-          afficher();
-          cadrerParcelle(i);
-        });
-        const ligne = el(
-          'tr',
-          {},
-          nom,
-          el(
-            'td',
-            { class: 'etats' },
-            ...(Object.keys(LIBELLES) as EtatContour[]).map((e) =>
-              el(
-                'button',
-                {
-                  class: `petit etat-${e}${f.etat === e ? ' choisi' : ''}`,
-                  title: LIBELLES[e],
-                  onclick: () => {
-                    majSuivi(changerFiche(ui.suivi, p, { etat: e }));
-                    afficher();
-                  },
-                },
-                { verifie: '✓', 'a-confirmer': '?', 'a-refaire': '✗' }[e],
-              ),
-            ),
-          ),
-          el('td', {}, dateFr(f.date)),
-        );
-        return ligne;
-      }),
-    ),
-    el('strong', {}, 'Journal'),
-    ...journal.map((e) =>
+      { class: 'info' },
+      el('strong', {}, 'Fichiers CSV'),
       el(
         'div',
         { class: 'doux' },
-        `${quandFr(e.quand)} · ${e.parcelle} · ${e.action}` +
-          (e.surfaceAvant !== null && e.surfaceApres !== null
-            ? ` · ${Math.round(e.surfaceApres - e.surfaceAvant) >= 0 ? '+' : ''}${Math.round(e.surfaceApres - e.surfaceAvant)} m²`
-            : ''),
+        'Suivi, journal et notes, pour un tableur ou un autre appareil.',
+      ),
+      el(
+        'div',
+        { class: 'rangee' },
+        el('button', { onclick: () => void exporterCsv() }, 'Exporter en CSV'),
+        boutonImportCsv(s),
       ),
     ),
-  );
-  bloc.addEventListener('toggle', () => (ui.suiviOuvert = bloc.open));
-  return bloc;
+    el(
+      'div',
+      { class: 'info' },
+      el(
+        'div',
+        { class: 'entete-selection' },
+        el('strong', {}, 'Journal'),
+        el(
+          'span',
+          { class: 'doux' },
+          ui.suivi.journal.length > journal.length
+            ? `${journal.length} dernières lignes sur ${ui.suivi.journal.length}`
+            : `${journal.length} ligne(s)`,
+        ),
+      ),
+      journal.length === 0 && el('div', { class: 'doux' }, 'Rien pour l’instant.'),
+      ...journal.map((e) =>
+        el(
+          'div',
+          { class: 'ligne-journal' },
+          el('span', { class: 'doux' }, quandFr(e.quand)),
+          el(
+            'span',
+            {},
+            el('strong', {}, e.parcelle),
+            ` · ${e.action}` +
+              (e.surfaceAvant !== null && e.surfaceApres !== null
+                ? ` · ${Math.round(e.surfaceApres - e.surfaceAvant) >= 0 ? '+' : ''}${Math.round(e.surfaceApres - e.surfaceAvant)} m²`
+                : ''),
+          ),
+        ),
+      ),
+    ),
+  ];
 }
 
 /** Reprend un CSV du suivi ou du journal (après un effacement des données de Chrome…). */

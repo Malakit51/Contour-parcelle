@@ -64,7 +64,10 @@ export function toucher(
     const i =
       (proche as { anneau: number } | null)?.anneau ??
       anneaux.findIndex((pts, j) => s.etat.anneaux[j]!.type === 1 && pointDansPolygone(p, pts));
-    if (i >= 0) ui.parcelleCourante = s.etat.anneaux[i]!.parcelle;
+    if (i >= 0) {
+      ui.parcelleCourante = s.etat.anneaux[i]!.parcelle;
+      ui.porteeSuivi = 'parcelle';
+    }
     afficher();
     return;
   }

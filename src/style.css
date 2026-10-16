@@ -516,15 +516,6 @@ details > summary {
   color: var(--rouge);
   font-weight: bold;
 }
-td.cliquable {
-  cursor: pointer;
-  color: var(--vert);
-  font-weight: 600;
-}
-td.etats {
-  white-space: nowrap;
-  text-align: center;
-}
 
 /* ---------- Barre du bas ---------- */
 .barre-bas {
@@ -1134,4 +1125,99 @@ button.nom-ligne {
 .ligne-creee.choisie {
   background: color-mix(in srgb, var(--choix) 10%, transparent);
   border-radius: 10px;
+}
+
+/* ---------- Onglet Suivi ---------- */
+textarea.remarque {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  margin: 4px 0 6px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid var(--ligne-douce);
+  background: var(--surface);
+  color: var(--fg);
+  resize: vertical;
+}
+.etats-contour button {
+  font-size: 0.95em;
+}
+/* Compteurs : un par état, de la couleur de l'état ; un appui filtre la liste. */
+.compteurs-suivi {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 8px;
+}
+button.compteur {
+  min-height: 60px;
+  flex-direction: column;
+  gap: 0;
+  padding: 6px 4px;
+  border-radius: var(--rayon);
+  border-left: 6px solid;
+  box-shadow: none;
+}
+button.compteur.etat-verifie {
+  border-left-color: var(--etat-verifie);
+}
+button.compteur.etat-a-confirmer {
+  border-left-color: var(--etat-a-confirmer);
+}
+button.compteur.etat-a-refaire {
+  border-left-color: var(--etat-a-refaire);
+}
+.compteur-nombre {
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.compteur-libelle {
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+.liste-suivi {
+  display: flex;
+  flex-direction: column;
+}
+button.ligne-suivi {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px 4px;
+  border: none;
+  border-bottom: 1px solid var(--ligne);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+  font-weight: 400;
+}
+button.ligne-suivi.courante {
+  background: var(--choisi);
+}
+.ligne-suivi-texte {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ligne-suivi-texte .doux {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ligne-suivi-nom {
+  font-weight: 600;
+}
+.ligne-journal {
+  display: grid;
+  gap: 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--ligne-douce);
 }

@@ -149,8 +149,10 @@ export interface EtatInterface {
   emplacementConnu: string | null;
   /** Dossier des sauvegardes choisi (« Documents/Contour parcelle »), ou null : Téléchargements. */
   dossierSauvegardes: string | null;
-  /** La liste du suivi reste ouverte d'un affichage à l'autre. */
-  suiviOuvert: boolean;
+  /** Onglet Suivi : parcelle choisie, liste de toutes les parcelles ou journal. */
+  porteeSuivi: 'parcelle' | 'toutes' | 'journal';
+  /** Liste « Toutes » réduite à un état (un appui sur un compteur), ou null. */
+  filtreSuivi: EtatContour | null;
   onglet: Onglet;
   messageAffiche: { texte: string; erreur: boolean } | null;
   minuterieBulle: ReturnType<typeof setTimeout> | undefined;
@@ -224,7 +226,8 @@ export const ui: EtatInterface = {
   ligneVue: null,
   emplacementConnu: null,
   dossierSauvegardes: lireStockage(CLE_DOSSIER_SAUVEGARDES),
-  suiviOuvert: true,
+  porteeSuivi: 'parcelle',
+  filtreSuivi: null,
   onglet: 'fichier',
   messageAffiche: null,
   minuterieBulle: undefined,

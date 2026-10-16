@@ -172,6 +172,7 @@ export function dessin(s: Session): Dessin {
         action: () => {
           ui.noteVue = n.id;
           ui.parcelleCourante = parCle.get(n.cle)!;
+          ui.porteeSuivi = 'parcelle';
           ui.message = {
             texte: `${n.parcelle} · ${n.type || 'Note'}${n.texte ? ` : ${n.texte}` : ''}`,
             erreur: false,

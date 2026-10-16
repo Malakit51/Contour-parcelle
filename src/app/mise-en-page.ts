@@ -23,7 +23,7 @@ import {
   panneauSimplification,
   raccourcis,
 } from './modifier';
-import { panneauNotes, panneauSuiviGeneral, panneauSuiviParcelle } from './panneau-suivi';
+import { panneauSuivi } from './panneau-suivi';
 import { panneauRemplacement } from './reference';
 import { ecrireStockage } from './stockage';
 import { annuler, arreterOutilsCarte, effacerSelection, enMetres, metres } from './travail';
@@ -294,6 +294,7 @@ export function afficher(): void {
     });
   choixParcelle.addEventListener('change', () => {
     ui.parcelleCourante = choixParcelle.value === '' ? null : Number(choixParcelle.value);
+    if (ui.parcelleCourante !== null) ui.porteeSuivi = 'parcelle';
     effacerSelection();
     afficher();
     if (ui.parcelleCourante === null) cadrerTout();
@@ -469,25 +470,7 @@ export function afficher(): void {
       contenu = [panneauGuidage(s), ui.porteeGuidage !== 'optimiser' && raccourcis()];
       break;
     case 'suivi':
-      contenu = [
-        panneauSuiviParcelle(s) ?? el('div', { class: 'info doux' }, 'Touche une parcelle.'),
-        panneauNotes(s),
-        el(
-          'div',
-          { class: 'rangee' },
-          el(
-            'button',
-            {
-              onclick: () => {
-                ui.couleursParEtat = !ui.couleursParEtat;
-                afficher();
-              },
-            },
-            ui.couleursParEtat ? 'Couleurs : état' : 'Couleurs : voisins',
-          ),
-        ),
-        panneauSuiviGeneral(s),
-      ];
+      contenu = panneauSuivi(s);
       break;
     case 'export':
       contenu = panneauExport(s);
