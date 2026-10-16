@@ -4,8 +4,19 @@ import { encoder } from '../isoxml/octets';
 import { aujourdhui } from '../suivi/suivi';
 import { el } from '../ui/dom';
 import { panneauDrive } from './drive';
-import { CLE_MISE_EN_PAGE, CLE_SESSION_ILLISIBLE, type Session, ui } from './etat';
-import { enregistrer } from './exporter';
+import {
+  CLE_DOSSIER_SAUVEGARDES,
+  CLE_MISE_EN_PAGE,
+  CLE_SESSION_ILLISIBLE,
+  type Session,
+  ui,
+} from './etat';
+import { enregistrerSauvegarde } from './exporter';
+import {
+  choisirDossierSauvegardes,
+  ecritureDossierPossible,
+  oublierDossierSauvegardes,
+} from '../ui/dossier';
 import { afficher } from './mise-en-page';
 import { panneauReference } from './reference';
 import { changerNomAppareil, ecrireStockage, nomAppareil } from './stockage';
@@ -21,17 +32,69 @@ import {
 
 // ---------- Sauvegarde dans un fichier (clé USB…) ----------
 
-export function enregistrerFichierSauvegarde(): void {
+export async function enregistrerFichierSauvegarde(): Promise<void> {
   if (!ui.session) return;
   if (nomAppareil() === 'appareil') changerNomAppareil();
   const contenu = sauvegardeComplete(ui.session);
   const nom = `contour-parcelle-sauvegarde-${aujourdhui()}.json`;
-  enregistrer(encoder(JSON.stringify(contenu)), nom, 'application/json');
-  ui.message = {
-    texte: `${nom} enregistré dans Téléchargements.`,
-    erreur: false,
-  };
+  const ou = await enregistrerSauvegarde(encoder(JSON.stringify(contenu)), nom, 'application/json');
+  ui.message = { texte: `${ou}.`, erreur: ou.startsWith('Dossier') };
   afficher();
+}
+
+/** Réglage : dossier « Contour parcelle » où vont les CSV et les sauvegardes. */
+function panneauDossierSauvegardes(): HTMLElement | null {
+  if (!ecritureDossierPossible()) return null;
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, 'Dossier des sauvegardes'),
+    el(
+      'div',
+      { class: 'doux' },
+      ui.dossierSauvegardes
+        ? `CSV et sauvegardes vont dans « ${ui.dossierSauvegardes} ».`
+        : 'Pas choisi : CSV et sauvegardes vont dans Téléchargements.',
+    ),
+    el(
+      'div',
+      { class: 'rangee' },
+      el(
+        'button',
+        {
+          onclick: async () => {
+            try {
+              const chemin = await choisirDossierSauvegardes();
+              if (!chemin) return;
+              ui.dossierSauvegardes = chemin;
+              ecrireStockage(CLE_DOSSIER_SAUVEGARDES, chemin);
+              ui.message = { texte: `Les sauvegardes iront dans « ${chemin} ».`, erreur: false };
+            } catch (e) {
+              ui.message = {
+                texte: `Dossier non choisi : ${(e as Error).message}`,
+                erreur: true,
+              };
+            }
+            afficher();
+          },
+        },
+        ui.dossierSauvegardes ? 'Changer' : 'Choisir le dossier',
+      ),
+      ui.dossierSauvegardes &&
+        el(
+          'button',
+          {
+            onclick: async () => {
+              await oublierDossierSauvegardes();
+              ui.dossierSauvegardes = null;
+              ecrireStockage(CLE_DOSSIER_SAUVEGARDES, null);
+              afficher();
+            },
+          },
+          'Revenir à Téléchargements',
+        ),
+    ),
+  );
 }
 
 // Partage direct (menu Android : Bluetooth, Quick Share, messagerie…). Chrome n'accepte de
@@ -98,7 +161,9 @@ export function panneauSauvegardeFichier(): HTMLElement {
     el(
       'div',
       { class: 'rangee' },
-      ui.session ? el('button', { onclick: enregistrerFichierSauvegarde }, 'Enregistrer') : null,
+      ui.session
+        ? el('button', { onclick: () => void enregistrerFichierSauvegarde() }, 'Enregistrer')
+        : null,
       ui.session && partagePossible()
         ? el('button', { onclick: () => void partagerSauvegarde() }, 'Partager')
         : null,
@@ -171,12 +236,15 @@ export function contenuFichier(s: Session | null): Node[] {
               el(
                 'button',
                 {
-                  onclick: () =>
-                    enregistrer(
+                  onclick: async () => {
+                    const ou = await enregistrerSauvegarde(
                       encoder(ui.sessionIllisible!),
                       `contour-parcelle-travail-illisible-${aujourdhui()}.json`,
                       'application/json',
-                    ),
+                    );
+                    ui.message = { texte: `${ou}.`, erreur: false };
+                    afficher();
+                  },
                 },
                 'Télécharger le travail illisible',
               ),
@@ -202,6 +270,7 @@ export function contenuFichier(s: Session | null): Node[] {
     panneauDrive(),
     // Réglages : mise en page, version de l'application.
     section('Réglages'),
+    ...[panneauDossierSauvegardes()].filter((x): x is HTMLElement => x !== null),
     el(
       'div',
       { class: 'info' },

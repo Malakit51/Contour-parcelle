@@ -18,9 +18,12 @@ import {
   NOM_FICHIER,
   nomEmplacement,
   oublierEmplacement,
+  ecrireDansSauvegardes,
+  nomDossierSauvegardes,
 } from '../ui/dossier';
-import { type Session, ui } from './etat';
+import { CLE_DOSSIER_SAUVEGARDES, type Session, ui } from './etat';
 import { afficher } from './mise-en-page';
+import { ecrireStockage } from './stockage';
 import { majSuivi } from './travail';
 
 /** Écart de surface en hectares, signé, à 4 décimales : « +0,0395 ». */
@@ -76,6 +79,32 @@ export function enregistrer(octets: Uint8Array, nom: string, type: string): void
 void nomEmplacement().then((n) => {
   ui.emplacementConnu = n;
 });
+// Le dossier des sauvegardes affiché doit exister encore (données du navigateur effacées…).
+void nomDossierSauvegardes().then((n) => {
+  if (!n && ui.dossierSauvegardes) {
+    ui.dossierSauvegardes = null;
+    ecrireStockage(CLE_DOSSIER_SAUVEGARDES, null);
+  }
+});
+
+/**
+ * Enregistre un fichier de sauvegarde (CSV, .json) : dans le dossier « Contour parcelle » s'il est
+ * choisi et accessible, sinon par un téléchargement. Renvoie où il est parti, pour la bulle.
+ */
+export async function enregistrerSauvegarde(
+  octets: Uint8Array,
+  nom: string,
+  type: string,
+): Promise<string> {
+  if (ui.dossierSauvegardes) {
+    const chemin = await ecrireDansSauvegardes(octets, nom);
+    if (chemin) return `${nom} enregistré dans « ${ui.dossierSauvegardes} »`;
+    enregistrer(octets, nom, type);
+    return `Dossier « ${ui.dossierSauvegardes} » inaccessible : ${nom} téléchargé dans Téléchargements`;
+  }
+  enregistrer(octets, nom, type);
+  return `${nom} enregistré dans Téléchargements`;
+}
 
 /** Nom du dossier écrit sur la clé : « TASKDATA 0.12 », pour le retrouver tel quel sur la console. */
 export const nomDossierVersion = (version: string) => `${NOM_DOSSIER} ${version}`;

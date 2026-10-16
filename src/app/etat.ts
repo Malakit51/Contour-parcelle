@@ -48,6 +48,7 @@ export const CLE_SESSION_ILLISIBLE = 'contour-parcelle/session-illisible';
 export const CLE_JEUX_MASQUES = 'contour-parcelle/jeux-masques';
 export const CLE_MISE_EN_PAGE = 'contour-parcelle/mise-en-page';
 export const CLE_HAUTEUR_VOLET = 'contour-parcelle/hauteur-volet';
+export const CLE_DOSSIER_SAUVEGARDES = 'contour-parcelle/dossier-sauvegardes';
 
 export interface EtatInterface {
   session: Session | null;
@@ -114,6 +115,8 @@ export interface EtatInterface {
   menuLignesOuvert: boolean;
   /** Emplacement mémorisé pour « Enregistrer sur la clé » (nom affiché), ou null. */
   emplacementConnu: string | null;
+  /** Dossier des sauvegardes choisi (« Documents/Contour parcelle »), ou null : Téléchargements. */
+  dossierSauvegardes: string | null;
   /** La liste du suivi reste ouverte d'un affichage à l'autre. */
   suiviOuvert: boolean;
   onglet: Onglet;
@@ -170,6 +173,7 @@ export const ui: EtatInterface = {
   jeuxMasques: jeuxMasquesGardes(),
   menuLignesOuvert: false,
   emplacementConnu: null,
+  dossierSauvegardes: lireStockage(CLE_DOSSIER_SAUVEGARDES),
   suiviOuvert: true,
   onglet: 'fichier',
   messageAffiche: null,

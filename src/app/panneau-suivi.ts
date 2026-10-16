@@ -6,6 +6,7 @@ import {
   cleParcelle,
   csvJournal,
   csvSuivi,
+  aujourdhui,
   type EtatContour,
   fiche,
   importerCsv,
@@ -13,7 +14,7 @@ import {
 } from '../suivi/suivi';
 import { el } from '../ui/dom';
 import { type Session, ui } from './etat';
-import { enregistrer } from './exporter';
+import { enregistrerSauvegarde } from './exporter';
 import { afficher } from './mise-en-page';
 import { dateFr, effacerSelection, majSuivi, quandFr } from './travail';
 import { cadrerParcelle } from './vue';
@@ -76,8 +77,11 @@ export function panneauSuiviGeneral(s: Session): HTMLElement {
     .sort((a, b) => a.p.nom.localeCompare(b.p.nom, 'fr', { numeric: true }));
   const compte = (e: EtatContour) => parcelles.filter((x) => x.f.etat === e).length;
   const journal = [...ui.suivi.journal].reverse().slice(0, 50);
-  const telechargerCsv = (texte: string, nom: string) =>
-    enregistrer(encoder(texte), nom, 'text/csv');
+  const telechargerCsv = async (texte: string, nom: string) => {
+    const ou = await enregistrerSauvegarde(encoder(texte), nom, 'text/csv');
+    ui.message = { texte: `${ou}.`, erreur: ou.startsWith('Dossier') };
+    afficher();
+  };
   const bloc = el(
     'details',
     { class: 'info', ...(ui.suiviOuvert ? { open: '' } : {}) },
@@ -132,12 +136,21 @@ export function panneauSuiviGeneral(s: Session): HTMLElement {
       { class: 'rangee' },
       el(
         'button',
-        { onclick: () => telechargerCsv(csvSuivi(ui.suivi, s.td.parcelles), 'suivi-contours.csv') },
+        {
+          onclick: () =>
+            void telechargerCsv(
+              csvSuivi(ui.suivi, s.td.parcelles),
+              `suivi-contours-${aujourdhui()}.csv`,
+            ),
+        },
         'Suivi en CSV',
       ),
       el(
         'button',
-        { onclick: () => telechargerCsv(csvJournal(ui.suivi), 'journal-contours.csv') },
+        {
+          onclick: () =>
+            void telechargerCsv(csvJournal(ui.suivi), `journal-contours-${aujourdhui()}.csv`),
+        },
         'Journal en CSV',
       ),
       boutonImportCsv(s),
