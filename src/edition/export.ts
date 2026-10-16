@@ -2,13 +2,25 @@
 
 import { exporterTaskData, type Changements } from '../isoxml/ecriture';
 import { lireTaskData, type Point, type TaskData } from '../isoxml/lecture';
-import { distanceM, estSupprimee, etatInitial, latLon, surfaceEtat, type Etat } from './etat';
+import {
+  anneauIgnore,
+  distanceM,
+  estSupprimee,
+  etatInitial,
+  latLon,
+  surfaceEtat,
+  type Etat,
+} from './etat';
 
 /** Parcelles dont au moins un sommet a bougé, a été ajouté ou supprimé. */
 export function parcellesModifiees(etat: Etat): number[] {
   const modifiees = new Set<number>();
-  for (const a of etat.anneaux) {
-    if (estSupprimee(etat, a.parcelle)) continue;
+  for (const i of etat.zonesRetirees ?? []) {
+    const p = etat.anneaux[i]!.parcelle;
+    if (!estSupprimee(etat, p)) modifiees.add(p);
+  }
+  for (const [i, a] of etat.anneaux.entries()) {
+    if (anneauIgnore(etat, i)) continue;
     const supprime = a.sommets.filter((s) => s.origine).length < a.nbOrigine;
     if (
       supprime ||
@@ -37,8 +49,8 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
   const points: NonNullable<Changements['points']>[number][] = [];
   const insertions: { apres: Point; points: { lat: number; lon: number }[] }[] = [];
   const suppressions: Point[] = [];
-  for (const a of etat.anneaux) {
-    if (estSupprimee(etat, a.parcelle)) continue;
+  for (const [i, a] of etat.anneaux.entries()) {
+    if (anneauIgnore(etat, i)) continue;
     const anneau = td.parcelles[a.parcelle]!.anneaux[a.anneau]!;
     // Points du fichier qui ne sont plus utilisés (hors répétition finale du premier).
     const utilises = new Set(a.sommets.map((s) => s.origine));
@@ -84,7 +96,15 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
         ];
   });
   const parcellesRetirees = (etat.supprimees ?? []).map((p) => td.parcelles[p]!);
-  return { points, insertions, suppressions, surfaces, guidages, parcellesRetirees };
+  const zonesRetirees = (etat.zonesRetirees ?? [])
+    .filter((i) => !estSupprimee(etat, etat.anneaux[i]!.parcelle))
+    .map((i) => {
+      const a = etat.anneaux[i]!;
+      const plage = td.parcelles[a.parcelle]!.anneaux[a.anneau]!.plage;
+      if (!plage) throw new Error('Zone exclue introuvable dans le fichier.');
+      return plage;
+    });
+  return { points, insertions, suppressions, surfaces, guidages, parcellesRetirees, zonesRetirees };
 }
 
 export function exporterEtat(td: TaskData, etat: Etat): string {
@@ -116,11 +136,17 @@ export function verifierRelecture(td: TaskData, etat: Etat, texte: string): stri
     return problemes;
   }
   const reluEtat = etatInitial(relu);
-  for (const a of etat.anneaux) {
-    if (estSupprimee(etat, a.parcelle)) continue;
+  for (const [k, a] of etat.anneaux.entries()) {
+    if (anneauIgnore(etat, k)) continue;
     const nom = td.parcelles[a.parcelle]!.nom;
     const i = gardees.indexOf(a.parcelle);
-    const r = reluEtat.anneaux.find((x) => x.parcelle === i && x.anneau === a.anneau);
+    // Rang de l'anneau dans le fichier produit : les zones retirées avant lui ne comptent plus.
+    const rang =
+      a.anneau -
+      (etat.zonesRetirees ?? []).filter(
+        (z) => etat.anneaux[z]!.parcelle === a.parcelle && etat.anneaux[z]!.anneau < a.anneau,
+      ).length;
+    const r = reluEtat.anneaux.find((x) => x.parcelle === i && x.anneau === rang);
     const ferme = (pts: readonly { lat: number; lon: number }[]) =>
       pts.length > 1 && pts[0]!.lat === pts.at(-1)!.lat && pts[0]!.lon === pts.at(-1)!.lon;
     if (!r || r.sommets.length !== a.sommets.length) {
@@ -129,7 +155,7 @@ export function verifierRelecture(td: TaskData, etat: Etat, texte: string): stri
       problemes.push(`${nom} : un point du contour écrit n’est pas à la bonne place.`);
     } else if (
       ferme(td.parcelles[a.parcelle]!.anneaux[a.anneau]!.points) !==
-      ferme(relu.parcelles[i]!.anneaux[a.anneau]!.points)
+      ferme(relu.parcelles[i]!.anneaux[rang]!.points)
     ) {
       problemes.push(`${nom} : le contour écrit n’est plus fermé comme dans l’original.`);
     }

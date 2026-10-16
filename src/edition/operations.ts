@@ -482,3 +482,19 @@ export function remettreParcelle(etat: Etat, p: number): Etat {
   const { supprimees: _, ...reste } = etat;
   return supprimees.length ? { ...reste, supprimees } : reste;
 }
+
+/** Retire la zone exclue (anneau intérieur) `anneau` : la parcelle reprend sa surface. */
+export function supprimerZone(etat: Etat, anneau: number): Etat {
+  if (etat.anneaux[anneau]?.type !== 2) {
+    throw new ErreurEdition('Ce n’est pas une zone exclue.');
+  }
+  if (etat.zonesRetirees?.includes(anneau)) return etat;
+  return { ...etat, zonesRetirees: [...(etat.zonesRetirees ?? []), anneau].sort((a, b) => a - b) };
+}
+
+export function remettreZone(etat: Etat, anneau: number): Etat {
+  if (!etat.zonesRetirees?.includes(anneau)) return etat;
+  const zonesRetirees = etat.zonesRetirees.filter((x) => x !== anneau);
+  const { zonesRetirees: _, ...reste } = etat;
+  return zonesRetirees.length ? { ...reste, zonesRetirees } : reste;
+}

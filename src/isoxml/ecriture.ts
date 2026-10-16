@@ -20,6 +20,8 @@ export interface Changements {
   }>;
   /** Parcelles retirées du fichier, avec les tâches (TSK) qui s'y rapportent. */
   parcellesRetirees?: ReadonlyArray<Parcelle>;
+  /** Zones exclues retirées : lignes entières de leur LSG. */
+  zonesRetirees?: ReadonlyArray<Plage>;
 }
 
 /** Étend une plage aux lignes entières qu'elle occupe (fin de ligne comprise). */
@@ -196,6 +198,7 @@ export function exporterTaskData(td: TaskData, changements: Changements = {}): s
     if (!pfd) throw new Error(`${parcelle.nom} : parcelle introuvable dans le fichier.`);
     retraits.push(pfd, ...taches.map((t) => t.plage));
   }
+  retraits.push(...(changements.zonesRetirees ?? []));
   const dedans = (p: Plage) => retraits.some((r) => p.debut >= r.debut && p.fin <= r.fin);
   return remplacer(td.texte, [
     ...remplacements.filter((x) => !dedans(x.plage)),

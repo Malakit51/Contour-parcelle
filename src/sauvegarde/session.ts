@@ -23,6 +23,8 @@ export interface SessionEnregistree {
   guidages?: Guidage[];
   /** Parcelles retirées du fichier (indices). */
   supprimees?: number[];
+  /** Zones exclues retirées (indices des anneaux). */
+  zonesRetirees?: number[];
 }
 
 export class ErreurSession extends Error {
@@ -56,6 +58,7 @@ export function enregistrerSession(
     }),
     ...(etat.guidages?.length ? { guidages: [...etat.guidages] } : {}),
     ...(etat.supprimees?.length ? { supprimees: [...etat.supprimees] } : {}),
+    ...(etat.zonesRetirees?.length ? { zonesRetirees: [...etat.zonesRetirees] } : {}),
     ...(suivi ? { suivi } : {}),
   };
 }
@@ -92,6 +95,7 @@ export function relireSession(sauvegarde: unknown): {
   });
   const guidages = (s.guidages ?? []).filter((g) => td.parcelles[g.parcelle]);
   const supprimees = (s.supprimees ?? []).filter((p) => td.parcelles[p]);
+  const zonesRetirees = (s.zonesRetirees ?? []).filter((i) => anneaux[i]?.type === 2);
   return {
     td,
     nom: s.fichier.nom,
@@ -99,6 +103,7 @@ export function relireSession(sauvegarde: unknown): {
       anneaux,
       ...(guidages.length ? { guidages } : {}),
       ...(supprimees.length ? { supprimees } : {}),
+      ...(zonesRetirees.length ? { zonesRetirees } : {}),
     },
     session: s,
   };

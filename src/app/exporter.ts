@@ -26,7 +26,7 @@ import { CLE_DOSSIER_SAUVEGARDES, type Session, ui } from './etat';
 import { afficher } from './mise-en-page';
 import { ecrireStockage } from './stockage';
 import { majSuivi, modifier } from './travail';
-import { remettreParcelle } from '../edition/operations';
+import { remettreParcelle, remettreZone } from '../edition/operations';
 
 /** Écart de surface en hectares, signé, à 4 décimales : « +0,0395 ». */
 export const haSigne = (m2: number) =>
@@ -277,6 +277,32 @@ export function panneauExport(s: Session): HTMLElement[] {
         'Changer le numéro',
       ),
     ),
+    // Zones exclues retirées : idem.
+    ...(s.etat.zonesRetirees ?? []).map((z) => {
+      const p = s.etat.anneaux[z]!.parcelle;
+      return el(
+        'div',
+        { class: 'rangee' },
+        el(
+          'span',
+          { class: 'erreur', style: 'flex:1' },
+          `${s.td.parcelles[p]!.nom} : zone exclue retirée`,
+        ),
+        el(
+          'button',
+          {
+            class: 'petit',
+            onclick: () =>
+              modifier(
+                () => remettreZone(ui.session!.etat, z),
+                `Zone exclue de ${s.td.parcelles[p]!.nom} remise`,
+                false,
+              ),
+          },
+          'Remettre',
+        ),
+      );
+    }),
     // Parcelles retirées : rappelées ici, avec de quoi les remettre.
     ...(s.etat.supprimees ?? []).map((p) => {
       const n = blocsDeParcelle(s.td.texte, s.td.parcelles[p]!.id).taches.length;

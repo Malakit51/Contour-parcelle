@@ -84,3 +84,46 @@ describe('supprimer une parcelle', () => {
     expect(relue.etat.supprimees).toEqual([p]);
   });
 });
+
+describe('retirer une zone exclue', () => {
+  it('13 Jard : le LSG A="2" disparaît, la surface reprend la zone, le reste est identique', async () => {
+    const { supprimerZone, remettreZone } = await import('../src/edition/operations');
+    const { surfaceEtat } = await import('../src/edition/etat');
+    const { comparer } = await import('../src/isoxml/comparaison');
+    const etat0 = etatInitial(td);
+    const p = indice('13 Jard');
+    const z = etat0.anneaux.findIndex((a) => a.parcelle === p && a.type === 2);
+    expect(z).toBeGreaterThanOrEqual(0);
+    const etat = supprimerZone(etat0, z);
+    expect(parcellesModifiees(etat)).toEqual([p]);
+    const trou = surfaceEtat(etat, p) - surfaceEtat(etat0, p);
+    expect(trou).toBeGreaterThan(0);
+    const sortie = exporterEtat(td, etat);
+    expect(verifierRelecture(td, etat, sortie)).toEqual([]);
+    const relu = lireTaskData(sortie).parcelles[p]!;
+    expect(relu.anneaux.map((a) => a.type)).toEqual([1]);
+    // Différences : la surface D, les lignes du LSG retiré, et les lignes AB de la console.
+    const plage = td.parcelles[p]!.anneaux.find((a) => a.type === 2)!.plage!;
+    const lignesZone = texte.slice(plage.debut, plage.fin).split('\r\n').length - 1;
+    const diffs = comparer(texte, sortie);
+    const modifiees = diffs.filter((d) => d.avant !== null && d.apres !== null);
+    expect(modifiees).toHaveLength(1);
+    expect(modifiees[0]!.avant).toMatch(/^<PFD [^>]*C="13 Jard"/);
+    expect(diffs.filter((d) => d.apres === null)).toHaveLength(
+      lignesZone +
+        td.segmentsIgnores.reduce(
+          (n, s) => n + texte.slice(s.debut, s.fin).split('\r\n').length - 1,
+          0,
+        ),
+    );
+    // Les points de la zone ne sont plus des sommets ; remettre la zone rend l'état d'origine.
+    expect(controler(td, etat, [p])).toEqual([]);
+    expect(remettreZone(etat, z)).toEqual(etat0);
+    expect(() =>
+      supprimerZone(
+        etat0,
+        etat0.anneaux.findIndex((a) => a.type === 1),
+      ),
+    ).toThrow();
+  });
+});

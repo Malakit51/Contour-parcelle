@@ -1,6 +1,13 @@
 // La carte et la géométrie à l’écran (cadrage, couleurs, point sous le doigt).
 
-import { type Etat, latLon, limitesJumelles, type RefLimite, suivant } from '../edition/etat';
+import {
+  type Etat,
+  latLon,
+  limitesJumelles,
+  type RefLimite,
+  suivant,
+  anneauIgnore,
+} from '../edition/etat';
 import { type LatLon, planLocal, type XY } from '../geometrie/plan';
 import { Carte, type VersEcran } from '../ui/carte';
 import { el } from '../ui/dom';
@@ -56,9 +63,7 @@ export function anneauxXY(s: Session): XY[][] {
 
 /** Points de chaque anneau (vide pour une parcelle retirée : ni dessinée, ni touchable). */
 export function anneauxLL(s: Session): LatLon[][] {
-  return s.etat.anneaux.map((a) =>
-    s.etat.supprimees?.includes(a.parcelle) ? [] : a.sommets.map(latLon),
-  );
+  return s.etat.anneaux.map((a, i) => (anneauIgnore(s.etat, i) ? [] : a.sommets.map(latLon)));
 }
 
 export function cadrerTout(): void {

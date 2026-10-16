@@ -34,7 +34,7 @@ export function optimiserParcelle(
   const xy = (s: { lat: number; lon: number }) => plan.versXY([s.lat, s.lon]);
   const contour = ext.sommets.map(xy);
   const trous = etat.anneaux
-    .filter((a) => a.parcelle === p && a.type === 2)
+    .filter((a, i) => a.parcelle === p && a.type === 2 && !etat.zonesRetirees?.includes(i))
     .map((a) => a.sommets.map(xy));
   const dedans = obstacles.filter((o) => pointDansPolygone(plan.versXY(o), contour));
   const propositions = proposerPassages(

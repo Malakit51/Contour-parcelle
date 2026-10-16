@@ -46,6 +46,11 @@ export function parcellesChangees(a: Etat, b: Etat): number[] {
       changees.add(r.parcelle);
     }
   });
+  for (const z of [...(a.zonesRetirees ?? []), ...(b.zonesRetirees ?? [])]) {
+    if ((a.zonesRetirees ?? []).includes(z) !== (b.zonesRetirees ?? []).includes(z)) {
+      changees.add(a.anneaux[z]!.parcelle);
+    }
+  }
   for (const p of [...(a.supprimees ?? []), ...(b.supprimees ?? [])]) {
     if ((a.supprimees ?? []).includes(p) !== (b.supprimees ?? []).includes(p)) changees.add(p);
   }
@@ -61,7 +66,8 @@ export function parcellesChangees(a: Etat, b: Etat): number[] {
 export const travailEnCours = (etat: Etat) =>
   parcellesModifiees(etat).length > 0 ||
   (etat.guidages?.length ?? 0) > 0 ||
-  (etat.supprimees?.length ?? 0) > 0;
+  (etat.supprimees?.length ?? 0) > 0 ||
+  (etat.zonesRetirees?.length ?? 0) > 0;
 
 /**
  * Passe à un nouvel état (annulable) et note la modification au journal. L'état est d'abord

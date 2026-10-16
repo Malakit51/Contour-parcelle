@@ -30,6 +30,8 @@ export interface Anneau {
   /** 1 = contour extérieur, 2 = zone exclue (poteau, mare…). */
   type: 1 | 2;
   points: Point[];
+  /** Lignes entières du LSG, de la balise ouvrante à la fermante (pour retirer une zone exclue). */
+  plage?: Plage;
 }
 
 export interface Parcelle {
@@ -155,6 +157,7 @@ export function lireTaskData(texte: string): TaskData {
   let parcelle: Parcelle | null = null;
   let anneau: Anneau | null = null;
   let debutSegment: number | null = null;
+  let debutAnneau: number | null = null;
 
   for (const b of balises(texte)) {
     if (b.fermante) {
@@ -168,7 +171,11 @@ export function lireTaskData(texte: string): TaskData {
           segmentsIgnores.push(lignesEntieres(texte, { debut: debutSegment, fin: b.plage.fin }));
           debutSegment = null;
         }
+        if (anneau && debutAnneau !== null) {
+          anneau.plage = lignesEntieres(texte, { debut: debutAnneau, fin: b.plage.fin });
+        }
         anneau = null;
+        debutAnneau = null;
       }
       continue;
     }
@@ -198,6 +205,7 @@ export function lireTaskData(texte: string): TaskData {
         }
       } else if (dansLimite && (type === '1' || type === '2')) {
         anneau = { type: type === '1' ? 1 : 2, points: [] };
+        debutAnneau = b.plage.debut;
         parcelle.anneaux.push(anneau);
       }
     } else if (b.nom === 'PNT' && anneau && debutSegment === null) {

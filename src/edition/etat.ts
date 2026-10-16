@@ -45,15 +45,21 @@ export interface Etat {
    * `anneaux` (les indices ne bougent pas) mais ne comptent plus : ni carte, ni calculs, ni export.
    */
   readonly supprimees?: readonly number[];
+  /** Zones exclues retirées (indices dans `anneaux`, anneaux de type 2) : la parcelle les reprend. */
+  readonly zonesRetirees?: readonly number[];
 }
+
+/** Anneau qui ne compte plus : parcelle retirée, ou zone exclue retirée. */
+export const anneauIgnore = (etat: Etat, i: number) =>
+  estSupprimee(etat, etat.anneaux[i]!.parcelle) || (etat.zonesRetirees?.includes(i) ?? false);
 
 export const estSupprimee = (etat: Etat, parcelle: number) =>
   etat.supprimees?.includes(parcelle) ?? false;
 
 /** Le même état sans les anneaux des parcelles retirées (pour les contrôles). */
 export function sansSupprimees(etat: Etat): Etat {
-  if (!etat.supprimees?.length) return etat;
-  return { ...etat, anneaux: etat.anneaux.filter((a) => !estSupprimee(etat, a.parcelle)) };
+  if (!etat.supprimees?.length && !etat.zonesRetirees?.length) return etat;
+  return { ...etat, anneaux: etat.anneaux.filter((_, i) => !anneauIgnore(etat, i)) };
 }
 
 export interface RefSommet {
@@ -107,8 +113,8 @@ export function distanceM(a: LatLon, b: LatLon): number {
 export function sommetsEn(etat: Etat, p: LatLon, tolerance = TOLERANCE_PARTAGE_M): RefSommet[] {
   const refs: RefSommet[] = [];
   etat.anneaux.forEach((a, ia) => {
-    // Une parcelle retirée ne partage plus rien avec ses voisines.
-    if (estSupprimee(etat, a.parcelle)) return;
+    // Une parcelle (ou une zone exclue) retirée ne partage plus rien avec ses voisines.
+    if (anneauIgnore(etat, ia)) return;
     a.sommets.forEach((s, is) => {
       if (distanceM(p, latLon(s)) <= tolerance) refs.push({ anneau: ia, sommet: is });
     });
@@ -162,8 +168,8 @@ export function anneauXY(a: AnneauEdite): XY[] {
 /** Surface cultivable d'une parcelle (m²) : contours extérieurs moins zones exclues. */
 export function surfaceEtat(etat: Etat, parcelle: number): number {
   let total = 0;
-  for (const a of etat.anneaux) {
-    if (a.parcelle !== parcelle) continue;
+  for (const [i, a] of etat.anneaux.entries()) {
+    if (a.parcelle !== parcelle || etat.zonesRetirees?.includes(i)) continue;
     const aire = Math.abs(aireSignee(anneauXY(a)));
     total += a.type === 1 ? aire : -aire;
   }

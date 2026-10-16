@@ -14,6 +14,7 @@ import {
   simplifierParcelle,
   sommetsDuBord,
   supprimerSommet,
+  supprimerZone,
 } from '../edition/operations';
 import { planLocal } from '../geometrie/plan';
 import { ecartMaximal } from '../geometrie/simplification';
@@ -450,6 +451,28 @@ export function panneauCollage(s: Session): HTMLElement {
   return el('div', { class: 'info' }, ...lignes);
 }
 
+/** Zone exclue (trou dans la parcelle) : la retirer, la parcelle reprend sa surface. */
+function boutonRetirerZone(s: Session, anneau: number): HTMLElement {
+  const nom = nomParcelle(s, anneau);
+  return el(
+    'div',
+    { class: 'rangee' },
+    el(
+      'button',
+      {
+        class: 'danger',
+        onclick: () =>
+          modifier(
+            () => supprimerZone(s.etat, anneau),
+            `Zone exclue de ${nom} retirée (la parcelle la reprend)`,
+            false,
+          ),
+      },
+      'Supprimer la zone exclue',
+    ),
+  );
+}
+
 export function panneauSelection(s: Session): HTMLElement {
   if (ui.mode === 'limite') {
     if (!ui.selLimite) return el('div', { class: 'info doux' }, 'Touche une limite.');
@@ -491,6 +514,7 @@ export function panneauSelection(s: Session): HTMLElement {
         el('span', { class: 'doux' }, `${longueur(s, ref).toFixed(1).replace('.', ',')} m`),
       ),
       el('div', { class: 'cartes-sens' }, carteSens('exterieur'), carteSens('interieur')),
+      type === 2 && boutonRetirerZone(s, ref.anneau),
     );
   }
   const boutonAjout = el(
@@ -588,6 +612,7 @@ export function panneauSelection(s: Session): HTMLElement {
       ? el('div', { class: 'commandes-point' }, commandesSommet(), glisse)
       : glisse,
     el('div', { class: 'rangee' }, el('button', { onclick: supprimer }, 'Supprimer'), boutonAjout),
+    s.etat.anneaux[ref.anneau]!.type === 2 && boutonRetirerZone(s, ref.anneau),
   );
 }
 

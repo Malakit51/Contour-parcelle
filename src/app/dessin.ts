@@ -1,6 +1,6 @@
 // Ce qui est dessiné sur la carte.
 
-import { latLon, type RefLimite } from '../edition/etat';
+import { anneauIgnore, latLon, type RefLimite } from '../edition/etat';
 import { jeuDe } from '../edition/guidages';
 import { cotesLimite, repereLeLong, sommetsDuBord } from '../edition/operations';
 import { cleParcelle, fiche } from '../suivi/suivi';
@@ -39,7 +39,7 @@ export function dessin(s: Session): Dessin {
       : [],
     anneaux: affiches.flatMap((pts, i) => {
       const a = s.etat.anneaux[i]!;
-      if (s.etat.supprimees?.includes(a.parcelle)) return [];
+      if (anneauIgnore(s.etat, i)) return [];
       return {
         pts,
         couleur: ui.couleursParEtat
