@@ -10,7 +10,15 @@ import {
 import { comparer } from '../isoxml/comparaison';
 import { blocsDeParcelle, tachesDuFichier } from '../isoxml/ecriture';
 import { encoder } from '../isoxml/octets';
-import { cleParcelle, VERSION_DE_DEPART, versionSuivante } from '../suivi/suivi';
+import {
+  aujourdhui,
+  cleParcelle,
+  fiche,
+  LIBELLES,
+  VERSION_DE_DEPART,
+  versionSuivante,
+} from '../suivi/suivi';
+import { shapefileParcelles } from '../edition/shp';
 import { el } from '../ui/dom';
 import {
   ecrireDossierTaskdata,
@@ -273,6 +281,51 @@ function cadreTaches(s: Session): HTMLElement | null {
   );
 }
 
+/** Contours des parcelles en shapefile (Lambert 93), pour un autre logiciel. */
+function cadreShapefile(s: Session): HTMLElement {
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, 'Autres logiciels'),
+    el(
+      'div',
+      { class: 'doux' },
+      'Contours des parcelles en shapefile (Lambert 93, dans un .zip) : nom, surface, état du contour. Ce fichier n’est pas pour la console.',
+    ),
+    el(
+      'div',
+      { class: 'rangee' },
+      el(
+        'button',
+        {
+          onclick: async () => {
+            const base = `parcelles-${aujourdhui()}`;
+            try {
+              const octets = shapefileParcelles(
+                s.td,
+                s.etat,
+                (p) => LIBELLES[fiche(ui.suivi, s.td.parcelles[p]!).etat].toLowerCase(),
+                base,
+              );
+              ui.message = {
+                texte: await enregistrerSauvegarde(octets, `${base}.zip`, 'application/zip'),
+                erreur: false,
+              };
+            } catch (e) {
+              ui.message = {
+                texte: `Shapefile impossible : ${(e as Error).message}`,
+                erreur: true,
+              };
+            }
+            afficher();
+          },
+        },
+        'Exporter en shapefile (.zip)',
+      ),
+    ),
+  );
+}
+
 export function panneauExport(s: Session): HTMLElement[] {
   const prepare = exportAJour();
   const graves = prepare?.alertes.filter((a) => a.grave) ?? [];
@@ -469,5 +522,7 @@ export function panneauExport(s: Session): HTMLElement[] {
         ),
     ),
   );
-  return [controle, version, cadreTaches(s), ou].filter((x): x is HTMLElement => x !== null);
+  return [controle, version, cadreTaches(s), ou, cadreShapefile(s)].filter(
+    (x): x is HTMLElement => x !== null,
+  );
 }
