@@ -31,6 +31,21 @@ export interface Changements {
     apres: number;
     zones: ReadonlyArray<ReadonlyArray<{ lat: number; lon: number }>>;
   }>;
+  /** Parcelles créées dans l'éditeur, écrites en entier à la position `apres`. */
+  parcellesAjoutees?: ReadonlyArray<ParcelleAEcrire>;
+}
+
+export interface ParcelleAEcrire {
+  apres: number;
+  id: string;
+  guid: string;
+  nom: string;
+  m2: number;
+  /** Parcelle du fichier dont on reprend client et exploitation (E, F) et le format des points. */
+  modele: Parcelle;
+  /** Contour extérieur (type 1) puis zones exclues (type 2). */
+  anneaux: ReadonlyArray<{ type: 1 | 2; points: ReadonlyArray<{ lat: number; lon: number }> }>;
+  lignes: ReadonlyArray<{ nom: string; points: ReadonlyArray<{ lat: number; lon: number }> }>;
 }
 
 /** Étend une plage aux lignes entières qu'elle occupe (fin de ligne comprise). */
@@ -113,6 +128,7 @@ export function texteZoneExclue(
   modele: Point,
   zone: ReadonlyArray<{ lat: number; lon: number }>,
   finDeLigne: string,
+  type: 1 | 2 = 2,
 ): string {
   const balise = texte.slice(modele.balise.debut, modele.balise.fin).replace(/\sB="[^"]*"/, '');
   const ligne = (p: { lat: number; lon: number }, b: string | null) =>
@@ -122,10 +138,38 @@ export function texteZoneExclue(
       .replace(/^<PNT(\s+A="[^"]*")?/, (m) => (b ? `${m} B="${b}"` : m)) + finDeLigne;
   const premier = zone[0]!;
   return (
-    `<LSG A="2">${finDeLigne}` +
+    `<LSG A="${type}">${finDeLigne}` +
     zone.map((p, k) => ligne(p, k === 0 ? 'start' : null)).join('') +
     ligne(premier, 'end') +
     `</LSG>${finDeLigne}`
+  );
+}
+
+/**
+ * Parcelle créée dans l'éditeur, au format de la console : `<PFD A B C D E F>` (client et
+ * exploitation repris du modèle, sans culture ni variété), ses lignes de guidage, `<PLN A="1" B>`,
+ * le contour puis les zones exclues, `</PLN>`, `</PFD>`.
+ */
+export function texteParcelleAjoutee(
+  texte: string,
+  p: ParcelleAEcrire,
+  finDeLigne: string,
+): string {
+  const { pfd } = blocsDeParcelle(texte, p.modele.id);
+  const ouvrante = pfd ? (/<PFD\b[^>]*>/.exec(texte.slice(pfd.debut, pfd.fin))?.[0] ?? '') : '';
+  const attribut = (nom: string) => {
+    const m = new RegExp(`\\s${nom}="([^"]*)"`).exec(ouvrante);
+    return m ? ` ${nom}="${m[1]}"` : '';
+  };
+  const point = p.modele.anneaux[0]?.points[0];
+  if (!point) throw new Error(`${p.nom} : modèle sans contour.`);
+  if (!Number.isFinite(p.m2)) throw new Error(`${p.nom} : surface invalide.`);
+  return (
+    `<PFD A="${p.id}" B="${p.guid}" C="${echapper(p.nom)}" D="${Math.round(p.m2)}"${attribut('E')}${attribut('F')}>${finDeLigne}` +
+    texteGuidages(p.lignes, finDeLigne) +
+    `<PLN A="1" B="${echapper(p.nom)}">${finDeLigne}` +
+    p.anneaux.map((a) => texteZoneExclue(texte, point, a.points, finDeLigne, a.type)).join('') +
+    `</PLN>${finDeLigne}</PFD>${finDeLigne}`
   );
 }
 
@@ -231,6 +275,14 @@ export function exporterTaskData(td: TaskData, changements: Changements = {}): s
     remplacements.push({
       plage: { debut: apres, fin: apres },
       texte: zones.map((z) => texteZoneExclue(td.texte, modele, z, finDeLigne)).join(''),
+    });
+  }
+  // Parcelles créées : toutes au même endroit (après la dernière parcelle du fichier), en un bloc.
+  const ajoutees = changements.parcellesAjoutees ?? [];
+  if (ajoutees.length > 0) {
+    remplacements.push({
+      plage: { debut: ajoutees[0]!.apres, fin: ajoutees[0]!.apres },
+      texte: ajoutees.map((p) => texteParcelleAjoutee(td.texte, p, finDeLigne)).join(''),
     });
   }
   // Parcelles retirées : leur bloc et leurs tâches disparaissent, avec tout ce qu'on allait

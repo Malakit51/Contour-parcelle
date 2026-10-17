@@ -1,6 +1,7 @@
 // Passage de l'état modifié aux changements à écrire dans le fichier.
 
-import { exporterTaskData, type Changements } from '../isoxml/ecriture';
+import { blocsDeParcelle, exporterTaskData, type Changements } from '../isoxml/ecriture';
+import { rapportSurface } from './parcelles-ajoutees';
 import { lireTaskData, type Point, type TaskData } from '../isoxml/lecture';
 import {
   anneauIgnore,
@@ -43,6 +44,8 @@ export function parcellesModifiees(etat: Etat): number[] {
  * pour un décalage de quelques centimètres.
  */
 export function nouvelleSurface(td: TaskData, etat: Etat, parcelle: number): number | null {
+  // Parcelle créée dans l'éditeur : surface calculée, corrigée comme les D du fichier.
+  if (td.parcelles[parcelle]?.ajoutee) return surfaceEtat(etat, parcelle) * rapportSurface(td);
   const d = td.parcelles[parcelle]?.surface;
   if (!d) return null;
   const avant = surfaceEtat(etatInitial(td), parcelle);
@@ -85,7 +88,7 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
     return m2 === null ? [] : [{ parcelle: td.parcelles[p]!, m2 }];
   });
   const guidages = td.parcelles.flatMap((parcelle, i) => {
-    if (estSupprimee(etat, i)) return [];
+    if (estSupprimee(etat, i) || parcelle.ajoutee) return [];
     const lignes = (etat.guidages ?? []).filter((g) => g.parcelle === i);
     return lignes.length === 0
       ? []
@@ -99,7 +102,36 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
           },
         ];
   });
-  const parcellesRetirees = (etat.supprimees ?? []).map((p) => td.parcelles[p]!);
+  const parcellesRetirees = (etat.supprimees ?? [])
+    .map((p) => td.parcelles[p]!)
+    .filter((p) => !p.ajoutee);
+  // Parcelles créées dans l'éditeur : écrites en entier après la dernière parcelle du fichier.
+  const derniere = td.parcelles.filter((p) => !p.ajoutee).at(-1);
+  const finParcelles = derniere ? blocsDeParcelle(td.texte, derniere.id).pfd?.fin : undefined;
+  const parcellesAjoutees = (etat.ajoutees ?? [])
+    .filter((a) => !estSupprimee(etat, a.parcelle))
+    .map((a) => {
+      if (finParcelles === undefined) throw new Error('Aucune parcelle dans le fichier.');
+      const anneaux = etat.anneaux
+        .filter((x, i) => x.parcelle === a.parcelle && !anneauIgnore(etat, i))
+        .sort((x, y) => x.type - y.type)
+        .map((x) => ({
+          type: x.type,
+          points: x.sommets.map((s) => ({ lat: s.lat, lon: s.lon })),
+        }));
+      return {
+        apres: finParcelles,
+        id: a.id,
+        guid: a.guid,
+        nom: a.nom,
+        m2: nouvelleSurface(td, etat, a.parcelle) ?? 0,
+        modele: td.parcelles[a.modele]!,
+        anneaux,
+        lignes: (etat.guidages ?? [])
+          .filter((g) => g.parcelle === a.parcelle)
+          .map((g) => ({ nom: g.nom, points: g.points.map(([lat, lon]) => ({ lat, lon })) })),
+      };
+    });
   const zonesRetirees = (etat.zonesRetirees ?? [])
     .filter((i) => !estSupprimee(etat, etat.anneaux[i]!.parcelle))
     .map((i) => {
@@ -113,7 +145,8 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
     const nouvelles = etat.anneaux.filter(
       (a, i) => a.parcelle === p && a.anneau < 0 && !anneauIgnore(etat, i),
     );
-    if (nouvelles.length === 0) return [];
+    // Une parcelle créée dans l'éditeur est écrite en entier plus bas.
+    if (nouvelles.length === 0 || parcelle.ajoutee) return [];
     const gardes = etat.anneaux.filter(
       (a, i) => a.parcelle === p && a.anneau >= 0 && !anneauIgnore(etat, i),
     );
@@ -136,6 +169,7 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
     parcellesRetirees,
     zonesRetirees,
     zonesAjoutees,
+    parcellesAjoutees,
   };
 }
 
@@ -157,8 +191,13 @@ export function verifierRelecture(td: TaskData, etat: Etat, texte: string): stri
     return [`Le fichier produit est illisible : ${(e as Error).message}`];
   }
   const problemes: string[] = [];
-  // Parcelles gardées, dans l'ordre : la i-ième du fichier produit est gardees[i].
-  const gardees = td.parcelles.map((_, i) => i).filter((i) => !estSupprimee(etat, i));
+  // Parcelles gardées, dans l'ordre : la i-ième du fichier produit est gardees[i] (celles du
+  // fichier, puis celles créées dans l'éditeur).
+  const gardees = td.parcelles
+    .map((_, i) => i)
+    .filter((i) =>
+      td.parcelles[i]!.ajoutee ? !estSupprimee(etat, i) : !etat.supprimees?.includes(i),
+    );
   if (relu.parcelles.length !== gardees.length) {
     problemes.push('Le fichier produit n’a pas le nombre de parcelles attendu.');
     return problemes;

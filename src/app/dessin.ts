@@ -44,7 +44,7 @@ export function dessin(s: Session): Dessin {
         pts,
         couleur: ui.couleursParEtat
           ? COULEURS_ETAT[fiche(ui.suivi, s.td.parcelles[a.parcelle]!).etat]
-          : COULEURS[s.couleurs[a.parcelle]! % COULEURS.length]!,
+          : COULEURS[(s.couleurs[a.parcelle] ?? a.parcelle) % COULEURS.length]!,
         courant: a.parcelle === ui.parcelleCourante,
         nom: a.type === 1 ? s.td.parcelles[a.parcelle]!.nom : null,
       };

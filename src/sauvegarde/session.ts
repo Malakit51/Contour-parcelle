@@ -1,7 +1,8 @@
 // Session de travail : le fichier ouvert et les contours modifiés, sous une forme qu'on peut
 // enregistrer (sur le téléphone, ou dans Google Drive) puis recharger à l'identique.
 
-import type { AnneauEdite, Etat, Guidage, Sommet } from '../edition/etat';
+import type { AnneauEdite, Etat, Guidage, ParcelleAjoutee, Sommet } from '../edition/etat';
+import { completerParcelles } from '../edition/parcelles-ajoutees';
 import { lireTaskData, type TaskData } from '../isoxml/lecture';
 import type { Suivi } from '../suivi/suivi';
 
@@ -16,7 +17,15 @@ export interface SessionEnregistree {
    * Sommets de chaque anneau : [lat, lon, indice du point d'origine dans l'anneau du fichier, ou
    * null pour un point ajouté par l'éditeur].
    */
-  anneaux: { parcelle: number; anneau: number; sommets: [number, number, number | null][] }[];
+  anneaux: {
+    parcelle: number;
+    anneau: number;
+    /** Type d'un anneau créé dans l'éditeur (anneau -1) ; sinon celui du fichier. */
+    type?: 1 | 2;
+    sommets: [number, number, number | null][];
+  }[];
+  /** Parcelles créées dans l'éditeur. */
+  ajoutees?: ParcelleAjoutee[];
   /** Suivi et journal au moment de l'enregistrement (pour la sauvegarde en ligne). */
   suivi?: Suivi;
   /** Lignes de guidage créées dans l'éditeur. */
@@ -50,6 +59,7 @@ export function enregistrerSession(
       return {
         parcelle: a.parcelle,
         anneau: a.anneau,
+        ...(a.anneau < 0 ? { type: a.type } : {}),
         sommets: a.sommets.map((s): [number, number, number | null] => [
           s.lat,
           s.lon,
@@ -60,6 +70,7 @@ export function enregistrerSession(
     ...(etat.guidages?.length ? { guidages: [...etat.guidages] } : {}),
     ...(etat.supprimees?.length ? { supprimees: [...etat.supprimees] } : {}),
     ...(etat.zonesRetirees?.length ? { zonesRetirees: [...etat.zonesRetirees] } : {}),
+    ...(etat.ajoutees?.length ? { ajoutees: [...etat.ajoutees] } : {}),
     ...(suivi ? { suivi } : {}),
   };
 }
@@ -76,6 +87,9 @@ export function relireSession(sauvegarde: unknown): {
     throw new ErreurSession('Sauvegarde illisible ou d’une version inconnue.');
   }
   const td = lireTaskData(s.fichier.texte);
+  // Parcelles créées dans l'éditeur : remises à la suite de celles du fichier.
+  const ajoutees = (s.ajoutees ?? []).filter((a) => a.parcelle >= td.parcelles.length);
+  completerParcelles(td, { anneaux: [], ajoutees });
   const anneaux: AnneauEdite[] = s.anneaux.map((a) => {
     if (a.anneau === -1) {
       if (!td.parcelles[a.parcelle] || a.sommets.length < 3) {
@@ -84,7 +98,7 @@ export function relireSession(sauvegarde: unknown): {
       return {
         parcelle: a.parcelle,
         anneau: -1,
-        type: 2,
+        type: a.type ?? 2,
         nbOrigine: 0,
         sommets: a.sommets.map(([lat, lon]): Sommet => ({ lat, lon, origine: null })),
       };
@@ -117,6 +131,7 @@ export function relireSession(sauvegarde: unknown): {
       ...(guidages.length ? { guidages } : {}),
       ...(supprimees.length ? { supprimees } : {}),
       ...(zonesRetirees.length ? { zonesRetirees } : {}),
+      ...(ajoutees.length ? { ajoutees } : {}),
     },
     session: s,
   };

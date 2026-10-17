@@ -45,6 +45,8 @@ export interface Parcelle {
   anneaux: Anneau[];
   /** Début de la ligne du premier PLN de la parcelle : les lignes de guidage s'écrivent juste avant. */
   debutContour: number | null;
+  /** Parcelle créée dans l'éditeur : pas dans le texte du fichier, écrite en entier à l'export. */
+  ajoutee?: boolean;
 }
 
 export interface TaskData {

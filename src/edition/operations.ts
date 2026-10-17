@@ -468,6 +468,17 @@ export function remplacerContour(etat: Etat, anneau: number, points: LatLon[]): 
 /** Retire la parcelle `p` du fichier (avec ses lignes de guidage). Annulable comme le reste. */
 export function supprimerParcelle(etat: Etat, p: number): Etat {
   if (etat.supprimees?.includes(p)) return etat;
+  // Parcelle créée dans l'éditeur : elle n'est pas dans le fichier, on la retire simplement.
+  if (etat.ajoutees?.some((a) => a.parcelle === p)) {
+    const ajoutees = etat.ajoutees.filter((a) => a.parcelle !== p);
+    const { ajoutees: _, ...reste } = etat;
+    return {
+      ...reste,
+      anneaux: etat.anneaux.filter((a) => a.parcelle !== p),
+      guidages: (etat.guidages ?? []).filter((g) => g.parcelle !== p),
+      ...(ajoutees.length ? { ajoutees } : {}),
+    };
+  }
   return {
     ...etat,
     supprimees: [...(etat.supprimees ?? []), p].sort((a, b) => a - b),

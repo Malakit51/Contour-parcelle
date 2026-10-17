@@ -3,6 +3,7 @@
 import { nouvelleSurface } from '../edition/export';
 import { fiche, LIBELLES } from '../suivi/suivi';
 import { el } from '../ui/dom';
+import { estSupprimee } from '../edition/etat';
 import { icone, type Icone } from '../ui/icones';
 import { dessin } from './dessin';
 import { drive, driveEnAttente, reconnecterDrive } from './drive';
@@ -15,6 +16,7 @@ import {
   apercuCollage,
   apercuSimplification,
   boutonSupprimerParcelle,
+  cadreNouvelleParcelle,
   cadreZoneExclue,
   choixActionLimite,
   appliquer,
@@ -257,6 +259,14 @@ export function remplir(
 }
 
 export function afficher(): void {
+  // Parcelle choisie qui n'existe plus (parcelle créée puis annulée, ou retirée) : plus de choix.
+  if (
+    ui.session &&
+    ui.parcelleCourante !== null &&
+    estSupprimee(ui.session.etat, ui.parcelleCourante)
+  ) {
+    ui.parcelleCourante = null;
+  }
   app.classList.toggle('avec-volet', ui.voletActif && ui.session !== null);
   ui.gpsAffiche = carte.gpsActif();
   const defilement = zones.panneau.scrollTop;
@@ -286,7 +296,7 @@ export function afficher(): void {
   choixParcelle.append(el('option', { value: '' }, 'Toutes les parcelles'));
   s.td.parcelles
     .map((p, i) => ({ nom: p.nom, i }))
-    .filter(({ i }) => !s.etat.supprimees?.includes(i))
+    .filter(({ i }) => !estSupprimee(s.etat, i))
     .sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { numeric: true }))
     .forEach(({ nom, i }) => {
       const o = el('option', { value: String(i) }, nom);
@@ -326,7 +336,7 @@ export function afficher(): void {
             ]
               .filter(Boolean)
               .join(' · ')
-          : `${s.td.parcelles.length - (s.etat.supprimees?.length ?? 0)} parcelles`,
+          : `${s.td.parcelles.filter((_, i) => !estSupprimee(s.etat, i)).length} parcelles`,
       ),
     ),
     icone('chevron', 20),
@@ -465,6 +475,7 @@ export function afficher(): void {
         ui.mode === 'sommet' && panneauRemplacement(s),
         distanceUtile && raccourcis(),
         (ui.mode === 'limite' || ui.mode === 'sommet') && cadreZoneExclue(s),
+        (ui.mode === 'limite' || ui.mode === 'sommet') && cadreNouvelleParcelle(),
         boutonSupprimerParcelle(s),
       ];
       break;

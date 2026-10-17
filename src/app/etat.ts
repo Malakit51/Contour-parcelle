@@ -148,8 +148,8 @@ export interface EtatInterface {
    */
   traceZone: {
     mode: 'points' | 'gps';
-    /** Zone d'une note, ou nouvelle zone exclue de la parcelle `parcelle`. */
-    pour: 'note' | 'exclue';
+    /** Zone d'une note, nouvelle zone exclue de la parcelle `parcelle`, ou nouvelle parcelle. */
+    pour: 'note' | 'exclue' | 'parcelle';
     parcelle: number | null;
     points: LatLon[];
     precision: number | null;

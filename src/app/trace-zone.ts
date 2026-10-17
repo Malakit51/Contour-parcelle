@@ -1,6 +1,7 @@
 // Tracé de la zone d'une note : coins touchés sur la carte, ou tour de la zone à pied avec le
 // GPS du téléphone (l'écran reste allumé pendant le tracé).
 
+import { creerParcelle } from '../edition/parcelles-ajoutees';
 import { ajouterZoneExclue } from '../edition/zones-exclues';
 import { ajouterPointTrace, pointInterieur, surfaceZone, texteSurface } from '../suivi/zones';
 import { ui } from './etat';
@@ -23,7 +24,7 @@ function arreterGps(): void {
  */
 export function commencerTrace(
   mode: 'points' | 'gps',
-  pour: 'note' | 'exclue' = 'note',
+  pour: 'note' | 'exclue' | 'parcelle' = 'note',
   parcelle: number | null = null,
 ): void {
   arreterOutilsCarte();
@@ -101,6 +102,29 @@ export function terminerTrace(): void {
     return;
   }
   const zone = t.points.map((p): [number, number] => [p[0], p[1]]);
+  if (t.pour === 'parcelle') {
+    const s = ui.session;
+    if (!s) return annulerTrace();
+    const nom = prompt('Nom de la nouvelle parcelle', '')?.trim();
+    if (!nom) return; // le tracé reste, on peut terminer plus tard
+    let creee = -1;
+    modifier(
+      () => {
+        const r = creerParcelle(s.td, s.etat, nom, zone);
+        creee = r.parcelle;
+        return r.etat;
+      },
+      `Parcelle ${nom} créée (${texteSurface(surfaceZone(zone))})`,
+      false,
+    );
+    if (creee >= 0) {
+      arreterGps();
+      ui.traceZone = null;
+      ui.parcelleCourante = creee;
+    }
+    afficher();
+    return;
+  }
   if (t.pour === 'exclue') {
     const s = ui.session;
     if (!s || t.parcelle === null) return annulerTrace();

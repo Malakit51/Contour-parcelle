@@ -47,6 +47,21 @@ export interface Etat {
   readonly supprimees?: readonly number[];
   /** Zones exclues retirées (indices dans `anneaux`, anneaux de type 2) : la parcelle les reprend. */
   readonly zonesRetirees?: readonly number[];
+  /**
+   * Parcelles créées dans l'éditeur (indice dans `TaskData.parcelles`, où elles sont ajoutées à la
+   * suite de celles du fichier). Leurs anneaux ont `anneau: -1`.
+   */
+  readonly ajoutees?: readonly ParcelleAjoutee[];
+}
+
+export interface ParcelleAjoutee {
+  readonly parcelle: number;
+  /** Identifiant PFD (« PFD31 »), GUID (32 chiffres hexadécimaux) et nom. */
+  readonly id: string;
+  readonly guid: string;
+  readonly nom: string;
+  /** Parcelle du fichier dont on reprend client et exploitation (attributs E et F). */
+  readonly modele: number;
 }
 
 /** Zone exclue créée dans l'éditeur (pas dans le fichier d'origine). */
@@ -56,8 +71,13 @@ export const estNouvelAnneau = (a: AnneauEdite) => a.anneau < 0;
 export const anneauIgnore = (etat: Etat, i: number) =>
   estSupprimee(etat, etat.anneaux[i]!.parcelle) || (etat.zonesRetirees?.includes(i) ?? false);
 
+/**
+ * Parcelle qui ne compte plus : retirée du fichier, ou créée dans l'éditeur puis annulée (elle n'a
+ * plus d'anneau).
+ */
 export const estSupprimee = (etat: Etat, parcelle: number) =>
-  etat.supprimees?.includes(parcelle) ?? false;
+  (etat.supprimees?.includes(parcelle) ?? false) ||
+  !etat.anneaux.some((a) => a.parcelle === parcelle);
 
 /** Le même état sans les anneaux des parcelles retirées (pour les contrôles). */
 export function sansSupprimees(etat: Etat): Etat {

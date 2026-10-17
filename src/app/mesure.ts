@@ -37,6 +37,8 @@ export function majMesure(): void {
   boiteMesure.classList.toggle('trace', !!t);
   if (t) {
     const n = t.points.length;
+    const quoi =
+      t.pour === 'exclue' ? 'Zone exclue' : t.pour === 'parcelle' ? 'Nouvelle parcelle' : 'Zone';
     boiteMesure.hidden = false;
     remplir(
       boiteMesure,
@@ -45,8 +47,8 @@ export function majMesure(): void {
         {},
         t.mode === 'points'
           ? n === 0
-            ? `${t.pour === 'exclue' ? 'Zone exclue' : 'Zone'} : touche les coins sur la carte.`
-            : `${t.pour === 'exclue' ? 'Zone exclue' : 'Zone'} : ${n} coin(s)${n >= 3 ? ` · ${texteSurface(surfaceZone(t.points))}` : ''}`
+            ? `${quoi} : touche les coins sur la carte.`
+            : `${quoi} : ${n} coin(s)${n >= 3 ? ` · ${texteSurface(surfaceZone(t.points))}` : ''}`
           : `En marchant : ${n} point(s)` +
               (t.precision !== null ? ` · GPS ± ${Math.round(t.precision)} m` : ' · GPS…') +
               (n >= 3 ? ` · ${texteSurface(surfaceZone(t.points))}` : ''),

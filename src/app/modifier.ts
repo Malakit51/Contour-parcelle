@@ -653,6 +653,42 @@ export function raccourcis(): HTMLElement {
   );
 }
 
+/** Créer une parcelle : tracer son contour au doigt ou en en faisant le tour (GPS). */
+export function cadreNouvelleParcelle(): HTMLElement | null {
+  if (ui.selLimite || ui.selSommet) return null;
+  const t = ui.traceZone?.pour === 'parcelle' ? ui.traceZone : null;
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, 'Nouvelle parcelle'),
+    el(
+      'div',
+      { class: 'doux' },
+      'Trace son contour ; son nom est demandé à la fin. Ensuite, « Coller au voisin » pour la caler sur une voisine.',
+    ),
+    el(
+      'div',
+      { class: 'rangee' },
+      el(
+        'button',
+        {
+          class: t?.mode === 'points' ? 'actif' : '',
+          onclick: () => commencerTrace('points', 'parcelle'),
+        },
+        'Dessiner au doigt',
+      ),
+      el(
+        'button',
+        {
+          class: t?.mode === 'gps' ? 'actif' : '',
+          onclick: () => commencerTrace('gps', 'parcelle'),
+        },
+        'Tracer en marchant',
+      ),
+    ),
+  );
+}
+
 /**
  * Créer une zone exclue dans la parcelle choisie : la dessiner au doigt, en faire le tour à pied,
  * ou reprendre la zone dessinée d'une note de la parcelle (mare, bosquet…).

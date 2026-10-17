@@ -20,7 +20,7 @@ import {
 } from '../suivi/suivi';
 import { el } from '../ui/dom';
 import { COULEURS_ETAT, couleurNote, type Session, ui } from './etat';
-import { parcelleContenant } from '../edition/etat';
+import { parcelleContenant, estSupprimee } from '../edition/etat';
 import { nouvelleSurface } from '../edition/export';
 import { enregistrerSauvegarde } from './exporter';
 import { afficher } from './mise-en-page';
@@ -460,7 +460,7 @@ function panneauNotes(s: Session): HTMLElement | null {
 function panneauToutes(s: Session): HTMLElement[] {
   const parcelles = s.td.parcelles
     .map((p, i) => ({ p, i, f: fiche(ui.suivi, p) }))
-    .filter(({ i }) => !s.etat.supprimees?.includes(i))
+    .filter(({ i }) => !estSupprimee(s.etat, i))
     .sort((a, b) => a.p.nom.localeCompare(b.p.nom, 'fr', { numeric: true }));
   const etats = Object.keys(LIBELLES) as EtatContour[];
   const compteurs = el(
