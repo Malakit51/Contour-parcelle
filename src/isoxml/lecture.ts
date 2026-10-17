@@ -47,6 +47,11 @@ export interface Parcelle {
   debutContour: number | null;
   /** Parcelle créée dans l'éditeur : pas dans le texte du fichier, écrite en entier à l'export. */
   ajoutee?: boolean;
+  /** Nom tel qu'écrit dans le fichier (attribut C du PFD, et B de ses PLN), pour le renommer. */
+  nomBrut?: ValeurBrute;
+  nomsContour?: ValeurBrute[];
+  /** Nom du fichier quand la parcelle a été renommée dans l'éditeur (`nom` est alors le nouveau). */
+  nomFichier?: string;
 }
 
 export interface TaskData {
@@ -191,10 +196,18 @@ export function lireTaskData(texte: string): TaskData {
         surface: attribut(b, 'D') ?? null,
         anneaux: [],
         debutContour: null,
+        ...(attribut(b, 'C') ? { nomBrut: attribut(b, 'C')! } : {}),
+        nomsContour: [],
       };
       parcelles.push(parcelle);
-    } else if (b.nom === 'PLN' && parcelle && parcelle.debutContour === null) {
-      parcelle.debutContour = lignesEntieres(texte, b.plage).debut;
+    } else if (b.nom === 'PLN' && parcelle) {
+      if (parcelle.debutContour === null) {
+        parcelle.debutContour = lignesEntieres(texte, b.plage).debut;
+      }
+      const nomPln = attribut(b, 'B');
+      if (nomPln && decoderEntites(nomPln.texte) === parcelle.nom) {
+        parcelle.nomsContour!.push(nomPln);
+      }
     } else if (b.nom === 'LSG' && parcelle) {
       const type = attribut(b, 'A')?.texte;
       const parent = pile[pile.length - 1];

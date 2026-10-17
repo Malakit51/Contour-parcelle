@@ -57,6 +57,8 @@ export interface Etat {
    * préparées dans xarvio), ou tous (avec les chantiers enregistrés par la console).
    */
   readonly taches?: 'prevues' | 'toutes';
+  /** Parcelles renommées dans l'éditeur (indice dans `TaskData.parcelles`, nouveau nom). */
+  readonly noms?: readonly { readonly parcelle: number; readonly nom: string }[];
 }
 
 export interface ParcelleAjoutee {

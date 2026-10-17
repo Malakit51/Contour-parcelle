@@ -19,12 +19,21 @@ import {
   LIBELLES,
 } from '../suivi/suivi';
 import { el } from '../ui/dom';
+import { icone } from '../ui/icones';
+import { renommer } from '../edition/noms';
 import { COULEURS_ETAT, couleurNote, type Session, ui } from './etat';
 import { parcelleContenant, estSupprimee } from '../edition/etat';
 import { nouvelleSurface } from '../edition/export';
 import { enregistrerSauvegarde } from './exporter';
 import { afficher } from './mise-en-page';
-import { arreterOutilsCarte, dateFr, effacerSelection, majSuivi, quandFr } from './travail';
+import {
+  arreterOutilsCarte,
+  dateFr,
+  effacerSelection,
+  majSuivi,
+  modifier,
+  quandFr,
+} from './travail';
 import { cadrerParcelle, carte } from './vue';
 import { annulerTrace, commencerTrace } from './trace-zone';
 import { surfaceZone, texteSurface } from '../suivi/zones';
@@ -111,7 +120,28 @@ function panneauSuiviParcelle(s: Session): HTMLElement | null {
     el(
       'div',
       { class: 'entete-selection' },
-      el('strong', {}, `Contour de ${p.nom}`),
+      // Le nom de la parcelle : un appui pour le changer (écrit dans le fichier exporté).
+      el(
+        'button',
+        {
+          class: 'nom-fiche',
+          'aria-label': `Renommer ${p.nom}`,
+          onclick: () => {
+            const i = ui.parcelleCourante!;
+            const nom = prompt('Nom de la parcelle (écrit dans le fichier pour la console)', p.nom);
+            if (nom === null || nom.trim() === p.nom) return;
+            const ancien = p.nom;
+            modifier(
+              () => renommer(s.td, s.etat, i, nom),
+              `${ancien} renommée « ${nom.trim().replace(/\s+/g, ' ')} »`,
+              true,
+            );
+            afficher();
+          },
+        },
+        p.nom,
+        icone('modifier', 18),
+      ),
       f.date ? el('span', { class: 'doux' }, `depuis le ${dateFr(f.date)}`) : '',
     ),
     el(

@@ -1291,3 +1291,19 @@ button.ligne-suivi.courante {
   padding: 6px 0;
   border-top: 1px solid var(--ligne-douce);
 }
+
+/* Nom de la parcelle en tête de sa fiche (onglet Suivi) : un appui pour le renommer. */
+button.nom-fiche {
+  min-height: 36px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  font-size: 1.15rem;
+  font-weight: 700;
+  gap: 8px;
+  color: var(--fg);
+}
+button.nom-fiche svg {
+  color: var(--doux);
+}

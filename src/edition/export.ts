@@ -123,7 +123,7 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
         apres: finParcelles,
         id: a.id,
         guid: a.guid,
-        nom: a.nom,
+        nom: etat.noms?.find((n) => n.parcelle === a.parcelle)?.nom ?? a.nom,
         m2: nouvelleSurface(td, etat, a.parcelle) ?? 0,
         modele: td.parcelles[a.modele]!,
         anneaux,
@@ -171,6 +171,9 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
     zonesAjoutees,
     parcellesAjoutees,
     ...(etat.taches ? { taches: etat.taches } : {}),
+    noms: (etat.noms ?? [])
+      .filter((n) => !estSupprimee(etat, n.parcelle) && !td.parcelles[n.parcelle]!.ajoutee)
+      .map((n) => ({ parcelle: td.parcelles[n.parcelle]!, nom: n.nom })),
   };
 }
 
@@ -207,6 +210,16 @@ export function verifierRelecture(td: TaskData, etat: Etat, texte: string): stri
     problemes.push('Les parcelles du fichier produit ne sont pas celles attendues.');
     return problemes;
   }
+  gardees.forEach((p, i) => {
+    const attendu =
+      etat.noms?.find((n) => n.parcelle === p)?.nom ??
+      etat.ajoutees?.find((a) => a.parcelle === p)?.nom ??
+      td.parcelles[p]!.nomFichier ??
+      td.parcelles[p]!.nom;
+    if (relu.parcelles[i]!.nom !== attendu) {
+      problemes.push(`${attendu} : le nom écrit dans le fichier n’est pas le bon.`);
+    }
+  });
   const reluEtat = etatInitial(relu);
   for (const [k, a] of etat.anneaux.entries()) {
     if (anneauIgnore(etat, k)) continue;

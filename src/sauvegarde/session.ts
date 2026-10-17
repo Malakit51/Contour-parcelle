@@ -28,6 +28,8 @@ export interface SessionEnregistree {
   ajoutees?: ParcelleAjoutee[];
   /** Travaux retirés à l'export. */
   taches?: 'prevues' | 'toutes';
+  /** Parcelles renommées. */
+  noms?: { parcelle: number; nom: string }[];
   /** Suivi et journal au moment de l'enregistrement (pour la sauvegarde en ligne). */
   suivi?: Suivi;
   /** Lignes de guidage créées dans l'éditeur. */
@@ -74,6 +76,7 @@ export function enregistrerSession(
     ...(etat.zonesRetirees?.length ? { zonesRetirees: [...etat.zonesRetirees] } : {}),
     ...(etat.ajoutees?.length ? { ajoutees: [...etat.ajoutees] } : {}),
     ...(etat.taches ? { taches: etat.taches } : {}),
+    ...(etat.noms?.length ? { noms: [...etat.noms] } : {}),
     ...(suivi ? { suivi } : {}),
   };
 }
@@ -126,6 +129,7 @@ export function relireSession(sauvegarde: unknown): {
   const guidages = (s.guidages ?? []).filter((g) => td.parcelles[g.parcelle]);
   const supprimees = (s.supprimees ?? []).filter((p) => td.parcelles[p]);
   const zonesRetirees = (s.zonesRetirees ?? []).filter((i) => anneaux[i]?.type === 2);
+  const noms = (s.noms ?? []).filter((n) => td.parcelles[n.parcelle] && n.nom.trim());
   return {
     td,
     nom: s.fichier.nom,
@@ -136,6 +140,7 @@ export function relireSession(sauvegarde: unknown): {
       ...(zonesRetirees.length ? { zonesRetirees } : {}),
       ...(ajoutees.length ? { ajoutees } : {}),
       ...(s.taches === 'prevues' || s.taches === 'toutes' ? { taches: s.taches } : {}),
+      ...(noms.length ? { noms } : {}),
     },
     session: s,
   };

@@ -24,6 +24,7 @@ import {
 } from '../suivi/suivi';
 import { programmerSauvegardeDrive } from './drive';
 import { CLE_SESSION_ILLISIBLE, type Session, ui, ongletDuMode } from './etat';
+import { appliquerNoms } from '../edition/noms';
 import { afficher } from './mise-en-page';
 import { ecrireStockage, nomAppareil, stockage } from './stockage';
 import { cadrerTout, colorier } from './vue';
@@ -94,6 +95,7 @@ export function enregistrerModification(s: Session, brut: Etat, quoi: string): s
   }));
   s.historique.push({ etat: s.etat, journal: entrees });
   s.etat = nouveau;
+  appliquerNoms(s.td, s.etat);
   garderSession();
   majSuivi({ ...ui.suivi, journal: [...ui.suivi.journal, ...entrees] });
   if (net.doublons.size === 0) return '';
@@ -152,6 +154,7 @@ export function ouvrir(
     alertesChargement,
     couleurs: colorier(initial, td.parcelles.length),
   };
+  appliquerNoms(td, ui.session.etat);
   ui.parcelleCourante = null;
   ui.onglet = ongletDuMode();
   effacerSelection();
@@ -339,6 +342,7 @@ export function annuler(): void {
   const precedent = ui.session?.historique.pop();
   if (!ui.session || !precedent) return;
   ui.session.etat = precedent.etat;
+  appliquerNoms(ui.session.td, ui.session.etat);
   retirerDuJournal(precedent.journal);
   garderSession();
   effacerSelection();

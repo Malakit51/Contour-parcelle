@@ -22,6 +22,8 @@ export interface Changements {
   parcellesRetirees?: ReadonlyArray<Parcelle>;
   /** Travaux retirés : ceux encore prévus (statut 1), ou tous. */
   taches?: 'prevues' | 'toutes';
+  /** Parcelles renommées : attribut C du PFD et B de ses PLN. */
+  noms?: ReadonlyArray<{ parcelle: Parcelle; nom: string }>;
   /** Zones exclues retirées : lignes entières de leur LSG. */
   zonesRetirees?: ReadonlyArray<Plage>;
   /**
@@ -273,6 +275,12 @@ export function exporterTaskData(td: TaskData, changements: Changements = {}): s
   for (const point of changements.suppressions ?? []) {
     // La ligne entière si le point est seul dessus, sinon seulement sa balise.
     remplacements.push({ plage: ligneSeule(td.texte, point.balise) ?? point.balise, texte: '' });
+  }
+  for (const { parcelle, nom } of changements.noms ?? []) {
+    if (!parcelle.nomBrut) throw new Error(`${nom} : nom introuvable dans le fichier.`);
+    for (const v of [parcelle.nomBrut, ...(parcelle.nomsContour ?? [])]) {
+      remplacements.push({ plage: v.plage, texte: echapper(nom) });
+    }
   }
   for (const { parcelle, m2 } of changements.surfaces ?? []) {
     if (!parcelle.surface) continue;
