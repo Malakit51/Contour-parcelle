@@ -33,7 +33,15 @@ import {
 import { CLE_DOSSIER_SAUVEGARDES, type Session, ui } from './etat';
 import { afficher } from './mise-en-page';
 import { ecrireStockage } from './stockage';
-import { garderSession, majSuivi, modifier } from './travail';
+import { exportsGardes, garderExport } from './exports-gardes';
+import {
+  garderSession,
+  majSuivi,
+  modifier,
+  nouvellesLignes,
+  quandFr,
+  repartirDuFichier,
+} from './travail';
 import { remettreParcelle, remettreZone } from '../edition/operations';
 
 /** Écart de surface en hectares, signé, à 4 décimales : « +0,0395 ». */
@@ -220,8 +228,47 @@ export async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
         : `Version ${version} exportée (${destination}).`,
     erreur: false,
   };
-  garderSession();
+  garderExport({ version, quand, texte: prepare.texte });
+  // Le fichier exporté devient le fichier de départ (sauf export forcé malgré un problème grave).
+  if (!prepare.alertes.some((a) => a.grave)) {
+    repartirDuFichier(prepare.texte, nomDossierVersion(version));
+    ui.message = {
+      texte: `${ui.message.texte} Il devient le fichier de départ.`,
+      erreur: false,
+    };
+  } else garderSession();
   afficher();
+}
+
+/** Les derniers exports gardés sur le téléphone, à re-télécharger. */
+function cadreDerniersExports(): HTMLElement | null {
+  const liste = exportsGardes();
+  if (liste.length === 0) return null;
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, 'Derniers exports'),
+    ...liste.map((e) =>
+      el(
+        'div',
+        { class: 'rangee' },
+        el(
+          'span',
+          { style: 'flex:1' },
+          `${nomDossierVersion(e.version)} `,
+          el('span', { class: 'doux' }, quandFr(e.quand)),
+        ),
+        el(
+          'button',
+          {
+            class: 'petit',
+            onclick: () => enregistrer(encoder(e.texte), NOM_FICHIER, 'application/xml'),
+          },
+          'Télécharger',
+        ),
+      ),
+    ),
+  );
 }
 
 /**
@@ -363,7 +410,7 @@ export function panneauExport(s: Session): HTMLElement[] {
       );
   // 2. Version et ce qui change.
   const modifiees = new Set(parcellesModifiees(s.etat));
-  const guidages = s.etat.guidages ?? [];
+  const guidages = nouvellesLignes(s.etat);
   const changements = modifiees.size + guidages.length;
   const version = el(
     'div',
@@ -520,6 +567,7 @@ export function panneauExport(s: Session): HTMLElement[] {
     version,
     cadreTaches(s),
     ou,
+    cadreDerniersExports(),
     section('Autres logiciels'),
     cadreShapefile(s),
   ].filter((x): x is HTMLElement => x !== null);

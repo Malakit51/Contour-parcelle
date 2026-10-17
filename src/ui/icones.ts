@@ -8,6 +8,7 @@ const TRACES = {
   export: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
   fichier: '<path d="M4 6h6l2 2h8v11H4z"/>',
   annuler: '<path d="M9 7L4 12l5 5M4 12h11a5 5 0 010 10h-3"/>',
+  retablir: '<path d="M15 7l5 5-5 5M20 12H9a5 5 0 000 10h3"/>',
   gps: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
   centrer: '<path d="M12 2l7 19-7-4-7 4z"/>',
   mesure: '<path d="M3 17L17 3l4 4L7 21zM7 13l2 2M10 10l2 2M13 7l2 2"/>',

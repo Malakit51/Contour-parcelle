@@ -57,6 +57,26 @@ describe('session enregistrée', () => {
     expect(exporterEtat(td, e)).toBe(exporterEtat(td, { ...etat, supprimees: [1] }));
   });
 
+  it('garde les lignes de guidage du fichier de départ (après un export)', () => {
+    const { td, etat } = preparer(parcelles);
+    const ligne = {
+      parcelle: 0,
+      type: 'ab' as const,
+      nom: 'Semoir 1',
+      points: [
+        [0, 0],
+        [0, 0.001],
+      ] as [number, number][],
+    };
+    const nouvelle = { ...ligne, nom: 'Semoir 2' };
+    const e = { ...etat, guidages: [ligne, nouvelle] };
+    const s = enregistrerSession(td, 'T', e, 'x', undefined, undefined, [ligne]);
+    const relu = relireSession(JSON.parse(JSON.stringify(s)));
+    expect(relu.lignesDepart).toHaveLength(1);
+    expect(relu.lignesDepart[0]).toBe(relu.etat.guidages![0]);
+    expect(relu.lignesDepart[0]!.nom).toBe('Semoir 1');
+  });
+
   it('se garde dans le stockage du téléphone', () => {
     const { td, etat } = preparer(parcelles);
     const memoire = new Map<string, string>();

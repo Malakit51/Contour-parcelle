@@ -27,6 +27,8 @@ export interface Session {
   etat: Etat;
   /** États précédents, avec les lignes de journal à retirer si on annule. */
   historique: { etat: Etat; journal: EntreeJournal[] }[];
+  /** États annulés, à rétablir (vidé à la modification suivante). */
+  retablir: { etat: Etat; journal: EntreeJournal[] }[];
   /** Indice de couleur de chaque parcelle : deux voisines n'ont jamais la même. */
   couleurs: number[];
 }

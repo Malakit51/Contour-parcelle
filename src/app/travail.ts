@@ -1,7 +1,8 @@
 // Le travail en cours : ouverture, modifications, annulation, session gardée sur l’appareil.
 
-import { type Etat, etatInitial, latLon } from '../edition/etat';
+import { type Etat, etatInitial, type Guidage, latLon } from '../edition/etat';
 import { nouvelleSurface, parcellesModifiees } from '../edition/export';
+import { repartirDe } from '../edition/repartir';
 import { nettoyer } from '../edition/nettoyage';
 import { ErreurEdition } from '../edition/operations';
 import { planLocal } from '../geometrie/plan';
@@ -74,9 +75,18 @@ export function parcellesChangees(a: Etat, b: Etat): number[] {
 }
 
 /** Travail qui serait perdu en ouvrant un autre fichier : contours modifiés ou lignes de guidage. */
+/** Lignes de guidage ajoutées ou retirées depuis le fichier ouvert (celles d'un export repris comptent pour lui). */
+export const nouvellesLignes = (etat: Etat) => {
+  const depart = new Set(ui.session?.initial.guidages ?? []);
+  return (etat.guidages ?? []).filter((g) => !depart.has(g));
+};
+const lignesChangees = (etat: Etat) =>
+  nouvellesLignes(etat).length > 0 ||
+  (etat.guidages?.length ?? 0) !== (ui.session?.initial.guidages?.length ?? 0);
+
 export const travailEnCours = (etat: Etat) =>
   parcellesModifiees(etat).length > 0 ||
-  (etat.guidages?.length ?? 0) > 0 ||
+  lignesChangees(etat) ||
   (etat.supprimees?.length ?? 0) > 0 ||
   (etat.zonesRetirees?.length ?? 0) > 0 ||
   (etat.ajoutees?.length ?? 0) > 0 ||
@@ -111,6 +121,7 @@ export function enregistrerModification(s: Session, brut: Etat, quoi: string): s
     });
   }
   s.historique.push({ etat: s.etat, journal: entrees });
+  s.retablir = [];
   s.etat = nouveau;
   appliquerNoms(s.td, s.etat);
   garderSession();
@@ -138,9 +149,13 @@ export function ouvrir(
   etat: Etat | null,
   texteMessage: string,
   nouveau = true,
+  lignesDepart: readonly Guidage[] = [],
 ): void {
   if (td.parcelles.length === 0) throw new Error('Aucune parcelle (PFD) dans ce fichier.');
-  const initial = etatInitial(td);
+  // Fichier repris d'un export de l'éditeur : ses lignes de guidage font partie du départ.
+  const initial: Etat = lignesDepart.length
+    ? { ...etatInitial(td), guidages: lignesDepart }
+    : etatInitial(td);
   const tous = initial.anneaux.flatMap((a) => a.sommets.map(latLon));
   const centre: [number, number] = [
     tous.reduce((s, p) => s + p[0], 0) / tous.length,
@@ -153,6 +168,7 @@ export function ouvrir(
     initial,
     etat: etat ?? initial,
     historique: [],
+    retablir: [],
     couleurs: colorier(initial, td.parcelles.length),
   };
   appliquerNoms(td, ui.session.etat);
@@ -199,14 +215,30 @@ export function garderSession(envoyer = true): void {
   if (!ui.session) return;
   ui.sessionNonGardee = !garderSurAppareil(
     stockage,
-    enregistrerSession(ui.session.td, ui.session.nomFichier, ui.session.etat, nomAppareil()),
+    enregistrerSession(
+      ui.session.td,
+      ui.session.nomFichier,
+      ui.session.etat,
+      nomAppareil(),
+      undefined,
+      undefined,
+      ui.session.initial.guidages,
+    ),
   );
   if (envoyer) programmerSauvegardeDrive();
 }
 
 /** Tout le travail à sauvegarder (Drive, fichier, partage) : fichier, contours, guidages, suivi. */
 export const sauvegardeComplete = (s: Session) =>
-  enregistrerSession(s.td, s.nomFichier, s.etat, nomAppareil(), ui.suivi);
+  enregistrerSession(
+    s.td,
+    s.nomFichier,
+    s.etat,
+    nomAppareil(),
+    ui.suivi,
+    undefined,
+    s.initial.guidages,
+  );
 
 /**
  * Reprend une sauvegarde (Drive ou fichier) : remplace le travail de cet appareil, après
@@ -230,6 +262,7 @@ export function reprendreSauvegarde(contenu: unknown, provenance: string): strin
     r.etat,
     `Travail repris : sauvegarde ${provenance} du ${quand}.`,
     provenance !== 'en ligne',
+    r.lignesDepart,
   );
   return quand;
 }
@@ -248,6 +281,7 @@ export function reprendreSession(): void {
       `Travail repris : ${r.nom}, enregistré le ${quandFr(r.session.enregistreLe)}` +
         (n > 0 ? `, ${n} parcelle(s) modifiée(s).` : ', sans modification.'),
       false,
+      r.lignesDepart,
     );
   } catch (e) {
     // Ne jamais effacer le travail sans prévenir : on le met de côté, téléchargeable.
@@ -345,6 +379,7 @@ export function modifier(operation: () => Etat, quoi: string, garderSelection: b
 export function annuler(): void {
   const precedent = ui.session?.historique.pop();
   if (!ui.session || !precedent) return;
+  ui.session.retablir.push({ etat: ui.session.etat, journal: precedent.journal });
   ui.session.etat = precedent.etat;
   appliquerNoms(ui.session.td, ui.session.etat);
   retirerDuJournal(precedent.journal);
@@ -354,12 +389,51 @@ export function annuler(): void {
   afficher();
 }
 
+/** Refait la dernière modification annulée (et remet ses lignes au journal). */
+export function retablir(): void {
+  const suivant = ui.session?.retablir.pop();
+  if (!ui.session || !suivant) return;
+  const s = ui.session;
+  s.historique.push({ etat: s.etat, journal: suivant.journal });
+  s.etat = suivant.etat;
+  appliquerNoms(s.td, s.etat);
+  majSuivi({ ...ui.suivi, journal: [...ui.suivi.journal, ...suivant.journal] });
+  garderSession();
+  effacerSelection();
+  ui.message = { texte: 'Modification rétablie.', erreur: false };
+  afficher();
+}
+
+/**
+ * Après un export : le fichier exporté devient le fichier ouvert (« Réinitialiser » et « ce qui
+ * change » partent de lui). On ne peut plus annuler au-delà. La parcelle choisie reste choisie.
+ */
+export function repartirDuFichier(texte: string, nom: string): void {
+  const s = ui.session;
+  if (!s) return;
+  const guid = ui.parcelleCourante === null ? null : s.td.parcelles[ui.parcelleCourante]!.guid;
+  const r = repartirDe(s.td, s.etat, texte);
+  s.td = r.td;
+  s.nomFichier = nom;
+  // Le départ garde les lignes de guidage du fichier exporté : « Réinitialiser » les laisse.
+  s.initial = r.etat;
+  s.etat = r.etat;
+  s.historique = [];
+  s.retablir = [];
+  s.couleurs = colorier(s.initial, r.td.parcelles.length);
+  appliquerNoms(s.td, s.etat);
+  const p = guid === null ? -1 : s.td.parcelles.findIndex((x) => x.guid === guid);
+  ui.parcelleCourante = p >= 0 ? p : null;
+  effacerSelection();
+  garderSession();
+}
+
 /** Retour au fichier d'origine (contours et lignes de guidage). Annulable, comme une modification. */
 export function reinitialiser(): void {
   if (!ui.session || !travailEnCours(ui.session.etat)) return;
   if (
     !confirm(
-      'Revenir au fichier d’origine ? Contours modifiés et lignes de guidage seront retirés (« Annuler » pour revenir).',
+      `Revenir à « ${ui.session.nomFichier} » ? Contours modifiés et lignes de guidage depuis seront retirés (« Annuler » pour revenir).`,
     )
   ) {
     return;

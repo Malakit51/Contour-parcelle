@@ -42,7 +42,14 @@ import {
 import { panneauSuivi } from './panneau-suivi';
 import { panneauRemplacement } from './reference';
 import { ecrireStockage } from './stockage';
-import { annuler, arreterOutilsCarte, effacerSelection, enMetres, metres } from './travail';
+import {
+  annuler,
+  arreterOutilsCarte,
+  effacerSelection,
+  enMetres,
+  metres,
+  retablir,
+} from './travail';
 import { cadrerParcelle, cadrerTout, carte, texteGps } from './vue';
 
 export const app = document.getElementById('app')!;
@@ -153,6 +160,12 @@ export function majBulle(): void {
   clearTimeout(ui.minuterieBulle);
   const m = ui.message;
   if (!m || !ui.session) return;
+  // Une petite vibration : on sent que l'action est passée (trois si elle est refusée).
+  try {
+    navigator.vibrate?.(m.erreur ? [60, 60, 60, 60, 60] : 25);
+  } catch {
+    // pas de vibreur : tant pis
+  }
   ui.minuterieBulle = setTimeout(
     () => {
       if (ui.message !== m) return;
@@ -653,6 +666,18 @@ export function afficher(): void {
       },
       icone('annuler', 24),
     ),
+    // « Rétablir » seulement juste après une annulation.
+    s.retablir.length > 0 &&
+      el(
+        'button',
+        {
+          class: 'annuler',
+          title: 'Rétablir la modification annulée',
+          'aria-label': 'Rétablir',
+          onclick: retablir,
+        },
+        icone('retablir', 24),
+      ),
     // Pas de distance là où elle ne sert pas : le bouton prend la place.
     !sansDistance &&
       el(

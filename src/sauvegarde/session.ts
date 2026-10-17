@@ -38,6 +38,11 @@ export interface SessionEnregistree {
   supprimees?: number[];
   /** Zones exclues retirées (indices des anneaux). */
   zonesRetirees?: number[];
+  /**
+   * Lignes de guidage déjà dans le fichier (indices dans `guidages`) : après un export, le fichier
+   * exporté devient le fichier de départ, avec ses lignes.
+   */
+  lignesDepart?: number[];
   /** Retraits déjà exportés (plus rappelés dans l'onglet Exporter). */
   exportes?: { parcelles: number[]; zones: number[] };
 }
@@ -53,7 +58,9 @@ export function enregistrerSession(
   appareil: string,
   suivi?: Suivi,
   maintenant = new Date(),
+  depart: readonly Guidage[] = [],
 ): SessionEnregistree {
+  const lignesDepart = (etat.guidages ?? []).flatMap((g, i) => (depart.includes(g) ? [i] : []));
   return {
     version: 1,
     enregistreLe: maintenant.toISOString(),
@@ -74,6 +81,7 @@ export function enregistrerSession(
       };
     }),
     ...(etat.guidages?.length ? { guidages: [...etat.guidages] } : {}),
+    ...(lignesDepart.length ? { lignesDepart } : {}),
     ...(etat.supprimees?.length ? { supprimees: [...etat.supprimees] } : {}),
     ...(etat.zonesRetirees?.length ? { zonesRetirees: [...etat.zonesRetirees] } : {}),
     ...(etat.exportes
@@ -91,6 +99,8 @@ export function relireSession(sauvegarde: unknown): {
   td: TaskData;
   nom: string;
   etat: Etat;
+  /** Lignes de guidage déjà dans le fichier (mêmes objets que dans `etat.guidages`). */
+  lignesDepart: Guidage[];
   session: SessionEnregistree;
 } {
   const s = sauvegarde as SessionEnregistree;
@@ -131,7 +141,11 @@ export function relireSession(sauvegarde: unknown): {
       }),
     };
   });
-  const guidages = (s.guidages ?? []).filter((g) => td.parcelles[g.parcelle]);
+  const guidagesLus = s.guidages ?? [];
+  const guidages = guidagesLus.filter((g) => td.parcelles[g.parcelle]);
+  const lignesDepart = (s.lignesDepart ?? [])
+    .map((i) => guidagesLus[i])
+    .filter((g): g is Guidage => !!g && guidages.includes(g));
   const supprimees = (s.supprimees ?? []).filter((p) => td.parcelles[p]);
   const zonesRetirees = (s.zonesRetirees ?? []).filter((i) => anneaux[i]?.type === 2);
   const noms = (s.noms ?? []).filter((n) => td.parcelles[n.parcelle] && n.nom.trim());
@@ -155,6 +169,7 @@ export function relireSession(sauvegarde: unknown): {
       ...(s.taches === 'prevues' || s.taches === 'toutes' ? { taches: s.taches } : {}),
       ...(noms.length ? { noms } : {}),
     },
+    lignesDepart,
     session: s,
   };
 }

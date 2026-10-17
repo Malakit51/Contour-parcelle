@@ -263,5 +263,8 @@ export function dessin(s: Session): Dessin {
     if (k > 0) d.traits.push({ a: pts[k - 1]!, b: p, couleur: MESURE, epaisseur: 4 });
     d.points.push({ p, couleur: MESURE, rayon: 6 });
   });
+  // Trois points ou plus : la surface mesurée se referme (pointillés vers le premier point).
+  const m = ui.mesure ?? [];
+  if (m.length >= 3) d.fantomes = [...(d.fantomes ?? []), [m[m.length - 1]!, m[0]!]];
   return d;
 }

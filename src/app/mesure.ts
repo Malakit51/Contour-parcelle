@@ -87,7 +87,7 @@ export function majMesure(): void {
         ? 'Règle : touche deux points (un sommet attire le doigt).'
         : pts.length === 2
           ? `Règle : ${enM(total)}`
-          : `Règle : ${enM(total)} (dernier : ${enM(dernier)})`,
+          : `Règle : ${enM(total)} (dernier : ${enM(dernier)}) · surface ${texteSurface(surfaceZone(pts))}`,
     ),
     pts.length > 0 &&
       el(
