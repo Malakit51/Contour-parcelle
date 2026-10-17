@@ -33,15 +33,14 @@ export interface Session {
 }
 
 /** Onglets du bas. */
-export type OngletBas = 'modifier' | 'guidage' | 'suivi' | 'export' | 'fichier';
+export type OngletBas = 'modifier' | 'guidage' | 'suivi' | 'fichiers';
 /** « reglages » : panneau ouvert par l'engrenage de la carte, sans onglet en bas. */
 export type Onglet = OngletBas | 'reglages';
 export const ONGLETS: Record<OngletBas, string> = {
   modifier: 'Modifier',
   guidage: 'Guidage',
   suivi: 'Suivi',
-  export: 'Export',
-  fichier: 'Fichier',
+  fichiers: 'Fichiers',
 };
 
 /** Hauteur du volet (mise en page « volet », en portrait). */
@@ -185,6 +184,8 @@ export interface EtatInterface {
   /** Liste « Toutes » réduite à un état (un appui sur un compteur), ou null. */
   filtreSuivi: EtatContour | null;
   onglet: Onglet;
+  /** Onglet Fichiers : ce qui entre (TASKDATA, référence) ou ce qui sort (console, shapefile). */
+  porteeFichiers: 'importer' | 'exporter';
   /** Onglet à retrouver en refermant les réglages (deuxième appui sur l'engrenage). */
   ongletAvantReglages: OngletBas;
   messageAffiche: { texte: string; erreur: boolean } | null;
@@ -268,8 +269,9 @@ export const ui: EtatInterface = {
   dossierSauvegardes: lireStockage(CLE_DOSSIER_SAUVEGARDES),
   porteeSuivi: 'parcelle',
   filtreSuivi: null,
-  onglet: 'fichier',
-  ongletAvantReglages: 'fichier',
+  onglet: 'fichiers',
+  ongletAvantReglages: 'fichiers',
+  porteeFichiers: 'importer',
   messageAffiche: null,
   minuterieBulle: undefined,
   voletActif: lireStockage(CLE_MISE_EN_PAGE) === 'volet',

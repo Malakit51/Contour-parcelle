@@ -189,8 +189,10 @@ export function boutonFichier(): HTMLElement {
   return choix;
 }
 
+const section = (titre: string) => el('h2', { class: 'titre-section' }, titre);
+
+/** Onglet Fichiers, côté Importer : fichier ouvert, référence (sans fichier : tout, réglages compris). */
 export function contenuFichier(s: Session | null): Node[] {
-  const section = (titre: string) => el('h2', { class: 'titre-section' }, titre);
   const contenu: Node[] = [
     ...(s ? [] : [el('h1', {}, 'Contours parcelles')]),
     // Fichier ouvert : ouvrir, référence, réinitialiser, fermer.
@@ -225,7 +227,7 @@ export function contenuFichier(s: Session | null): Node[] {
           ),
         ]
       : []),
-    ...(s ? [panneauReference()] : []),
+    ...(s ? [section('Référence'), panneauReference()] : []),
     ...(ui.sessionIllisible
       ? [
           el(
@@ -266,20 +268,20 @@ export function contenuFichier(s: Session | null): Node[] {
           ),
         ]
       : []),
-    // Sauvegarde : fichier, partage, Drive.
-    section('Sauvegarde'),
-    panneauSauvegardeFichier(),
-    panneauDrive(),
-    // Sans fichier ouvert, pas de carte ni d'engrenage : les réglages restent ici.
-    ...(s ? [] : [section('Réglages'), ...contenuReglages(null)]),
+    // Sans fichier ouvert, pas de carte ni d'engrenage : sauvegardes et réglages restent ici.
+    ...(s ? [] : contenuReglages(null)),
   ];
   return contenu;
 }
 
-/** Réglages (engrenage de la carte) : dossier des sauvegardes, photo, mise en page, version. */
+/** Engrenage de la carte : sauvegardes (fichier, partage, Drive, dossier), réglages, version. */
 export function contenuReglages(s: Session | null): Node[] {
   return [
+    section('Sauvegardes'),
+    panneauSauvegardeFichier(),
+    panneauDrive(),
     ...[panneauDossierSauvegardes()].filter((x): x is HTMLElement => x !== null),
+    section('Réglages'),
     ...(s ? [cadrePhotoHorsReseau(s)] : []),
     el(
       'div',

@@ -1018,7 +1018,7 @@ export function boutonSupprimerParcelle(s: Session): HTMLElement | null {
             !confirm(
               `Retirer toute la parcelle ${p.nom} du fichier exporté${n > 0 ? `, avec ses ${n} tâche(s)` : ''} ?\n\n` +
                 'Pour enlever seulement le trou d’un poteau : touche un point du trou, puis « Supprimer la zone exclue ».\n' +
-                'Elle reste dans la console et dans ton export d’origine. « Annuler » ou « Remettre » (onglet Export) la fait revenir.',
+                'Elle reste dans la console et dans ton export d’origine. « Annuler » ou « Remettre » (onglet Fichiers, Exporter) la fait revenir.',
             )
           ) {
             return;

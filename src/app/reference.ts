@@ -47,8 +47,13 @@ export function panneauReference(): HTMLElement {
   return el(
     'div',
     { class: 'info' },
-    el('strong', {}, 'Référence'),
-    ui.reference && el('div', { class: 'doux' }, `${ui.reference.nom} (gris)`),
+    el(
+      'div',
+      { class: 'doux' },
+      ui.reference
+        ? `${ui.reference.nom} (en gris sur la carte)`
+        : 'Contours affichés en gris, pour y recoller des points (☝) ou remplacer un contour.',
+    ),
     el(
       'div',
       { class: 'rangee' },

@@ -100,7 +100,7 @@ async function effacer(): Promise<void> {
   afficher();
 }
 
-/** Cadre de l'onglet Fichier : enregistrer ou effacer la photo autour des parcelles. */
+/** Cadre des Réglages : enregistrer ou effacer la photo autour des parcelles. */
 export function cadrePhotoHorsReseau(s: Session): HTMLElement {
   const deja = infos();
   const n = tuilesDuTravail(s).length;

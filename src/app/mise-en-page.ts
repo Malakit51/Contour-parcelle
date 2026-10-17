@@ -50,10 +50,40 @@ export const champDistance = el('input', {
   placeholder: '0',
   'aria-label': 'Distance en mètres',
 });
+/** Onglet Fichiers : barre Importer / Exporter, comme la portée du suivi. */
+function choixPorteeFichiers(): HTMLElement {
+  return el(
+    'div',
+    { class: 'modes' },
+    ...(
+      [
+        ['importer', 'Importer'],
+        ['exporter', 'Exporter'],
+      ] as const
+    ).map(([v, t]) =>
+      el(
+        'button',
+        {
+          class: ui.porteeFichiers === v ? 'principal' : '',
+          onclick: () => {
+            ui.porteeFichiers = v;
+            zones.panneau.scrollTop = 0;
+            afficher();
+          },
+        },
+        t,
+      ),
+    ),
+  );
+}
+
+/** Onglet Fichiers, côté Exporter : le bouton du bas écrit l'export. */
+const enExport = () => ui.onglet === 'fichiers' && ui.porteeFichiers === 'exporter';
+
 // Bouton principal de la barre du bas : son texte dit ce qu'il va faire (« Décaler 0,5 m »).
 let boutonAppliquer: HTMLButtonElement | null = null;
 function texteAppliquer(): string {
-  if (ui.onglet === 'export') {
+  if (enExport()) {
     const graves = exportAJour()?.alertes.some((a) => a.grave) ?? false;
     return `${graves ? 'Malgré tout : ' : ''}${texteBoutonExport()}`;
   }
@@ -283,7 +313,7 @@ export function afficher(): void {
   majBulle();
 
   if (!ui.session) {
-    ui.onglet = 'fichier';
+    ui.onglet = 'fichiers';
     zones.carte.hidden = true;
     remplir(zones.onglets);
     remplir(zones.bas);
@@ -413,8 +443,7 @@ export function afficher(): void {
     modifier: 'modifier',
     guidage: 'lignes',
     suivi: 'suivi',
-    export: 'export',
-    fichier: 'fichier',
+    fichiers: 'fichier',
   };
   remplir(
     zones.onglets,
@@ -513,31 +542,34 @@ export function afficher(): void {
     case 'suivi':
       contenu = panneauSuivi(s);
       break;
-    case 'export':
-      contenu = panneauExport(s);
-      break;
-    case 'fichier':
-      contenu = contenuFichier(s);
+    case 'fichiers':
+      contenu = [
+        choixPorteeFichiers(),
+        ...(ui.porteeFichiers === 'importer' ? contenuFichier(s) : panneauExport(s)),
+      ];
       break;
     case 'reglages':
-      contenu = [el('h2', { class: 'titre-section' }, 'Réglages'), ...contenuReglages(s)];
+      contenu = contenuReglages(s);
       break;
   }
   remplir(zones.panneau, msg, ...contenu);
 
-  // Onglet Export : le bouton principal écrit l'export (sur la clé, ou en téléchargement).
-  const enExport = ui.onglet === 'export';
+  // Fichiers, Exporter : le bouton principal écrit l'export (sur la clé, ou en téléchargement).
+  const exportEnCours = enExport();
   // Pas de distance à saisir pour l'optimisation du guidage (la largeur vient de l'outil).
-  const sansBouton = ui.onglet === 'suivi' || ui.onglet === 'fichier' || ui.onglet === 'reglages';
+  const sansBouton =
+    ui.onglet === 'suivi' ||
+    ui.onglet === 'reglages' ||
+    (ui.onglet === 'fichiers' && !exportEnCours);
   const sansDistance =
-    enExport ||
+    exportEnCours ||
     sansBouton ||
     (ui.onglet === 'guidage' && ui.porteeGuidage === 'optimiser') ||
     (ui.onglet === 'modifier' &&
       (ui.mode === 'simplifier' ||
         ui.mode === 'coller' ||
         (ui.mode === 'couper' && ui.actionCoupe === 'fusionner')));
-  const peutAppliquer = enExport
+  const peutAppliquer = exportEnCours
     ? exportAJour() !== null
     : (ui.mode === 'limite' && ui.selLimite !== null && ui.sensLimite !== null) ||
       (ui.mode === 'sommet' &&
@@ -577,8 +609,8 @@ export function afficher(): void {
       (boutonAppliquer = el(
         'button',
         {
-          class: enExport ? 'principal large' : 'principal',
-          onclick: enExport ? exporterVersCle : appliquer,
+          class: exportEnCours ? 'principal large' : 'principal',
+          onclick: exportEnCours ? exporterVersCle : appliquer,
           ...(peutAppliquer ? {} : { disabled: '' }),
         },
         texteAppliquer(),

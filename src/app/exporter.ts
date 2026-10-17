@@ -44,7 +44,7 @@ export const haSigne = (m2: number) =>
 
 /**
  * Prépare l'export du travail en cours : texte du fichier, contrôles, différences avec l'original.
- * Fait tout seul à l'ouverture de l'onglet Export (et refait après chaque modification).
+ * Fait tout seul à l'ouverture de l'onglet Fichiers, côté Exporter (et refait après chaque modification).
  */
 export function preparerExport(): void {
   if (!ui.session) return;
@@ -86,7 +86,7 @@ export function exportAJour(): typeof ui.exportPrepare {
   return ui.exportPrepare;
 }
 
-/** Bouton principal de l'onglet Export (barre du bas) : écrire sur la clé, ou télécharger. */
+/** Bouton principal de Fichiers, Exporter (barre du bas) : écrire sur la clé, ou télécharger. */
 export const exporterVersCle = () =>
   void telecharger(ecritureDossierPossible() ? 'dossier' : 'xml');
 export const texteBoutonExport = () =>
@@ -286,7 +286,7 @@ function cadreShapefile(s: Session): HTMLElement {
   return el(
     'div',
     { class: 'info' },
-    el('strong', {}, 'Autres logiciels'),
+    el('strong', {}, 'Shapefile'),
     el(
       'div',
       { class: 'doux' },
@@ -522,7 +522,14 @@ export function panneauExport(s: Session): HTMLElement[] {
         ),
     ),
   );
-  return [controle, version, cadreTaches(s), ou, cadreShapefile(s)].filter(
-    (x): x is HTMLElement => x !== null,
-  );
+  const section = (titre: string) => el('h2', { class: 'titre-section' }, titre);
+  return [
+    section('Vers la console'),
+    controle,
+    version,
+    cadreTaches(s),
+    ou,
+    section('Autres logiciels'),
+    cadreShapefile(s),
+  ].filter((x): x is HTMLElement => x !== null);
 }

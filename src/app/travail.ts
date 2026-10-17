@@ -272,7 +272,7 @@ export function reprendreSession(): void {
     ecrireStockage(CLE_SESSION_ILLISIBLE, ui.sessionIllisible);
     oublierSurAppareil(stockage);
     ui.message = {
-      texte: `Le travail enregistré sur cet appareil n’a pas pu être repris (${(e as Error).message}). Il est gardé de côté : onglet Fichier, « Télécharger le travail illisible ».`,
+      texte: `Le travail enregistré sur cet appareil n’a pas pu être repris (${(e as Error).message}). Il est gardé de côté : onglet Fichiers, « Télécharger le travail illisible ».`,
       erreur: true,
     };
     afficher();
