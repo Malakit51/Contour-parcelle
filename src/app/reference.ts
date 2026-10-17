@@ -1,4 +1,4 @@
-// Ancien TASKDATA affiché en référence, et remplacement d’un contour.
+// Ancien TASKDATA ou shapefile affiché en référence, et remplacement d’un contour.
 
 import { etatInitial, latLon, sommetsEn } from '../edition/etat';
 import { remplacerContour } from '../edition/operations';
@@ -6,26 +6,66 @@ import { planLocal, pointDansPolygone, type XY } from '../geometrie/plan';
 import { lireTaskData } from '../isoxml/lecture';
 import { decoder } from '../isoxml/octets';
 import { el } from '../ui/dom';
+import { dezipper } from '../formats/dezip';
+import { type FichiersShapefile, lireShapefile } from '../formats/lecture-shapefile';
 import { type Session, ui } from './etat';
 import { afficher } from './mise-en-page';
 import { modifier } from './travail';
 
-export async function chargerReference(f: File): Promise<void> {
+/** Shapefile choisi : un .zip, ou le .shp avec ses fichiers voisins (.dbf, .prj, .cpg). */
+async function fichiersShapefile(fichiers: File[]): Promise<FichiersShapefile> {
+  const contenus = new Map<string, Uint8Array>();
+  for (const f of fichiers) {
+    const octets = new Uint8Array(await f.arrayBuffer());
+    if (/\.zip$/i.test(f.name))
+      for (const [nom, o] of await dezipper(octets)) contenus.set(nom.split('/').pop()!, o);
+    else contenus.set(f.name, octets);
+  }
+  const shp = [...contenus.keys()].find((n) => /\.shp$/i.test(n));
+  if (!shp) throw new Error('aucun fichier .shp');
+  const base = shp.slice(0, -4);
+  const voisin = (ext: string) =>
+    [...contenus.entries()].find(([n]) => n.toLowerCase() === `${base}.${ext}`.toLowerCase())?.[1];
+  const texte = (o?: Uint8Array) => (o ? new TextDecoder().decode(o) : undefined);
+  return {
+    shp: contenus.get(shp)!,
+    dbf: voisin('dbf'),
+    prj: texte(voisin('prj')),
+    cpg: texte(voisin('cpg')),
+  };
+}
+
+/** Affiche en référence un ancien TASKDATA.XML ou un shapefile (.zip, ou .shp et ses voisins). */
+export async function chargerReference(fichiers: File[]): Promise<void> {
   try {
-    const td = lireTaskData(decoder(new Uint8Array(await f.arrayBuffer())));
-    const e = etatInitial(td);
-    ui.reference = {
-      nom: f.name,
-      anneaux: e.anneaux.map((a) => a.sommets.map(latLon)),
-      parcelles: td.parcelles.flatMap((p, i) => {
-        const ext = e.anneaux.find((a) => a.parcelle === i && a.type === 1);
-        return ext ? [{ nom: p.nom, guid: p.guid, contour: ext.sommets.map(latLon) }] : [];
-      }),
-    };
-    ui.message = {
-      texte: `${f.name} affiché en référence.`,
-      erreur: false,
-    };
+    const shapefile = fichiers.some((f) => /\.(zip|shp|dbf)$/i.test(f.name));
+    if (shapefile) {
+      const lus = lireShapefile(await fichiersShapefile(fichiers));
+      if (lus.length === 0) throw new Error('aucun polygone dans ce shapefile');
+      const nom = fichiers.find((f) => /\.(zip|shp)$/i.test(f.name))?.name ?? fichiers[0]!.name;
+      ui.reference = {
+        nom,
+        anneaux: lus.flatMap((l) => [l.contour, ...l.trous]),
+        parcelles: lus.map((l) => ({ nom: l.nom, guid: l.guid, contour: l.contour })),
+      };
+      ui.message = {
+        texte: `${nom} affiché en référence : ${lus.length} contour(s).`,
+        erreur: false,
+      };
+    } else {
+      const f = fichiers[0]!;
+      const td = lireTaskData(decoder(new Uint8Array(await f.arrayBuffer())));
+      const e = etatInitial(td);
+      ui.reference = {
+        nom: f.name,
+        anneaux: e.anneaux.map((a) => a.sommets.map(latLon)),
+        parcelles: td.parcelles.flatMap((p, i) => {
+          const ext = e.anneaux.find((a) => a.parcelle === i && a.type === 1);
+          return ext ? [{ nom: p.nom, guid: p.guid, contour: ext.sommets.map(latLon) }] : [];
+        }),
+      };
+      ui.message = { texte: `${f.name} affiché en référence.`, erreur: false };
+    }
   } catch (e) {
     ui.message = { texte: `Lecture impossible : ${(e as Error).message}`, erreur: true };
   }
@@ -36,12 +76,13 @@ export function panneauReference(): HTMLElement {
   const choix = el(
     'label',
     { class: 'bouton-fichier secondaire' },
-    ui.reference ? 'Autre référence' : 'Afficher un ancien TASKDATA',
+    ui.reference ? 'Autre référence' : 'Ancien TASKDATA ou shapefile',
   );
-  const input = el('input', { type: 'file' });
+  // Plusieurs fichiers à la fois : un shapefile sans .zip (.shp, .dbf, .prj ensemble).
+  const input = el('input', { type: 'file', multiple: '' });
   input.addEventListener('change', () => {
-    const f = input.files?.[0];
-    if (f) void chargerReference(f);
+    const f = [...(input.files ?? [])];
+    if (f.length > 0) void chargerReference(f);
   });
   choix.append(input);
   return el(
@@ -52,7 +93,7 @@ export function panneauReference(): HTMLElement {
       { class: 'doux' },
       ui.reference
         ? `${ui.reference.nom} (en gris sur la carte)`
-        : 'Contours affichés en gris, pour y recoller des points (☝) ou remplacer un contour.',
+        : 'Contours affichés en gris, pour y recoller des points (☝) ou remplacer un contour. Shapefile : un .zip, ou le .shp avec son .dbf et son .prj (Lambert 93 ou degrés).',
     ),
     el(
       'div',

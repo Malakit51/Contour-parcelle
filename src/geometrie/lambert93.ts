@@ -1,4 +1,4 @@
-// Conversion GPS (WGS84, degrés) → Lambert 93 (RGF93, EPSG:2154, mètres), le système officiel
+// Conversion GPS (WGS84, degrés) ↔ Lambert 93 (RGF93, EPSG:2154, mètres), le système officiel
 // en France. RGF93 et WGS84 sont confondus ici (écart de quelques dizaines de cm au plus, comme
 // les logiciels qui ne font pas de transformation de datum).
 
@@ -30,6 +30,22 @@ export function versLambert93(p: LatLon): [number, number] {
   const rho = A * FF * t(lat) ** N;
   const theta = N * (lon - LON0);
   return [X0 + rho * Math.sin(theta), Y0 + RHO0 - rho * Math.cos(theta)];
+}
+
+/** [latitude, longitude] du point [x, y] en Lambert 93 (inverse de `versLambert93`). */
+export function depuisLambert93(p: readonly [number, number]): LatLon {
+  const dx = p[0] - X0;
+  const dy = Y0 + RHO0 - p[1];
+  const rho = Math.sign(N) * Math.hypot(dx, dy);
+  const tt = (rho / (A * FF)) ** (1 / N);
+  const lon = Math.atan2(dx, dy) / N + LON0;
+  // Latitude : quelques itérations suffisent (au dixième de millimètre dès la 4e).
+  let lat = Math.PI / 2 - 2 * Math.atan(tt);
+  for (let k = 0; k < 10; k++) {
+    const es = E * Math.sin(lat);
+    lat = Math.PI / 2 - 2 * Math.atan(tt * ((1 - es) / (1 + es)) ** (E / 2));
+  }
+  return [lat / RAD, lon / RAD];
 }
 
 /** Description du système pour le fichier .prj (format ESRI). */
