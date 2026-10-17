@@ -120,7 +120,11 @@ export function controler(td: TaskData, etatComplet: Etat, parcelles: readonly n
       if (j === i || x.parcelle !== p) return;
       const b = anneaux[j]!;
       const dehors = x.type === 1 && !pointDansPolygone(a.pts[0]!, b.pts);
-      const dedans = x.type === 2 && j < i && pointDansPolygone(a.pts[0]!, b.pts);
+      // Deux zones exclues l'une dans l'autre (dans un sens ou dans l'autre), une seule fois.
+      const dedans =
+        x.type === 2 &&
+        j < i &&
+        (pointDansPolygone(a.pts[0]!, b.pts) || pointDansPolygone(b.pts[0]!, a.pts));
       const croise = a.pts.some((_, k) =>
         b.pts.some((__, m) => seCroisent(...segment(a, k), ...segment(b, m))),
       );
@@ -141,7 +145,13 @@ export function controler(td: TaskData, etatComplet: Etat, parcelles: readonly n
   const avant = paresDeVoisins(
     sansSupprimees({ ...etatInitial(td), supprimees: etatComplet.supprimees ?? [] }),
   );
-  const apres = paresDeVoisins(etat);
+  // Un morceau de parcelle coupée compte pour la parcelle d'origine : une limite commune passée
+  // au morceau n'est pas « perdue ».
+  const racine = (p: number): number => {
+    const a = etat.ajoutees?.find((x) => x.parcelle === p);
+    return a?.issueDe !== undefined && a.issueDe !== p ? racine(a.issueDe) : p;
+  };
+  const apres = paresDeVoisins(etat, racine);
   for (const [cle, n] of avant) {
     const [a, b] = cle.split('|').map(Number) as [number, number];
     if (!parcelles.includes(a) && !parcelles.includes(b)) continue;
@@ -222,13 +232,13 @@ export function sommetsPresqueCommuns(
 }
 
 /** Nombre de sommets communs (coordonnées identiques) entre chaque paire de parcelles « a|b ». */
-function paresDeVoisins(etat: Etat): Map<string, number> {
+function paresDeVoisins(etat: Etat, racine = (p: number) => p): Map<string, number> {
   const parPosition = new Map<string, Set<number>>();
   for (const a of etat.anneaux) {
     for (const s of a.sommets) {
       const cle = `${s.lat} ${s.lon}`;
       if (!parPosition.has(cle)) parPosition.set(cle, new Set());
-      parPosition.get(cle)!.add(a.parcelle);
+      parPosition.get(cle)!.add(racine(a.parcelle));
     }
   }
   const paires = new Map<string, number>();

@@ -2,7 +2,14 @@
 // des parcelles du fichier, et écrites en entier à l'export, sur le modèle des parcelles de la
 // console : <PFD A B C D E F>, <PLN A="1" B>, <LSG A="1">, les points, </LSG>, </PLN>, </PFD>.
 
-import { aireSignee, planLocal, pointDansPolygone, type LatLon, type XY } from '../geometrie/plan';
+import {
+  aireSignee,
+  distancePointSegment,
+  planLocal,
+  pointDansPolygone,
+  type LatLon,
+  type XY,
+} from '../geometrie/plan';
 import type { Parcelle, TaskData } from '../isoxml/lecture';
 import { seCroisent } from './controles';
 import {
@@ -48,7 +55,16 @@ export function completerParcelles(td: TaskData, etat: Etat): void {
  * Rapport moyen entre la surface D du fichier et celle calculée par l'éditeur (environ 0,9995) :
  * appliqué à une parcelle créée, pour que son D soit calculé comme celui des autres.
  */
+const rapports = new WeakMap<TaskData, number>();
 export function rapportSurface(td: TaskData): number {
+  const deja = rapports.get(td);
+  if (deja !== undefined) return deja;
+  const r = calculerRapport(td);
+  rapports.set(td, r);
+  return r;
+}
+
+function calculerRapport(td: TaskData): number {
   const initial = etatInitial(td);
   const rapports = td.parcelles.flatMap((p, i) => {
     const d = p.surface ? Number(p.surface.texte) : NaN;
@@ -56,6 +72,14 @@ export function rapportSurface(td: TaskData): number {
     return Number.isFinite(d) && d > 0 && calc > 0 ? [d / calc] : [];
   });
   return rapports.length ? rapports.reduce((s, r) => s + r, 0) / rapports.length : 1;
+}
+
+function distanceAuContour(p: XY, pts: readonly XY[]): number {
+  let d = Infinity;
+  for (let k = 0; k < pts.length; k++) {
+    d = Math.min(d, distancePointSegment(p, pts[k]!, pts[(k + 1) % pts.length]!));
+  }
+  return d;
 }
 
 /** Identifiant suivant : « PFD31 » après « PFD30 ». */
@@ -120,7 +144,15 @@ export function creerParcelle(
       ),
     );
     const nomAutre = td.parcelles[a.parcelle]!.nom;
-    if (croise || pointDansPolygone(centre, autre) || pointDansPolygone(autre[0]!, pts)) {
+    // Un sommet franchement dans l'autre parcelle (pas juste sur sa limite) : chevauchement. Le
+    // centre ne suffit pas : il peut tomber hors d'une parcelle en L ou en U.
+    const dansAutre = pts.some(
+      (q) => pointDansPolygone(q, autre) && distanceAuContour(q, autre) > 0.02,
+    );
+    const autreDedans = autre.some(
+      (q) => pointDansPolygone(q, pts) && distanceAuContour(q, pts) > 0.02,
+    );
+    if (croise || dansAutre || autreDedans) {
       throw new ErreurEdition(`La nouvelle parcelle chevauche ${nomAutre}.`);
     }
     if (td.parcelles[a.parcelle]!.ajoutee) continue;

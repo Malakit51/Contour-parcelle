@@ -35,26 +35,32 @@ export function majSuivi(nouveau: Suivi): void {
   programmerSauvegardeDrive();
 }
 
-/** Parcelles dont le contour diffère entre deux états. */
+/** Parcelles dont le contour, le nom ou les lignes diffèrent entre deux états. */
 export function parcellesChangees(a: Etat, b: Etat): number[] {
   const changees = new Set<number>();
-  // Une zone exclue créée ou retirée dans l'éditeur : un anneau de plus d'un côté.
-  for (const x of [...a.anneaux.slice(b.anneaux.length), ...b.anneaux.slice(a.anneaux.length)]) {
-    changees.add(x.parcelle);
-  }
-  a.anneaux.forEach((r, i) => {
-    const q = b.anneaux[i];
-    if (!q) return;
-    if (
-      r.sommets.length !== q.sommets.length ||
-      r.sommets.some((u, k) => u.lat !== q.sommets[k]!.lat || u.lon !== q.sommets[k]!.lon)
-    ) {
-      changees.add(r.parcelle);
+  // Contours comparés parcelle par parcelle (et non anneau par anneau : des anneaux peuvent être
+  // ajoutés ou retirés au milieu de la liste, et les indices se décaler).
+  const signatures = (e: Etat) => {
+    const m = new Map<number, string>();
+    for (const x of e.anneaux) {
+      const t = x.sommets.map((s) => `${s.lat},${s.lon}`).join(';');
+      m.set(x.parcelle, `${m.get(x.parcelle) ?? ''}|${x.type}:${t}`);
     }
-  });
+    return m;
+  };
+  const [sa, sb] = [signatures(a), signatures(b)];
+  for (const p of new Set([...sa.keys(), ...sb.keys()])) {
+    if (sa.get(p) !== sb.get(p)) changees.add(p);
+  }
+  for (const n of [...(a.noms ?? []), ...(b.noms ?? [])]) {
+    const na = a.noms?.find((x) => x.parcelle === n.parcelle)?.nom;
+    const nb = b.noms?.find((x) => x.parcelle === n.parcelle)?.nom;
+    if (na !== nb) changees.add(n.parcelle);
+  }
   for (const z of [...(a.zonesRetirees ?? []), ...(b.zonesRetirees ?? [])]) {
     if ((a.zonesRetirees ?? []).includes(z) !== (b.zonesRetirees ?? []).includes(z)) {
-      changees.add(a.anneaux[z]!.parcelle);
+      const x = a.anneaux[z] ?? b.anneaux[z];
+      if (x) changees.add(x.parcelle);
     }
   }
   for (const p of [...(a.supprimees ?? []), ...(b.supprimees ?? [])]) {
@@ -75,6 +81,7 @@ export const travailEnCours = (etat: Etat) =>
   (etat.supprimees?.length ?? 0) > 0 ||
   (etat.zonesRetirees?.length ?? 0) > 0 ||
   (etat.ajoutees?.length ?? 0) > 0 ||
+  (etat.noms?.length ?? 0) > 0 ||
   etat.taches !== undefined;
 
 /**
@@ -93,6 +100,17 @@ export function enregistrerModification(s: Session, brut: Etat, quoi: string): s
     surfaceAvant: nouvelleSurface(s.td, s.etat, p),
     surfaceApres: nouvelleSurface(s.td, nouveau, p),
   }));
+  // Travaux de la console retirés ou remis : une ligne pour tout le fichier.
+  if (s.etat.taches !== nouveau.taches) {
+    entrees.push({
+      quand: new Date().toISOString(),
+      cle: 'fichier',
+      parcelle: '—',
+      action: quoi,
+      surfaceAvant: null,
+      surfaceApres: null,
+    });
+  }
   s.historique.push({ etat: s.etat, journal: entrees });
   s.etat = nouveau;
   appliquerNoms(s.td, s.etat);

@@ -45,7 +45,11 @@ export function commencerTrace(
     };
     void nav.wakeLock
       ?.request('screen')
-      .then((v) => (verrouEcran = v))
+      .then((v) => {
+        // Tracé déjà terminé ou annulé pendant la demande : on rend l'écran tout de suite.
+        if (ui.traceZone?.mode === 'gps' && suivi !== null) verrouEcran = v;
+        else void v.release().catch(() => undefined);
+      })
       .catch(() => undefined);
     suivi = navigator.geolocation.watchPosition(
       (pos) => {

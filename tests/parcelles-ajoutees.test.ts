@@ -167,3 +167,31 @@ describe('créer une parcelle', () => {
     expect(verifierRelecture(relue.td, relue.etat, exporterEtat(relue.td, relue.etat))).toEqual([]);
   });
 });
+
+describe('nouvelle parcelle en U autour d’une autre', () => {
+  it('pas de chevauchement : acceptée (le centre tombe dans la voisine, ses sommets non)', async () => {
+    const { preparer } = await import('./outils');
+    const { td, etat } = preparer({
+      C: [
+        [40, 40],
+        [60, 40],
+        [60, 100],
+        [40, 100],
+      ],
+    });
+    const { plan } = await import('./outils');
+    const u = (
+      [
+        [0, 0],
+        [100, 0],
+        [100, 100],
+        [60, 100],
+        [60, 40],
+        [40, 40],
+        [40, 100],
+        [0, 100],
+      ] as XY[]
+    ).map((q) => plan.versLatLon(q));
+    expect(() => creerParcelle(td, etat, 'U', u)).not.toThrow();
+  });
+});

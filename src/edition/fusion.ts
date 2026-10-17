@@ -2,7 +2,7 @@
 // guidage et ses points du fichier ; elle reprend le contour de `b` au-delà de leur limite
 // commune. `b` est retirée du fichier (avec ses tâches), ses zones exclues passent à `a`.
 
-import { planLocal, type LatLon, type XY } from '../geometrie/plan';
+import { distancePointSegment, planLocal, type LatLon, type XY } from '../geometrie/plan';
 import type { TaskData } from '../isoxml/lecture';
 import {
   anneauIgnore,
@@ -23,24 +23,34 @@ function contour(etat: Etat, p: number): number {
   return X;
 }
 
+function distanceAuContour(p: XY, pts: readonly XY[]): number {
+  let d = Infinity;
+  for (let k = 0; k < pts.length; k++) {
+    d = Math.min(d, distancePointSegment(p, pts[k]!, pts[(k + 1) % pts.length]!));
+  }
+  return d;
+}
+
+const indiceProche = (pts: readonly XY[], p: XY) =>
+  pts.findIndex((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) <= TOLERANCE_PARTAGE_M);
+
 /**
- * Indices de la limite commune dans `A` (sommets consécutifs aussi dans `B`, à 2 cm près), de
- * `i` à `j` dans le sens de `A`, et leurs correspondants dans `B`.
+ * Limite commune : la suite de sommets de `A` posés sur le contour de `B` (à 2 cm près), de `i`
+ * à `j` dans le sens de `A`. Ses deux bouts doivent être aussi des sommets de `B` (`bi`, `bj`) ;
+ * les points entre les deux peuvent n'exister que d'un côté.
  */
 function limiteCommune(A: XY[], B: XY[]): { i: number; j: number; bi: number; bj: number } {
   const n = A.length;
-  const dans = A.map((p) =>
-    B.findIndex((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) <= TOLERANCE_PARTAGE_M),
-  );
-  const communs = dans.filter((k) => k >= 0).length;
-  if (communs < 2) {
+  const surB = A.map((p) => distanceAuContour(p, B) <= TOLERANCE_PARTAGE_M);
+  const nb = surB.filter(Boolean).length;
+  if (nb < 2) {
     throw new ErreurEdition(
       'Ces deux parcelles n’ont pas de limite commune : colle d’abord l’une sur l’autre (« Coller au voisin »).',
     );
   }
-  if (communs === n) throw new ErreurEdition('Ces deux parcelles ont le même contour.');
-  // Début de la limite : un sommet commun dont le précédent ne l'est pas.
-  const debuts = A.map((_, k) => k).filter((k) => dans[k]! >= 0 && dans[(k - 1 + n) % n]! < 0);
+  if (nb === n) throw new ErreurEdition('Ces deux parcelles ont le même contour.');
+  // Début de la limite : un sommet sur B dont le précédent ne l'est pas.
+  const debuts = A.map((_, k) => k).filter((k) => surB[k] && !surB[(k - 1 + n) % n]);
   if (debuts.length !== 1) {
     throw new ErreurEdition(
       'Ces deux parcelles se touchent à plusieurs endroits : fusion impossible ici.',
@@ -48,8 +58,15 @@ function limiteCommune(A: XY[], B: XY[]): { i: number; j: number; bi: number; bj
   }
   const i = debuts[0]!;
   let j = i;
-  while (dans[(j + 1) % n]! >= 0) j = (j + 1) % n;
-  return { i, j, bi: dans[i]!, bj: dans[j]! };
+  while (surB[(j + 1) % n]) j = (j + 1) % n;
+  const bi = indiceProche(B, A[i]!);
+  const bj = indiceProche(B, A[j]!);
+  if (bi < 0 || bj < 0 || bi === bj) {
+    throw new ErreurEdition(
+      'Les bouts de la limite commune ne sont pas des points communs : colle d’abord l’une sur l’autre (« Coller au voisin »).',
+    );
+  }
+  return { i, j, bi, bj };
 }
 
 /** Contour de la parcelle fusionnée (aperçu). */
@@ -80,19 +97,18 @@ function fusionner(etat: Etat, a: number, b: number) {
     }
   }
   // Contour fusionné, dans le sens de A : A de j à i (hors limite commune), puis B au-delà.
-  // Sens de B le long de la limite (de A[i] vers A[j]) : celui où le voisin de bi dans B est
-  // A[i+1] ; on part donc de bi dans l'autre sens pour faire le tour de B hors limite.
-  const voisinA = A[(i + 1) % n]!;
-  const avance = B[(bi + 1) % m]!;
-  const bLongeEnAvancant =
-    Math.hypot(avance[0] - voisinA[0], avance[1] - voisinA[1]) <= TOLERANCE_PARTAGE_M;
-  const pas = bLongeEnAvancant ? -1 : 1;
+  // Tour de B hors de la limite commune : depuis bi (= A[i]), dans le sens où le sommet suivant
+  // n'est pas sur le contour de A, jusqu'à bj (= A[j]).
+  const horsDeA = (k: number) => distanceAuContour(B[k]!, A) > TOLERANCE_PARTAGE_M;
+  const pas = horsDeA((bi + 1) % m) ? 1 : horsDeA((bi - 1 + m) % m) ? -1 : 0;
+  if (pas === 0) throw new ErreurEdition('Limite commune illisible : fusion impossible ici.');
   const seq: { s: Sommet; src: number | null }[] = [];
   for (let k = j; ; k = (k + 1) % n) {
     seq.push({ s: ea.sommets[k]!, src: k });
     if (k === i) break;
   }
-  for (let k = (bi + pas + m) % m; k !== bj; k = (k + pas + m) % m) {
+  for (let k = (bi + pas + m) % m, t = 0; k !== bj; k = (k + pas + m) % m, t++) {
+    if (t > m) throw new ErreurEdition('Limite commune illisible : fusion impossible ici.');
     const s = eb.sommets[k]!;
     seq.push({ s: { lat: s.lat, lon: s.lon, origine: null }, src: null });
   }

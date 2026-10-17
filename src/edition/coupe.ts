@@ -6,8 +6,15 @@
 import { aireSignee, planLocal, type LatLon, type XY } from '../geometrie/plan';
 import { directionDuSegment } from '../geometrie/passages';
 import type { TaskData } from '../isoxml/lecture';
-import { anneauIgnore, estSupprimee, latLon, type Etat, type Sommet } from './etat';
-import { ErreurEdition } from './operations';
+import {
+  anneauIgnore,
+  estSupprimee,
+  latLon,
+  limitesJumelles,
+  type Etat,
+  type Sommet,
+} from './etat';
+import { appliquer, ErreurEdition, type Ajout } from './operations';
 import { idSuivant, nouveauGuid, parcelleVirtuelle } from './parcelles-ajoutees';
 
 export interface Coupe {
@@ -211,7 +218,20 @@ export function couperParcelle(
   ];
   // Zones exclues : chacune suit son morceau ; une zone coupée par la ligne est refusée.
   const nouvelle = td.parcelles.length;
-  const anneaux = [...etat.anneaux];
+  // Un bout de la coupe posé sur une limite commune avec un voisin y est ajouté aussi (sommet
+  // commun, comme « Ajouter un point » sur une limite commune) : pas de bande vide chez lui.
+  let e1 = etat;
+  for (const [c, s] of [
+    [m.c1, garde.debut === m.c1 ? debut : fin],
+    [m.c2, garde.debut === m.c2 ? debut : fin],
+  ] as const) {
+    const ll: LatLon = [s.lat, s.lon];
+    const ajouts: Ajout[] = limitesJumelles(e1, { anneau: r.X, debut: c.k })
+      .filter((j) => j.anneau !== r.X)
+      .map((j) => ({ anneau: j.anneau, v: j.debut, w: j.fin, ll }));
+    if (ajouts.length) e1 = appliquer(e1, [], ajouts);
+  }
+  const anneaux = [...e1.anneaux];
   const zonesRetirees = [...(etat.zonesRetirees ?? [])];
   const anneauxPart: (typeof anneaux)[number][] = [];
   const retirer: number[] = [];
@@ -236,13 +256,20 @@ export function couperParcelle(
   const modele =
     etat.ajoutees?.find((a) => a.parcelle === parcelle)?.modele ??
     (td.parcelles[parcelle]!.ajoutee ? 0 : parcelle);
-  const ajoutee = { parcelle: nouvelle, id: idSuivant(td), guid, nom: nomPropre, modele };
+  const ajoutee = {
+    parcelle: nouvelle,
+    id: idSuivant(td),
+    guid,
+    nom: nomPropre,
+    modele,
+    issueDe: parcelle,
+  };
   td.parcelles.push(parcelleVirtuelle(ajoutee));
   anneaux[r.X] = { ...ext, sommets: seq.map((e) => e.s) };
   return {
     nouvelle,
     etat: {
-      ...etat,
+      ...e1,
       anneaux: [
         ...anneaux.filter((_, i) => !retirer.includes(i)),
         { parcelle: nouvelle, anneau: -1, type: 1, nbOrigine: 0, sommets: sommetsPart },

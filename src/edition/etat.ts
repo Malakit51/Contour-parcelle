@@ -69,6 +69,8 @@ export interface ParcelleAjoutee {
   readonly nom: string;
   /** Parcelle du fichier dont on reprend client et exploitation (attributs E et F). */
   readonly modele: number;
+  /** Parcelle coupée dont celle-ci est un morceau (pour les contrôles des limites communes). */
+  readonly issueDe?: number;
 }
 
 /** Zone exclue créée dans l'éditeur (pas dans le fichier d'origine). */
@@ -83,8 +85,18 @@ export const anneauIgnore = (etat: Etat, i: number) =>
  * plus d'anneau).
  */
 export const estSupprimee = (etat: Etat, parcelle: number) =>
-  (etat.supprimees?.includes(parcelle) ?? false) ||
-  !etat.anneaux.some((a) => a.parcelle === parcelle);
+  (etat.supprimees?.includes(parcelle) ?? false) || !parcellesAvecAnneau(etat).has(parcelle);
+
+// Parcelles qui ont au moins un anneau, calculées une fois par état (les états ne changent pas).
+const avecAnneau = new WeakMap<Etat, Set<number>>();
+function parcellesAvecAnneau(etat: Etat): Set<number> {
+  let p = avecAnneau.get(etat);
+  if (!p) {
+    p = new Set(etat.anneaux.map((a) => a.parcelle));
+    avecAnneau.set(etat, p);
+  }
+  return p;
+}
 
 /** Le même état sans les anneaux des parcelles retirées (pour les contrôles). */
 export function sansSupprimees(etat: Etat): Etat {

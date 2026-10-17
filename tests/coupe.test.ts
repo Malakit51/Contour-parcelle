@@ -101,3 +101,60 @@ describe('couper une parcelle parallèlement à un côté', () => {
     expect(zones).toHaveLength(1);
   });
 });
+
+describe('coupe d’une parcelle qui a une voisine', () => {
+  it('le bout de la coupe sur la limite commune est ajouté chez la voisine ; aucune alerte', () => {
+    const { td, etat } = preparer({
+      R,
+      V: [
+        [200, 0],
+        [300, 0],
+        [300, 100],
+        [200, 100],
+      ],
+    });
+    // Coupe parallèle au côté Sud, à 40 m : la ligne traverse la limite commune avec V (x = 200).
+    const { etat: e, nouvelle } = couperParcelle(td, etat, 0, 0, 40, 'autre', 'R Sud');
+    // V a reçu le point (200, 40), commun aux trois.
+    expect(enMetres(e, 1)).toContainEqual([200, 40]);
+    expect(controler(td, e, [0, 1, nouvelle])).toEqual([]);
+    expect(verifierRelecture(td, e, exporterEtat(td, e))).toEqual([]);
+  });
+
+  it('la limite commune passe entièrement au morceau coupé : pas d’alerte « limite perdue »', () => {
+    const { td, etat } = preparer({
+      R,
+      V: [
+        [0, -50],
+        [200, -50],
+        [200, 0],
+        [0, 0],
+      ],
+    });
+    const { etat: e, nouvelle } = couperParcelle(td, etat, 0, 2, 70, 'autre', 'R Sud');
+    // Le morceau Sud (y < 30) a la limite commune avec V ; R garde le Nord.
+    expect(controler(td, e, [0, 1, nouvelle])).toEqual([]);
+  });
+});
+
+describe('contrôle : zone exclue dans une autre', () => {
+  it('signalé, que la grande soit avant ou après la petite', async () => {
+    const { ajouterZoneExclue } = await import('../src/edition/zones-exclues');
+    const { plan } = await import('./outils');
+    const { td, etat } = preparer({ R });
+    const carre = (x: number, y: number, c: number) =>
+      (
+        [
+          [x, y],
+          [x + c, y],
+          [x + c, y + c],
+          [x, y + c],
+        ] as XY[]
+      ).map((q) => plan.versLatLon(q));
+    const petite = ajouterZoneExclue(etat, 0, carre(50, 40, 10));
+    // On met la grande autour à la main (ajouterZoneExclue la refuserait).
+    const grande = ajouterZoneExclue(etat, 0, carre(20, 20, 60)).anneaux.at(-1)!;
+    const e = { ...petite, anneaux: [...petite.anneaux, grande] };
+    expect(controler(td, e, [0]).some((x) => /zone exclue/.test(x.message))).toBe(true);
+  });
+});

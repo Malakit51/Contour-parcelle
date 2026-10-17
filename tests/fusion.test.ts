@@ -83,3 +83,34 @@ describe('fusionner deux parcelles', () => {
     expect(controler(td, e, [a]).filter((x) => x.grave)).toEqual([]);
   });
 });
+
+describe('fusion : limite commune avec des points d’un seul côté', () => {
+  it('B a un point de plus sur la limite, A aussi un autre : fusion correcte', () => {
+    const { td, etat } = preparer({
+      A: [
+        [0, 0],
+        [100, 0],
+        [100, 20],
+        [100, 50],
+        [0, 50],
+      ],
+      B: [
+        [100, 0],
+        [200, 0],
+        [200, 50],
+        [100, 50],
+        [100, 35],
+      ],
+    });
+    const e = fusionnerParcelles(td, etat, 0, 1);
+    expect(enMetres(e, 0)).toEqual([
+      [0, 0],
+      [100, 0],
+      [200, 0],
+      [200, 50],
+      [100, 50],
+      [0, 50],
+    ]);
+    expect(surfaceEtat(e, 0)).toBeCloseTo(10000, 0);
+  });
+});
