@@ -8,7 +8,7 @@ import {
   verifierRelecture,
 } from '../edition/export';
 import { comparer } from '../isoxml/comparaison';
-import { blocsDeParcelle } from '../isoxml/ecriture';
+import { blocsDeParcelle, tachesDuFichier } from '../isoxml/ecriture';
 import { encoder } from '../isoxml/octets';
 import { cleParcelle, VERSION_DE_DEPART, versionSuivante } from '../suivi/suivi';
 import { el } from '../ui/dom';
@@ -211,6 +211,68 @@ export async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
  * Onglet Export : contrôle (fait tout seul), version et ce qui change par rapport au fichier ouvert.
  * Le bouton principal (« Enregistrer « TASKDATA 0.12 » ») est dans la barre du bas.
  */
+/**
+ * Travaux du fichier (TSK) : les garder, retirer ceux encore prévus (pulvérisations préparées
+ * dans xarvio), ou tous (avec les chantiers enregistrés par la console). Seulement à l'export.
+ */
+function cadreTaches(s: Session): HTMLElement | null {
+  const taches = tachesDuFichier(s.td.texte);
+  if (taches.length === 0) return null;
+  const prevues = taches.filter((t) => t.statut === '1').length;
+  const choix = s.etat.taches ?? null;
+  const options: [typeof choix, string, string][] = [
+    [null, 'Garder', `${taches.length} travaux`],
+    ...(prevues > 0
+      ? ([['prevues', 'Retirer les prévus', `${prevues} pas encore faits`]] as [
+          typeof choix,
+          string,
+          string,
+        ][])
+      : []),
+    ['toutes', 'Retirer tout', `aussi les ${taches.length - prevues} chantiers enregistrés`],
+  ];
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, 'Travaux de la console'),
+    el(
+      'div',
+      { class: 'doux' },
+      `${prevues} prévu(s) (pulvérisations préparées…), ${taches.length - prevues} enregistré(s) par la console. Les retirer ne touche pas aux parcelles.`,
+    ),
+    el(
+      'div',
+      { class: 'cartes-sens' },
+      ...options.map(([v, titre, effet]) =>
+        el(
+          'button',
+          {
+            class: `carte-sens${choix === v ? ' choisie' : ''}`,
+            onclick: () => {
+              if (choix === v) return;
+              modifier(
+                () => {
+                  const { taches: _, ...reste } = s.etat;
+                  return v ? { ...reste, taches: v } : reste;
+                },
+                v === 'prevues'
+                  ? `${prevues} travaux prévus retirés de l’export`
+                  : v === 'toutes'
+                    ? `Tous les travaux (${taches.length}) retirés de l’export`
+                    : 'Travaux gardés dans l’export',
+                true,
+              );
+              afficher();
+            },
+          },
+          el('span', { class: 'carte-sens-titre' }, titre),
+          el('span', { class: 'carte-sens-effet' }, effet),
+        ),
+      ),
+    ),
+  );
+}
+
 export function panneauExport(s: Session): HTMLElement[] {
   const prepare = exportAJour();
   const graves = prepare?.alertes.filter((a) => a.grave) ?? [];
@@ -407,5 +469,5 @@ export function panneauExport(s: Session): HTMLElement[] {
         ),
     ),
   );
-  return [controle, version, ou];
+  return [controle, version, cadreTaches(s), ou].filter((x): x is HTMLElement => x !== null);
 }

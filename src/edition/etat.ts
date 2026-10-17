@@ -52,6 +52,11 @@ export interface Etat {
    * suite de celles du fichier). Leurs anneaux ont `anneau: -1`.
    */
   readonly ajoutees?: readonly ParcelleAjoutee[];
+  /**
+   * Travaux (TSK) retirés à l'export : ceux encore prévus (statut 1, les pulvérisations
+   * préparées dans xarvio), ou tous (avec les chantiers enregistrés par la console).
+   */
+  readonly taches?: 'prevues' | 'toutes';
 }
 
 export interface ParcelleAjoutee {

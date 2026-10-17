@@ -72,7 +72,9 @@ export const travailEnCours = (etat: Etat) =>
   parcellesModifiees(etat).length > 0 ||
   (etat.guidages?.length ?? 0) > 0 ||
   (etat.supprimees?.length ?? 0) > 0 ||
-  (etat.zonesRetirees?.length ?? 0) > 0;
+  (etat.zonesRetirees?.length ?? 0) > 0 ||
+  (etat.ajoutees?.length ?? 0) > 0 ||
+  etat.taches !== undefined;
 
 /**
  * Passe à un nouvel état (annulable) et note la modification au journal. L'état est d'abord

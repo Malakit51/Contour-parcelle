@@ -20,6 +20,8 @@ export interface Changements {
   }>;
   /** Parcelles retirées du fichier, avec les tâches (TSK) qui s'y rapportent. */
   parcellesRetirees?: ReadonlyArray<Parcelle>;
+  /** Travaux retirés : ceux encore prévus (statut 1), ou tous. */
+  taches?: 'prevues' | 'toutes';
   /** Zones exclues retirées : lignes entières de leur LSG. */
   zonesRetirees?: ReadonlyArray<Plage>;
   /**
@@ -88,6 +90,27 @@ export function blocsDeParcelle(
     });
   }
   return { pfd, taches };
+}
+
+/**
+ * Travaux du fichier (TSK), lignes entières : nom, statut (attribut G : 1 prévu, 2 en cours,
+ * 3 en pause, 4 terminé…) et parcelle (attribut E).
+ */
+export function tachesDuFichier(
+  texte: string,
+): { plage: Plage; nom: string; statut: string; parcelle: string }[] {
+  const taches = [];
+  for (const m of texte.matchAll(/<TSK\b[^>]*>/g)) {
+    const fin = finElement(texte, 'TSK', m.index + m[0].length);
+    const attribut = (n: string) => new RegExp(`\\s${n}="([^"]*)"`).exec(m[0])?.[1] ?? '';
+    taches.push({
+      plage: lignesDe(texte, { debut: m.index, fin }),
+      nom: attribut('B'),
+      statut: attribut('G'),
+      parcelle: attribut('E'),
+    });
+  }
+  return taches;
 }
 
 const echapper = (s: string) =>
@@ -294,6 +317,11 @@ export function exporterTaskData(td: TaskData, changements: Changements = {}): s
     retraits.push(pfd, ...taches.map((t) => t.plage));
   }
   retraits.push(...(changements.zonesRetirees ?? []));
+  if (changements.taches) {
+    for (const t of tachesDuFichier(td.texte)) {
+      if (changements.taches === 'toutes' || t.statut === '1') retraits.push(t.plage);
+    }
+  }
   // Une insertion posée pile au bord d'un retrait (zone créée juste avant une zone retirée) n'est
   // pas dedans.
   const dedans = (p: Plage) =>
@@ -305,6 +333,10 @@ export function exporterTaskData(td: TaskData, changements: Changements = {}): s
     );
   return remplacer(td.texte, [
     ...remplacements.filter((x) => !dedans(x.plage)),
-    ...retraits.map((plage) => ({ plage, texte: '' })),
+    // Une tâche d'une parcelle retirée peut aussi faire partie des travaux retirés : une seule fois.
+    ...[...new Map(retraits.map((r) => [`${r.debut}-${r.fin}`, r])).values()].map((plage) => ({
+      plage,
+      texte: '',
+    })),
   ]);
 }

@@ -26,6 +26,8 @@ export interface SessionEnregistree {
   }[];
   /** Parcelles créées dans l'éditeur. */
   ajoutees?: ParcelleAjoutee[];
+  /** Travaux retirés à l'export. */
+  taches?: 'prevues' | 'toutes';
   /** Suivi et journal au moment de l'enregistrement (pour la sauvegarde en ligne). */
   suivi?: Suivi;
   /** Lignes de guidage créées dans l'éditeur. */
@@ -71,6 +73,7 @@ export function enregistrerSession(
     ...(etat.supprimees?.length ? { supprimees: [...etat.supprimees] } : {}),
     ...(etat.zonesRetirees?.length ? { zonesRetirees: [...etat.zonesRetirees] } : {}),
     ...(etat.ajoutees?.length ? { ajoutees: [...etat.ajoutees] } : {}),
+    ...(etat.taches ? { taches: etat.taches } : {}),
     ...(suivi ? { suivi } : {}),
   };
 }
@@ -132,6 +135,7 @@ export function relireSession(sauvegarde: unknown): {
       ...(supprimees.length ? { supprimees } : {}),
       ...(zonesRetirees.length ? { zonesRetirees } : {}),
       ...(ajoutees.length ? { ajoutees } : {}),
+      ...(s.taches === 'prevues' || s.taches === 'toutes' ? { taches: s.taches } : {}),
     },
     session: s,
   };

@@ -144,3 +144,36 @@ describe('parcelle qui contient un point', () => {
     expect(parcelleContenant(etat, [0, 0])).toBeNull();
   });
 });
+
+describe('retirer les travaux de la console', () => {
+  it('les 30 pulvérisations prévues partent, les 2 chantiers enregistrés restent ; ou tout part', async () => {
+    const { tachesDuFichier } = await import('../src/isoxml/ecriture');
+    const toutes = tachesDuFichier(texte);
+    expect(toutes).toHaveLength(32);
+    expect(toutes.filter((t) => t.statut === '1')).toHaveLength(30);
+    const etat0 = etatInitial(td);
+    const avant = exporterEtat(td, etat0);
+    const prevues = exporterEtat(td, { ...etat0, taches: 'prevues' });
+    expect(verifierRelecture(td, { ...etat0, taches: 'prevues' }, prevues)).toEqual([]);
+    expect(tachesDuFichier(prevues).map((t) => t.statut)).toEqual(['4', '3']);
+    // Le reste du fichier ne change pas : seules des lignes de tâches disparaissent.
+    const { comparer } = await import('../src/isoxml/comparaison');
+    const diffs = comparer(avant, prevues);
+    expect(diffs.every((d) => d.apres === null)).toBe(true);
+    expect(diffs.length).toBe(
+      toutes
+        .filter((t) => t.statut === '1')
+        .reduce((n, t) => n + texte.slice(t.plage.debut, t.plage.fin).split('\r\n').length - 1, 0),
+    );
+    expect(tachesDuFichier(exporterEtat(td, { ...etat0, taches: 'toutes' }))).toEqual([]);
+    // Avec une parcelle supprimée (sa tâche est aussi dans les travaux retirés) : pas de conflit.
+    const etat = { ...supprimerParcelle(etat0, indice('13 Jard')), taches: 'prevues' as const };
+    const sortie = exporterEtat(td, etat);
+    expect(verifierRelecture(td, etat, sortie)).toEqual([]);
+    expect(tachesDuFichier(sortie)).toHaveLength(2);
+    const relue = relireSession(
+      JSON.parse(JSON.stringify(enregistrerSession(td, 'TASKDATA.XML', etat, 'essai'))),
+    );
+    expect(relue.etat.taches).toBe('prevues');
+  });
+});

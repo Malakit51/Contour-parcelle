@@ -170,6 +170,7 @@ export function changementsDepuisEtat(td: TaskData, etat: Etat): Changements {
     zonesRetirees,
     zonesAjoutees,
     parcellesAjoutees,
+    ...(etat.taches ? { taches: etat.taches } : {}),
   };
 }
 
