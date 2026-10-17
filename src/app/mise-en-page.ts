@@ -7,9 +7,9 @@ import { estSupprimee } from '../edition/etat';
 import { icone, type Icone } from '../ui/icones';
 import { dessin } from './dessin';
 import { drive, driveEnAttente, reconnecterDrive } from './drive';
-import { CLE_HAUTEUR_VOLET, COULEURS_ETAT, type Cran, type Onglet, ONGLETS, ui } from './etat';
+import { CLE_HAUTEUR_VOLET, COULEURS_ETAT, type Cran, type OngletBas, ONGLETS, ui } from './etat';
 import { exporterVersCle, exportAJour, panneauExport, texteBoutonExport } from './exporter';
-import { contenuFichier } from './fichier';
+import { contenuFichier, contenuReglages } from './fichier';
 import { apercuGuidages, commandesLignes, panneauGuidage } from './guidage';
 import { boiteMesure, majMesure } from './mesure';
 import {
@@ -94,7 +94,6 @@ champDistance.addEventListener('keydown', (e) => {
 });
 
 export const zones = {
-  haut: el('div', { class: 'barre-haut' }),
   carte: el('div', { class: 'zone-carte' }),
   onglets: el('div', { class: 'onglets' }),
   panneau: el('div', { class: 'panneau' }),
@@ -157,7 +156,7 @@ export const voletVisible = () =>
  */
 export const croixDansLeVolet = () => voletVisible() && ui.cran !== 'replie';
 
-/** Hauteur (px) de chaque cran : replié = poignée, onglets et barre du bas ; plein = sous la barre du haut. */
+/** Hauteur (px) de chaque cran : replié = poignée, onglets et barre du bas ; plein = sous le cartouche de la parcelle. */
 export function hauteurs(): Record<Cran, number> {
   // Poignée (marge −12) + onglets + barre du bas, deux espaces de 8 px et la marge du bas (zone
   // des boutons d'Android comprise) : le panneau est alors masqué.
@@ -175,7 +174,7 @@ export function poserVolet(hauteur?: number): void {
   if (!voletVisible()) {
     app.style.removeProperty('--volet');
     carte.margeBas = 0;
-    carte.margeHaut = 0;
+    carte.margeHaut = 56;
     return;
   }
   const crans = hauteurs();
@@ -185,7 +184,7 @@ export function poserVolet(hauteur?: number): void {
   app.classList.toggle('volet-haut', h > window.innerHeight * 0.6);
   app.style.setProperty('--volet', `${h}px`);
   carte.margeBas = h;
-  carte.margeHaut = 64;
+  carte.margeHaut = 56;
 }
 
 // Glissement : le volet suit le doigt, puis se cale sur le cran le plus proche. On l'attrape par
@@ -255,7 +254,7 @@ rendreGlissant(zones.onglets, false);
 window.addEventListener('resize', () => poserVolet());
 
 app.classList.add('mise-en-page');
-app.replaceChildren(zones.haut, zones.carte, volet);
+app.replaceChildren(zones.carte, volet);
 
 export function remplir(
   zone: HTMLElement,
@@ -286,68 +285,70 @@ export function afficher(): void {
   if (!ui.session) {
     ui.onglet = 'fichier';
     zones.carte.hidden = true;
-    remplir(zones.haut);
     remplir(zones.onglets);
     remplir(zones.bas);
     remplir(zones.panneau, msg, ...contenuFichier(null));
     carte.definirCommandes(null);
     carte.definirCommandesDroite(null);
+    carte.definirCommandesBas(null);
+    carte.definirCartouche(null);
     return;
   }
   const s = ui.session;
   zones.carte.hidden = false;
 
-  // Barre du haut : la parcelle (nom, surface, état du contour) dans une pilule qui ouvre la liste.
-  const choixParcelle = el('select', { 'aria-label': 'Choisir la parcelle' });
-  choixParcelle.append(el('option', { value: '' }, 'Toutes les parcelles'));
-  s.td.parcelles
-    .map((p, i) => ({ nom: p.nom, i }))
-    .filter(({ i }) => !estSupprimee(s.etat, i))
-    .sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { numeric: true }))
-    .forEach(({ nom, i }) => {
-      const o = el('option', { value: String(i) }, nom);
-      if (i === ui.parcelleCourante) o.selected = true;
-      choixParcelle.append(o);
-    });
-  choixParcelle.addEventListener('change', () => {
-    ui.parcelleCourante = choixParcelle.value === '' ? null : Number(choixParcelle.value);
-    if (ui.parcelleCourante !== null) ui.porteeSuivi = 'parcelle';
-    effacerSelection();
-    afficher();
-    if (ui.parcelleCourante === null) cadrerTout();
-    else cadrerParcelle(ui.parcelleCourante);
-  });
+  // Cartouche de la parcelle choisie (nom, surface, état), en haut à gauche de la carte. Pas de
+  // liste : on choisit une parcelle en la touchant sur la carte (ou dans Suivi, Toutes).
   const courante = ui.parcelleCourante === null ? null : s.td.parcelles[ui.parcelleCourante]!;
-  const etatCourant = courante ? fiche(ui.suivi, courante).etat : null;
-  const surface =
-    ui.parcelleCourante === null ? null : nouvelleSurface(s.td, s.etat, ui.parcelleCourante);
-  const pilule = el(
-    'label',
-    { class: 'pilule' },
-    el('span', {
-      class: 'pastille',
-      style: `background:${etatCourant ? COULEURS_ETAT[etatCourant] : 'var(--vert)'}`,
-    }),
-    el(
-      'span',
-      { class: 'pilule-texte' },
-      el('span', { class: 'pilule-nom' }, courante?.nom ?? 'Toutes les parcelles'),
+  let cartouche: HTMLElement | null = null;
+  if (courante) {
+    const p = ui.parcelleCourante!;
+    const etatCourant = fiche(ui.suivi, courante).etat;
+    const surface = nouvelleSurface(s.td, s.etat, p);
+    cartouche = el(
+      'div',
+      { class: 'cartouche' },
       el(
-        'span',
-        { class: 'pilule-detail' },
-        courante
-          ? [
+        'button',
+        {
+          class: 'cartouche-texte',
+          title: 'Cadrer la parcelle',
+          onclick: () => cadrerParcelle(p),
+        },
+        el('span', { class: 'pastille', style: `background:${COULEURS_ETAT[etatCourant]}` }),
+        el(
+          'span',
+          { class: 'cartouche-lignes' },
+          el('span', { class: 'cartouche-nom' }, courante.nom),
+          el(
+            'span',
+            { class: 'cartouche-detail' },
+            [
               surface !== null ? `${(surface / 10000).toFixed(2).replace('.', ',')} ha` : null,
-              LIBELLES[etatCourant!].toLowerCase(),
+              LIBELLES[etatCourant].toLowerCase(),
             ]
               .filter(Boolean)
-              .join(' · ')
-          : `${s.td.parcelles.filter((_, i) => !estSupprimee(s.etat, i)).length} parcelles`,
+              .join(' · '),
+          ),
+        ),
       ),
-    ),
-    icone('chevron', 20),
-    choixParcelle,
-  );
+      el(
+        'button',
+        {
+          class: 'cartouche-fermer',
+          title: 'Toutes les parcelles',
+          'aria-label': 'Toutes les parcelles',
+          onclick: () => {
+            ui.parcelleCourante = null;
+            effacerSelection();
+            afficher();
+            cadrerTout();
+          },
+        },
+        icone('fermer', 18),
+      ),
+    );
+  }
   const rond = (nom: Icone, titre: string, action: () => void, classe = '') =>
     el(
       'button',
@@ -355,31 +356,11 @@ export function afficher(): void {
       icone(nom),
     );
 
-  remplir(
-    zones.haut,
-    pilule,
-    el(
-      'div',
-      { class: 'zoom' },
-      rond('plus', 'Zoomer', () => carte.zoomer(1)),
-      rond('moins', 'Dézoomer', () => carte.zoomer(-1)),
-    ),
-  );
-
-  // Boutons ronds posés sur la carte, à droite sous le choix du fond.
+  // En haut à droite, sous le choix du fond : lignes, mesure, Drive à reconnecter, réglages.
   const boutonsCarte = el(
     'div',
     { class: 'boutons-ronds' },
-    rond(
-      'gps',
-      carte.gpsActif() ? 'Arrêter le GPS' : 'Ma position (GPS)',
-      () => {
-        carte.basculerGps();
-        afficher();
-      },
-      carte.gpsActif() ? 'actif' : '',
-    ),
-    carte.gpsActif() && rond('centrer', 'Centrer sur ma position', () => carte.centrerSurGps()),
+    commandesLignes(s),
     rond(
       'mesure',
       'Mesurer',
@@ -394,10 +375,41 @@ export function afficher(): void {
     driveEnAttente() &&
       !drive.connecte() &&
       rond('nuage', 'Reconnecter Google Drive', () => void reconnecterDrive(), 'alerte'),
-    commandesLignes(s),
+    rond(
+      'reglages',
+      'Réglages',
+      () => {
+        arreterOutilsCarte();
+        if (ui.onglet === 'reglages') ui.onglet = ui.ongletAvantReglages;
+        else {
+          ui.ongletAvantReglages = ui.onglet;
+          ui.onglet = 'reglages';
+          // Volet replié : on l'ouvre à moitié pour voir les réglages.
+          if (ui.cran === 'replie') ui.cran = 'moitie';
+        }
+        zones.panneau.scrollTop = 0;
+        afficher();
+      },
+      ui.onglet === 'reglages' ? 'actif' : '',
+    ),
+  );
+  // En bas à droite, comme sur Google Maps : ma position et, GPS allumé, centrer dessus.
+  const boutonsBas = el(
+    'div',
+    { class: 'boutons-ronds' },
+    carte.gpsActif() && rond('centrer', 'Centrer sur ma position', () => carte.centrerSurGps()),
+    rond(
+      'gps',
+      carte.gpsActif() ? 'Arrêter le GPS' : 'Ma position (GPS)',
+      () => {
+        carte.basculerGps();
+        afficher();
+      },
+      carte.gpsActif() ? 'actif' : '',
+    ),
   );
 
-  const ICONES_ONGLETS: Record<Onglet, Icone> = {
+  const ICONES_ONGLETS: Record<OngletBas, Icone> = {
     modifier: 'modifier',
     guidage: 'lignes',
     suivi: 'suivi',
@@ -406,7 +418,7 @@ export function afficher(): void {
   };
   remplir(
     zones.onglets,
-    ...(Object.keys(ONGLETS) as Onglet[]).map((o) =>
+    ...(Object.keys(ONGLETS) as OngletBas[]).map((o) =>
       el(
         'button',
         {
@@ -507,13 +519,16 @@ export function afficher(): void {
     case 'fichier':
       contenu = contenuFichier(s);
       break;
+    case 'reglages':
+      contenu = [el('h2', { class: 'titre-section' }, 'Réglages'), ...contenuReglages(s)];
+      break;
   }
   remplir(zones.panneau, msg, ...contenu);
 
   // Onglet Export : le bouton principal écrit l'export (sur la clé, ou en téléchargement).
   const enExport = ui.onglet === 'export';
   // Pas de distance à saisir pour l'optimisation du guidage (la largeur vient de l'outil).
-  const sansBouton = ui.onglet === 'suivi' || ui.onglet === 'fichier';
+  const sansBouton = ui.onglet === 'suivi' || ui.onglet === 'fichier' || ui.onglet === 'reglages';
   const sansDistance =
     enExport ||
     sansBouton ||
@@ -577,6 +592,8 @@ export function afficher(): void {
       : null,
   );
   carte.definirCommandesDroite(boutonsCarte);
+  carte.definirCommandesBas(boutonsBas);
+  carte.definirCartouche(cartouche);
   majMesure();
   poserVolet();
   carte.afficher(dessin(s));

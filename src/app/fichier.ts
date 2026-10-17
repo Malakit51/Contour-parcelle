@@ -269,8 +269,15 @@ export function contenuFichier(s: Session | null): Node[] {
     section('Sauvegarde'),
     panneauSauvegardeFichier(),
     panneauDrive(),
-    // Réglages : mise en page, version de l'application.
-    section('Réglages'),
+    // Sans fichier ouvert, pas de carte ni d'engrenage : les réglages restent ici.
+    ...(s ? [] : [section('Réglages'), ...contenuReglages(null)]),
+  ];
+  return contenu;
+}
+
+/** Réglages (engrenage de la carte) : dossier des sauvegardes, photo, mise en page, version. */
+export function contenuReglages(s: Session | null): Node[] {
+  return [
     ...[panneauDossierSauvegardes()].filter((x): x is HTMLElement => x !== null),
     ...(s ? [cadrePhotoHorsReseau(s)] : []),
     el(
@@ -303,5 +310,4 @@ export function contenuFichier(s: Session | null): Node[] {
       el('div', { class: 'doux' }, TEXTE_VERSION),
     ),
   ];
-  return contenu;
 }

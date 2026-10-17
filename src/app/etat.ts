@@ -32,8 +32,11 @@ export interface Session {
   couleurs: number[];
 }
 
-export type Onglet = 'modifier' | 'guidage' | 'suivi' | 'export' | 'fichier';
-export const ONGLETS: Record<Onglet, string> = {
+/** Onglets du bas. */
+export type OngletBas = 'modifier' | 'guidage' | 'suivi' | 'export' | 'fichier';
+/** « reglages » : panneau ouvert par l'engrenage de la carte, sans onglet en bas. */
+export type Onglet = OngletBas | 'reglages';
+export const ONGLETS: Record<OngletBas, string> = {
   modifier: 'Modifier',
   guidage: 'Guidage',
   suivi: 'Suivi',
@@ -182,6 +185,8 @@ export interface EtatInterface {
   /** Liste « Toutes » réduite à un état (un appui sur un compteur), ou null. */
   filtreSuivi: EtatContour | null;
   onglet: Onglet;
+  /** Onglet à retrouver en refermant les réglages (deuxième appui sur l'engrenage). */
+  ongletAvantReglages: OngletBas;
   messageAffiche: { texte: string; erreur: boolean } | null;
   minuterieBulle: ReturnType<typeof setTimeout> | undefined;
   /** Mise en page « volet » (sinon classique). */
@@ -264,6 +269,7 @@ export const ui: EtatInterface = {
   porteeSuivi: 'parcelle',
   filtreSuivi: null,
   onglet: 'fichier',
+  ongletAvantReglages: 'fichier',
   messageAffiche: null,
   minuterieBulle: undefined,
   voletActif: lireStockage(CLE_MISE_EN_PAGE) === 'volet',

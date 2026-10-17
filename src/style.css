@@ -73,21 +73,15 @@ body {
   padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
   gap: 8px;
 }
-.barre-haut,
 .barre-bas,
 .onglets {
   display: flex;
   gap: 6px;
   flex: none;
 }
-.barre-haut:empty,
 .barre-bas:empty,
 .onglets:empty {
   display: none;
-}
-.barre-haut button {
-  min-width: 46px;
-  padding: 8px 10px;
 }
 
 /* ---------- Carte ---------- */
@@ -140,7 +134,8 @@ body {
   transform: translateX(-50%);
   z-index: 1001;
   width: max-content;
-  max-width: calc(100% - 24px);
+  /* Place laissée de chaque côté pour le bouton GPS, en bas à droite. */
+  max-width: calc(100% - 136px);
   padding: 8px 14px;
   border-radius: 12px;
   background: #1c211ceb;
@@ -638,23 +633,32 @@ button.carte-sens.choisie .carte-sens-effet {
   font-weight: 700;
 }
 
-/* ---------- Barre du haut : pilule de la parcelle et zoom ---------- */
-.barre-haut {
+/* ---------- Cartouche de la parcelle choisie, en haut à gauche de la carte ---------- */
+.cartouche {
+  display: flex;
   align-items: center;
-  gap: 8px;
+  max-width: min(260px, calc(100vw - 110px));
+  border-radius: 24px;
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: var(--ombre-flottante);
 }
-.pilule {
-  position: relative;
+.cartouche button {
+  min-height: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+}
+.cartouche-texte {
   flex: 1;
   min-width: 0;
-  height: 52px;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 14px;
-  border-radius: 26px;
-  background: var(--surface);
-  box-shadow: var(--ombre-flottante);
+  height: 48px;
+  padding: 0 4px 0 14px;
+  text-align: left;
 }
 .pastille {
   width: 12px;
@@ -662,39 +666,36 @@ button.carte-sens.choisie .carte-sens-effet {
   border-radius: 6px;
   flex: none;
 }
-.pilule-texte {
-  flex: 1;
+.cartouche-lignes {
   min-width: 0;
   display: flex;
   flex-direction: column;
   line-height: 1.2;
 }
-.pilule-nom {
-  font-size: 1.05rem;
+.cartouche-nom {
+  font-size: 1rem;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.pilule-detail {
+.cartouche-detail {
   font-size: 0.8rem;
   color: var(--doux);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* La liste des parcelles couvre toute la pilule, invisible : un appui n'importe où l'ouvre. */
-.pilule select {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
+.cartouche-fermer {
+  flex: none;
+  width: 44px;
+  height: 48px;
+  padding: 0;
+  color: var(--doux) !important;
 }
-.zoom {
-  display: flex;
-  gap: 6px;
+/* Un outil qui attend un toucher affiche son bandeau en haut de la carte : le cartouche s'efface. */
+.zone-carte:has(> .boite-mesure:not([hidden])) .cartouche-carte {
+  display: none !important;
 }
 button.rond {
   width: 48px;
@@ -717,7 +718,8 @@ button.rond.alerte {
   color: #16201a;
 }
 
-/* Boutons ronds sur la carte (GPS, mesure, Drive, lignes), à droite sous le choix du fond. */
+/* Boutons ronds sur la carte : lignes, mesure, Drive, réglages en haut à droite sous le choix du
+   fond ; GPS en bas à droite. */
 .boutons-ronds {
   display: flex;
   flex-direction: column;
@@ -758,15 +760,11 @@ button.rond.alerte {
     max-width: none;
     display: grid;
     grid-template-columns: 1fr minmax(340px, 34%);
-    grid-template-rows: auto 1fr auto auto;
+    grid-template-rows: 1fr auto auto;
     grid-template-areas:
-      'carte haut'
       'carte panneau'
       'carte bas'
       'carte onglets';
-  }
-  .mise-en-page > .barre-haut {
-    grid-area: haut;
   }
   .mise-en-page > .zone-carte {
     grid-area: carte;
@@ -784,7 +782,7 @@ button.rond.alerte {
   /* Sans fichier ouvert, pas de carte : le panneau prend toute la largeur. */
   .mise-en-page:has(> .zone-carte[hidden]) {
     grid-template-columns: 1fr;
-    grid-template-areas: 'haut' 'panneau' 'bas' 'onglets';
+    grid-template-areas: 'panneau' 'bas' 'onglets';
   }
 }
 .info > .rangee:first-child {
@@ -860,7 +858,7 @@ button.rond.alerte {
     position: relative;
     padding: 0;
   }
-  /* La carte prend tout l'écran ; la barre du haut et le volet sont posés dessus. */
+  /* La carte prend tout l'écran ; le volet est posé dessus. */
   .avec-volet > .zone-carte {
     position: absolute;
     inset: 0;
@@ -869,19 +867,11 @@ button.rond.alerte {
     border-radius: 0;
     box-shadow: none;
   }
-  .avec-volet > .barre-haut {
-    position: absolute;
-    top: calc(8px + env(safe-area-inset-top));
-    left: 8px;
-    right: 8px;
-    z-index: 1002;
-  }
   .avec-volet .leaflet-top {
-    top: 62px;
+    top: env(safe-area-inset-top);
   }
-  /* Mesure : sous la pilule de la parcelle, qui est posée sur la carte. */
   .avec-volet .boite-mesure {
-    top: calc(72px + env(safe-area-inset-top));
+    top: calc(12px + env(safe-area-inset-top));
   }
   .avec-volet .leaflet-bottom {
     bottom: var(--volet, 160px);

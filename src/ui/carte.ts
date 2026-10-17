@@ -93,10 +93,14 @@ export class Carte {
   private readonly noms = L.layerGroup();
   private readonly gps = L.layerGroup();
   private suiviGps: number | null = null;
+  /** Cartouche de la parcelle choisie, en haut à gauche (au-dessus des flèches). */
+  private readonly cartouche = L.DomUtil.create('div', 'commandes-carte cartouche-carte');
   /** Boutons posés sur la carte, en haut à gauche (flèches de déplacement d'un point). */
   private readonly commandes = L.DomUtil.create('div', 'commandes-carte');
   /** Boutons posés sur la carte, en haut à droite sous le choix du fond (lignes de guidage). */
   private readonly commandesDroite = L.DomUtil.create('div', 'commandes-carte commandes-droite');
+  /** Boutons posés sur la carte, en bas à droite (GPS), comme sur Google Maps. */
+  private readonly commandesBas = L.DomUtil.create('div', 'commandes-carte commandes-bas');
   private dernierePosition: GeolocationPosition | null = null;
 
   constructor(
@@ -133,16 +137,15 @@ export class Carte {
     fonds.Photo.addTo(this.carte);
     L.control.layers(fonds, {}, { position: 'topright' }).addTo(this.carte);
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(this.carte);
-    L.DomEvent.disableClickPropagation(this.commandes);
-    L.DomEvent.disableScrollPropagation(this.commandes);
-    new (L.Control.extend({ onAdd: () => this.commandes }))({ position: 'topleft' }).addTo(
-      this.carte,
-    );
-    L.DomEvent.disableClickPropagation(this.commandesDroite);
-    L.DomEvent.disableScrollPropagation(this.commandesDroite);
-    new (L.Control.extend({ onAdd: () => this.commandesDroite }))({ position: 'topright' }).addTo(
-      this.carte,
-    );
+    const poser = (zone: HTMLElement, position: L.ControlPosition) => {
+      L.DomEvent.disableClickPropagation(zone);
+      L.DomEvent.disableScrollPropagation(zone);
+      new (L.Control.extend({ onAdd: () => zone }))({ position }).addTo(this.carte);
+    };
+    poser(this.cartouche, 'topleft');
+    poser(this.commandes, 'topleft');
+    poser(this.commandesDroite, 'topright');
+    poser(this.commandesBas, 'bottomright');
     this.calque.addTo(this.carte);
     this.noms.addTo(this.carte);
     this.gps.addTo(this.carte);
@@ -158,7 +161,7 @@ export class Carte {
     new ResizeObserver(() => this.carte.invalidateSize()).observe(this.element);
   }
 
-  /** Hauteur (px) cachée en haut et en bas de la carte (barre du haut, volet posés dessus). */
+  /** Hauteur (px) cachée en haut et en bas de la carte (cartouche de la parcelle, volet posés dessus). */
   margeHaut = 0;
   margeBas = 0;
 
@@ -170,11 +173,6 @@ export class Carte {
       paddingBottomRight: [20, 20 + this.margeBas],
       maxZoom: 19,
     });
-  }
-
-  zoomer(sens: 1 | -1): void {
-    if (sens > 0) this.carte.zoomIn();
-    else this.carte.zoomOut();
   }
 
   afficher(dessin: Dessin): void {
@@ -373,6 +371,22 @@ export class Carte {
 
   /** Remplace les boutons posés sur la carte (rien : on les retire). */
   definirCommandes(contenu: HTMLElement | null): void {
+    this.remplacer(this.commandes, contenu);
+  }
+
+  definirCommandesDroite(contenu: HTMLElement | null): void {
+    this.remplacer(this.commandesDroite, contenu);
+  }
+
+  definirCommandesBas(contenu: HTMLElement | null): void {
+    this.remplacer(this.commandesBas, contenu);
+  }
+
+  definirCartouche(contenu: HTMLElement | null): void {
+    this.remplacer(this.cartouche, contenu);
+  }
+
+  private remplacer(zone: HTMLElement, contenu: HTMLElement | null): void {
     // Le contenu est remplacé pendant l'appui sur un de ses boutons : Leaflet remonte alors depuis
     // le bouton (détaché de la page) sans retrouver le conteneur. On protège donc aussi le contenu,
     // sinon l'appui serait pris pour un toucher sur la carte.
@@ -380,17 +394,8 @@ export class Carte {
       L.DomEvent.disableClickPropagation(contenu);
       L.DomEvent.disableScrollPropagation(contenu);
     }
-    this.commandes.replaceChildren(...(contenu ? [contenu] : []));
-    this.commandes.style.display = contenu ? '' : 'none';
-  }
-
-  definirCommandesDroite(contenu: HTMLElement | null): void {
-    if (contenu) {
-      L.DomEvent.disableClickPropagation(contenu);
-      L.DomEvent.disableScrollPropagation(contenu);
-    }
-    this.commandesDroite.replaceChildren(...(contenu ? [contenu] : []));
-    this.commandesDroite.style.display = contenu ? '' : 'none';
+    zone.replaceChildren(...(contenu ? [contenu] : []));
+    zone.style.display = contenu ? '' : 'none';
   }
 
   private majNoms(): void {
