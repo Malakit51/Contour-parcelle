@@ -7,7 +7,15 @@ import { estSupprimee } from '../edition/etat';
 import { icone, type Icone } from '../ui/icones';
 import { dessin } from './dessin';
 import { drive, driveEnAttente, reconnecterDrive } from './drive';
-import { CLE_HAUTEUR_VOLET, COULEURS_ETAT, type Cran, type OngletBas, ONGLETS, ui } from './etat';
+import {
+  CLE_HAUTEUR_VOLET,
+  COULEURS_ETAT,
+  type Cran,
+  type Onglet,
+  ONGLETS,
+  type Session,
+  ui,
+} from './etat';
 import { exporterVersCle, exportAJour, panneauExport, texteBoutonExport } from './exporter';
 import { contenuFichier, contenuReglages } from './fichier';
 import { apercuGuidages, commandesLignes, panneauGuidage } from './guidage';
@@ -283,8 +291,59 @@ rendreGlissant(poignee, true);
 rendreGlissant(zones.onglets, false);
 window.addEventListener('resize', () => poserVolet());
 
+// ---------- Engrenage : sauvegardes et réglages, dans une fenêtre plein écran ----------
+//
+// Le bouton « retour » d'Android la referme (une étape ajoutée à l'historique en l'ouvrant).
+
+const contenuFenetre = el('div', { class: 'fenetre-contenu' });
+const fenetreReglages = el(
+  'div',
+  { class: 'fenetre-reglages', hidden: '', role: 'dialog', 'aria-label': 'Réglages' },
+  el(
+    'div',
+    { class: 'fenetre-entete' },
+    el('h1', {}, 'Réglages'),
+    el(
+      'button',
+      { class: 'rond', title: 'Fermer', 'aria-label': 'Fermer', onclick: () => fermerReglages() },
+      icone('fermer'),
+    ),
+  ),
+  contenuFenetre,
+);
+
+function ouvrirReglages(): void {
+  arreterOutilsCarte();
+  ui.reglagesOuverts = true;
+  contenuFenetre.scrollTop = 0;
+  history.pushState({ reglages: true }, '');
+  afficher();
+}
+
+function fermerReglages(): void {
+  if ((history.state as { reglages?: boolean } | null)?.reglages) history.back();
+  else {
+    ui.reglagesOuverts = false;
+    afficher();
+  }
+}
+
+window.addEventListener('popstate', () => {
+  if (!ui.reglagesOuverts) return;
+  ui.reglagesOuverts = false;
+  afficher();
+});
+
+function majFenetreReglages(s: Session | null): void {
+  fenetreReglages.hidden = !(ui.reglagesOuverts && s);
+  if (fenetreReglages.hidden) return;
+  const defilement = contenuFenetre.scrollTop;
+  remplir(contenuFenetre, ...contenuReglages(s));
+  contenuFenetre.scrollTop = defilement;
+}
+
 app.classList.add('mise-en-page');
-app.replaceChildren(zones.carte, volet);
+app.replaceChildren(zones.carte, volet, fenetreReglages);
 
 export function remplir(
   zone: HTMLElement,
@@ -322,6 +381,7 @@ export function afficher(): void {
     carte.definirCommandesDroite(null);
     carte.definirCommandesBas(null);
     carte.definirCartouche(null);
+    majFenetreReglages(null);
     return;
   }
   const s = ui.session;
@@ -405,23 +465,7 @@ export function afficher(): void {
     driveEnAttente() &&
       !drive.connecte() &&
       rond('nuage', 'Reconnecter Google Drive', () => void reconnecterDrive(), 'alerte'),
-    rond(
-      'reglages',
-      'Réglages',
-      () => {
-        arreterOutilsCarte();
-        if (ui.onglet === 'reglages') ui.onglet = ui.ongletAvantReglages;
-        else {
-          ui.ongletAvantReglages = ui.onglet;
-          ui.onglet = 'reglages';
-          // Volet replié : on l'ouvre à moitié pour voir les réglages.
-          if (ui.cran === 'replie') ui.cran = 'moitie';
-        }
-        zones.panneau.scrollTop = 0;
-        afficher();
-      },
-      ui.onglet === 'reglages' ? 'actif' : '',
-    ),
+    rond('reglages', 'Réglages', ouvrirReglages),
   );
   // En bas à droite, comme sur Google Maps : ma position et, GPS allumé, centrer dessus.
   const boutonsBas = el(
@@ -439,7 +483,7 @@ export function afficher(): void {
     ),
   );
 
-  const ICONES_ONGLETS: Record<OngletBas, Icone> = {
+  const ICONES_ONGLETS: Record<Onglet, Icone> = {
     modifier: 'modifier',
     guidage: 'lignes',
     suivi: 'suivi',
@@ -447,7 +491,7 @@ export function afficher(): void {
   };
   remplir(
     zones.onglets,
-    ...(Object.keys(ONGLETS) as OngletBas[]).map((o) =>
+    ...(Object.keys(ONGLETS) as Onglet[]).map((o) =>
       el(
         'button',
         {
@@ -548,19 +592,13 @@ export function afficher(): void {
         ...(ui.porteeFichiers === 'importer' ? contenuFichier(s) : panneauExport(s)),
       ];
       break;
-    case 'reglages':
-      contenu = contenuReglages(s);
-      break;
   }
   remplir(zones.panneau, msg, ...contenu);
 
   // Fichiers, Exporter : le bouton principal écrit l'export (sur la clé, ou en téléchargement).
   const exportEnCours = enExport();
   // Pas de distance à saisir pour l'optimisation du guidage (la largeur vient de l'outil).
-  const sansBouton =
-    ui.onglet === 'suivi' ||
-    ui.onglet === 'reglages' ||
-    (ui.onglet === 'fichiers' && !exportEnCours);
+  const sansBouton = ui.onglet === 'suivi' || (ui.onglet === 'fichiers' && !exportEnCours);
   const sansDistance =
     exportEnCours ||
     sansBouton ||
@@ -626,6 +664,7 @@ export function afficher(): void {
   carte.definirCommandesDroite(boutonsCarte);
   carte.definirCommandesBas(boutonsBas);
   carte.definirCartouche(cartouche);
+  majFenetreReglages(s);
   majMesure();
   poserVolet();
   carte.afficher(dessin(s));

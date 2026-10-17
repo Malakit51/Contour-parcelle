@@ -364,10 +364,7 @@ export function panneauExport(s: Session): HTMLElement[] {
   // 2. Version et ce qui change.
   const modifiees = new Set(parcellesModifiees(s.etat));
   const guidages = s.etat.guidages ?? [];
-  const parcelles = [...new Set([...modifiees, ...guidages.map((g) => g.parcelle)])].sort((a, b) =>
-    s.td.parcelles[a]!.nom.localeCompare(s.td.parcelles[b]!.nom, 'fr', { numeric: true }),
-  );
-  const ha = (m2: number) => (m2 / 10_000).toFixed(4).replace('.', ',');
+  const changements = modifiees.size + guidages.length;
   const version = el(
     'div',
     { class: 'info' },
@@ -444,43 +441,14 @@ export function panneauExport(s: Session): HTMLElement[] {
         ),
       );
     }),
-    parcelles.length === 0 && !(s.etat.supprimees?.length ?? 0)
+    // Le détail par parcelle est dans Suivi, Toutes : ici, seulement le résumé.
+    changements === 0 && !(s.etat.supprimees?.length ?? 0)
       ? el('div', { class: 'doux' }, `Aucun changement par rapport à ${s.nomFichier}.`)
-      : parcelles.length === 0
-        ? false
-        : el(
+      : changements > 0 &&
+          el(
             'div',
-            {},
-            el(
-              'div',
-              { class: 'doux' },
-              `Par rapport à ${s.nomFichier} : ${modifiees.size} contour(s) modifié(s), ${guidages.length} ligne(s) de guidage.`,
-            ),
-            el(
-              'table',
-              {},
-              el(
-                'tr',
-                {},
-                el('th', {}, 'Parcelle'),
-                el('th', {}, 'surface (ha)'),
-                el('th', {}, 'écart (ha)'),
-                el('th', {}, 'lignes'),
-              ),
-              ...parcelles.map((p) => {
-                const avant = Number(s.td.parcelles[p]!.surface?.texte ?? NaN);
-                const apres = nouvelleSurface(s.td, s.etat, p) ?? NaN;
-                const n = guidages.filter((g) => g.parcelle === p).length;
-                return el(
-                  'tr',
-                  {},
-                  el('td', {}, s.td.parcelles[p]!.nom),
-                  el('td', {}, ha(Math.round(apres))),
-                  el('td', {}, modifiees.has(p) ? haSigne(Math.round(apres) - avant) : '—'),
-                  el('td', {}, n > 0 ? String(n) : '—'),
-                );
-              }),
-            ),
+            { class: 'doux' },
+            `Par rapport à ${s.nomFichier} : ${modifiees.size} contour(s) modifié(s), ${guidages.length} ligne(s) de guidage.`,
           ),
   );
   // 3. Où ça part : emplacement retenu, autre façon d'exporter.

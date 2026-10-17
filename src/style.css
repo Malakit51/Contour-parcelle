@@ -1331,3 +1331,41 @@ button.nom-fiche svg {
   padding: 0 12px 8px;
   font-size: 0.85rem;
 }
+
+/* Engrenage : sauvegardes et réglages dans une fenêtre plein écran, par-dessus la carte. */
+.fenetre-reglages {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+.fenetre-reglages[hidden] {
+  display: none;
+}
+.fenetre-entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 10px 12px 6px 16px;
+}
+.fenetre-entete h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+.fenetre-contenu {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 8px 16px;
+}

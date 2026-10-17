@@ -32,11 +32,8 @@ export interface Session {
   couleurs: number[];
 }
 
-/** Onglets du bas. */
-export type OngletBas = 'modifier' | 'guidage' | 'suivi' | 'fichiers';
-/** « reglages » : panneau ouvert par l'engrenage de la carte, sans onglet en bas. */
-export type Onglet = OngletBas | 'reglages';
-export const ONGLETS: Record<OngletBas, string> = {
+export type Onglet = 'modifier' | 'guidage' | 'suivi' | 'fichiers';
+export const ONGLETS: Record<Onglet, string> = {
   modifier: 'Modifier',
   guidage: 'Guidage',
   suivi: 'Suivi',
@@ -186,8 +183,8 @@ export interface EtatInterface {
   onglet: Onglet;
   /** Onglet Fichiers : ce qui entre (TASKDATA, référence) ou ce qui sort (console, shapefile). */
   porteeFichiers: 'importer' | 'exporter';
-  /** Onglet à retrouver en refermant les réglages (deuxième appui sur l'engrenage). */
-  ongletAvantReglages: OngletBas;
+  /** Fenêtre plein écran de l'engrenage (sauvegardes et réglages) ouverte. */
+  reglagesOuverts: boolean;
   messageAffiche: { texte: string; erreur: boolean } | null;
   minuterieBulle: ReturnType<typeof setTimeout> | undefined;
   /** Mise en page « volet » (sinon classique). */
@@ -270,7 +267,7 @@ export const ui: EtatInterface = {
   porteeSuivi: 'parcelle',
   filtreSuivi: null,
   onglet: 'fichiers',
-  ongletAvantReglages: 'fichiers',
+  reglagesOuverts: false,
   porteeFichiers: 'importer',
   messageAffiche: null,
   minuterieBulle: undefined,
