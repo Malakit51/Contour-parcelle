@@ -7,7 +7,7 @@ declare const __VERSION__: string;
 declare const __DATE_VERSION__: string;
 
 export const VERSION = __VERSION__;
-export const TEXTE_VERSION = `Application : version ${__VERSION__} du ${__DATE_VERSION__}`;
+export const TEXTE_VERSION = `Jalon : version ${__VERSION__} du ${__DATE_VERSION__}`;
 
 const CLE_VERSION_VUE = 'contour-parcelle/version-vue';
 
@@ -18,7 +18,7 @@ export function annoncerMiseAJour(): void {
   if (vue === null || vue === VERSION) return;
   const avant = ui.message;
   ui.message = {
-    texte: `Application mise à jour : version ${VERSION}.` + (avant ? ` ${avant.texte}` : ''),
+    texte: `Jalon mis à jour : version ${VERSION}.` + (avant ? ` ${avant.texte}` : ''),
     erreur: avant?.erreur ?? false,
   };
 }

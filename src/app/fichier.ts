@@ -218,7 +218,22 @@ const section = (titre: string) => el('h2', { class: 'titre-section' }, titre);
 /** Onglet Fichiers, côté Importer : fichier ouvert, référence (sans fichier : tout, réglages compris). */
 export function contenuFichier(s: Session | null): Node[] {
   const contenu: Node[] = [
-    ...(s ? [] : [el('h1', {}, 'Contours parcelles')]),
+    // Écran d'ouverture : le logo et le nom de l'application.
+    ...(s
+      ? []
+      : [
+          el(
+            'div',
+            { class: 'accueil' },
+            el('img', { src: 'icone.svg', alt: '', width: '72', height: '72' }),
+            el(
+              'div',
+              {},
+              el('h1', {}, 'Jalon'),
+              el('div', { class: 'doux' }, 'Contours des parcelles pour la console'),
+            ),
+          ),
+        ]),
     // Fichier ouvert : ouvrir, référence, réinitialiser, fermer.
     section('Fichier ouvert'),
     el(

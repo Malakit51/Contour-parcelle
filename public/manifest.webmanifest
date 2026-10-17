@@ -1,8 +1,8 @@
 {
   "id": "contours-parcelles",
-  "name": "Contours parcelles",
-  "short_name": "Contours",
-  "description": "Corriger les contours des parcelles et préparer le TASKDATA de la console.",
+  "name": "Jalon",
+  "short_name": "Jalon",
+  "description": "Jalon : corriger les contours des parcelles et préparer le TASKDATA de la console.",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",

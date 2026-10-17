@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Jalon : une parcelle et le jalon du géomètre planté à son coin (point choisi, en violet). -->
+  <!-- Le dessin tient dans le cercle central de 80 % (icônes « maskable » découpées en rond). -->
+  <defs>
+    <clipPath id="parcelle"><path d="M96 262 L282 186 L420 336 L196 434 Z" /></clipPath>
+  </defs>
+  <rect width="512" height="512" fill="#1e5631" />
+  <g transform="translate(256 256) scale(0.88) translate(-256 -256)">
+    <path d="M96 262 L282 186 L420 336 L196 434 Z" fill="#9fcf8a" />
+    <g clip-path="url(#parcelle)" stroke="#7fb86a" stroke-width="14">
+      <path d="M20 380 L380 20 M70 430 L430 70 M120 480 L480 120 M170 530 L530 170 M220 580 L580 220" />
+    </g>
+    <path d="M96 262 L282 186 L420 336 L196 434 Z" fill="none" stroke="#fff" stroke-width="14" stroke-linejoin="round" />
+    <circle cx="96" cy="262" r="15" fill="#fff" />
+    <circle cx="420" cy="336" r="15" fill="#fff" />
+    <circle cx="196" cy="434" r="15" fill="#fff" />
+    <rect x="270" y="56" width="24" height="132" rx="4" fill="#fff" />
+    <rect x="270" y="78" width="24" height="24" fill="#e0362c" />
+    <rect x="270" y="126" width="24" height="24" fill="#e0362c" />
+    <path d="M294 58 L392 86 L294 114 Z" fill="#c026d3" />
+    <circle cx="282" cy="188" r="22" fill="#c026d3" stroke="#fff" stroke-width="9" />
+  </g>
+</svg>

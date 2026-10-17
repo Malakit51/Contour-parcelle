@@ -1402,3 +1402,18 @@ button.nom-fiche svg {
   min-height: 34px;
   padding: 4px 0;
 }
+
+/* Écran d'ouverture : logo et nom de l'application. */
+.accueil {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 8px 4px 4px;
+}
+.accueil img {
+  border-radius: 18px;
+  box-shadow: var(--ombre-flottante);
+}
+.accueil h1 {
+  margin: 0;
+}
