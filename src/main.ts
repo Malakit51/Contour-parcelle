@@ -7,6 +7,9 @@ import './style.css';
 import { afficher } from './app/mise-en-page';
 import { reprendreSession } from './app/travail';
 import { annoncerMiseAJour } from './app/version';
+import { appliquerTheme } from './app/theme';
+
+appliquerTheme();
 
 afficher();
 reprendreSession();

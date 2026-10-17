@@ -28,8 +28,9 @@
   --etat-a-confirmer: #f5a524;
   --etat-a-refaire: #e0362c;
 }
+/* Thème sombre : celui du téléphone, sauf thème imposé dans les Réglages (data-theme). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='clair']) {
     --fg: #e8ece9;
     --bg: #121614;
     --surface: #1c211e;
@@ -47,6 +48,30 @@
     --choix-texte: #e879f9;
     --bleu-lignes: #8fb0ff;
   }
+}
+:root[data-theme='sombre'] {
+  --fg: #e8ece9;
+  --bg: #121614;
+  --surface: #1c211e;
+  --seg: #262c28;
+  --ligne: #3a443d;
+  --ligne-douce: #2e3631;
+  --vert: #7cc48f;
+  --vert-fond: #2f7a47;
+  --vert-clair: #1f3a28;
+  --sel-texte: #f5b84a;
+  --rouge: #ef7a62;
+  --doux: #9aa59d;
+  --ombre: 0 1px 2px #0008;
+  --choisi: #343d37;
+  --choix-texte: #e879f9;
+  --bleu-lignes: #8fb0ff;
+}
+:root[data-theme='clair'] {
+  color-scheme: light;
+}
+:root[data-theme='sombre'] {
+  color-scheme: dark;
 }
 * {
   box-sizing: border-box;
@@ -743,9 +768,12 @@ button.rond.alerte {
   color: var(--fg);
 }
 @media (prefers-color-scheme: dark) {
-  .carte .leaflet-control-layers-toggle {
+  :root:not([data-theme='clair']) .carte .leaflet-control-layers-toggle {
     filter: invert(1);
   }
+}
+:root[data-theme='sombre'] .carte .leaflet-control-layers-toggle {
+  filter: invert(1);
 }
 .carte .leaflet-right .leaflet-control {
   margin-right: 12px;
@@ -1296,4 +1324,10 @@ button.nom-fiche {
 }
 button.nom-fiche svg {
   color: var(--doux);
+}
+
+/* Numéro de version de l'application, en bas des Réglages. */
+.version-appli {
+  padding: 0 12px 8px;
+  font-size: 0.85rem;
 }

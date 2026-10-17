@@ -22,6 +22,7 @@ import { afficher } from './mise-en-page';
 import { panneauReference } from './reference';
 import { changerNomAppareil, ecrireStockage, nomAppareil } from './stockage';
 import { TEXTE_VERSION } from './version';
+import { choisirTheme, themeChoisi } from './theme';
 import {
   charger,
   fermerFichier,
@@ -307,7 +308,35 @@ export function contenuReglages(s: Session | null): Node[] {
           ),
         ),
       ),
-      el('div', { class: 'doux' }, TEXTE_VERSION),
     ),
+    el(
+      'div',
+      { class: 'info' },
+      el('strong', {}, 'Thème'),
+      el(
+        'div',
+        { class: 'rangee' },
+        ...(
+          [
+            ['auto', 'Comme le téléphone'],
+            ['clair', 'Clair'],
+            ['sombre', 'Sombre'],
+          ] as const
+        ).map(([v, t]) =>
+          el(
+            'button',
+            {
+              class: themeChoisi() === v ? 'actif' : '',
+              onclick: () => {
+                choisirTheme(v);
+                afficher();
+              },
+            },
+            t,
+          ),
+        ),
+      ),
+    ),
+    el('div', { class: 'doux version-appli' }, TEXTE_VERSION),
   ];
 }
