@@ -15,6 +15,8 @@ import { boiteMesure, majMesure } from './mesure';
 import {
   apercuCollage,
   apercuCoupeCourante,
+  apercuFusionCourante,
+  choixActionCoupe,
   apercuSimplification,
   boutonSupprimerParcelle,
   cadreNouvelleParcelle,
@@ -25,6 +27,7 @@ import {
   panneauSelection,
   panneauCollage,
   panneauCoupe,
+  panneauFusion,
   panneauSimplification,
   raccourcis,
 } from './modifier';
@@ -65,7 +68,7 @@ function texteAppliquer(): string {
   }
   if (ui.mode === 'simplifier') return 'Simplifier';
   if (ui.mode === 'coller') return 'Coller';
-  if (ui.mode === 'couper') return 'Couper';
+  if (ui.mode === 'couper') return ui.actionCoupe === 'fusionner' ? 'Fusionner' : 'Couper';
   return 'Appliquer';
 }
 
@@ -454,7 +457,10 @@ export function afficher(): void {
     (ui.mode === 'limite' && ui.selLimite !== null) ||
     (ui.mode === 'sommet' && ui.selSommet !== null) ||
     ui.mode === 'guidage' ||
-    (ui.mode === 'couper' && ui.coupe !== null && ui.coupeMesure === 'distance');
+    (ui.mode === 'couper' &&
+      ui.actionCoupe === 'couper' &&
+      ui.coupe !== null &&
+      ui.coupeMesure === 'distance');
 
   let contenu: (Node | null | false)[];
   switch (ui.onglet) {
@@ -469,8 +475,11 @@ export function afficher(): void {
           modeBouton('couper', 'Couper'),
         ),
         (ui.mode === 'limite' || ui.mode === 'coller') && choixActionLimite(),
+        ui.mode === 'couper' && choixActionCoupe(),
         ui.mode === 'couper'
-          ? panneauCoupe(s)
+          ? ui.actionCoupe === 'fusionner'
+            ? panneauFusion(s)
+            : panneauCoupe(s)
           : ui.mode === 'simplifier'
             ? panneauSimplification(s)
             : ui.mode === 'guidage'
@@ -509,7 +518,10 @@ export function afficher(): void {
     enExport ||
     sansBouton ||
     (ui.onglet === 'guidage' && ui.porteeGuidage === 'optimiser') ||
-    (ui.onglet === 'modifier' && (ui.mode === 'simplifier' || ui.mode === 'coller'));
+    (ui.onglet === 'modifier' &&
+      (ui.mode === 'simplifier' ||
+        ui.mode === 'coller' ||
+        (ui.mode === 'couper' && ui.actionCoupe === 'fusionner')));
   const peutAppliquer = enExport
     ? exportAJour() !== null
     : (ui.mode === 'limite' && ui.selLimite !== null && ui.sensLimite !== null) ||
@@ -520,6 +532,7 @@ export function afficher(): void {
       (ui.mode === 'guidage' && apercuGuidages(s).length > 0) ||
       (ui.mode === 'coller' && 'etat' in (apercuCollage(s) ?? {})) ||
       (ui.mode === 'couper' && 'coupe' in (apercuCoupeCourante(s) ?? {})) ||
+      (ui.mode === 'couper' && 'contour' in (apercuFusionCourante(s) ?? {})) ||
       (ui.mode === 'simplifier' &&
         (apercuSimplification(s)?.bilan.some((b) => b.apres !== b.avant || b.ecartMax > 0) ??
           false));

@@ -305,6 +305,7 @@ export function effacerSelection(): void {
   ui.limiteGlisse = null;
   ui.coupe = null;
   ui.coupeGarder = null;
+  ui.fusion = null;
   ui.exportPrepare = null;
 }
 

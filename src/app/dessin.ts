@@ -17,7 +17,12 @@ import {
 } from './etat';
 import { apercuGuidages, coinsGuidage, optimisationCourante } from './guidage';
 import { afficher } from './mise-en-page';
-import { apercuCollage, apercuCoupeCourante, apercuSimplification } from './modifier';
+import {
+  apercuCollage,
+  apercuCoupeCourante,
+  apercuFusionCourante,
+  apercuSimplification,
+} from './modifier';
 import { directionDuSegment } from '../geometrie/passages';
 import { planLocal } from '../geometrie/plan';
 import { anneauxLL } from './vue';
@@ -168,6 +173,20 @@ export function dessin(s: Session): Dessin {
         d.points.push({ p: r.coupe.ligne[1], couleur: SEL, rayon: 7 });
       }
     }
+  }
+  // Fusion : la voisine en violet, le contour fusionné en pointillés.
+  if (enEdition && ui.mode === 'couper' && ui.actionCoupe === 'fusionner' && ui.fusion !== null) {
+    const X = s.etat.anneaux.findIndex(
+      (a, i) => a.parcelle === ui.fusion && a.type === 1 && !anneauIgnore(s.etat, i),
+    );
+    if (X >= 0) {
+      const pts = s.etat.anneaux[X]!.sommets.map(latLon);
+      pts.forEach((q, k) =>
+        d.traits.push({ a: q, b: pts[(k + 1) % pts.length]!, couleur: SEL, epaisseur: 4 }),
+      );
+    }
+    const r = apercuFusionCourante(s);
+    if (r && 'contour' in r) d.fantomes = [...(d.fantomes ?? []), r.contour];
   }
   // Optimisation : passages de la proposition choisie, en traits fins sous la ligne AB.
   const optim = enEdition ? optimisationCourante(s) : null;

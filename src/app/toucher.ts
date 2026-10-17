@@ -218,6 +218,23 @@ export function toucher(
       return;
     }
   }
+  // Fusion : toucher une autre parcelle (sa limite ou son intérieur) la choisit comme voisine à
+  // reprendre ; la parcelle choisie reste.
+  if (ui.mode === 'couper' && ui.actionCoupe === 'fusionner' && ui.parcelleCourante !== null) {
+    const autre = anneaux.findIndex(
+      (pts, i) =>
+        s.etat.anneaux[i]!.type === 1 &&
+        s.etat.anneaux[i]!.parcelle !== ui.parcelleCourante &&
+        pointDansPolygone(p, pts),
+    );
+    if (autre >= 0) {
+      ui.fusion = s.etat.anneaux[autre]!.parcelle;
+      ui.message = null;
+      ui.onglet = ongletDuMode();
+      afficher();
+      return;
+    }
+  }
   let meilleur: { anneau: number; indice: number; d: number } | null = null;
   for (const i of ordre) {
     const pts = anneaux[i]!;

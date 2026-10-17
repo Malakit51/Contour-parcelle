@@ -69,6 +69,10 @@ export interface EtatInterface {
   coupeMesure: 'distance' | 'surface';
   /** Morceau qui garde la parcelle ; null : le plus grand. */
   coupeGarder: 'bord' | 'autre' | null;
+  /** Mode Couper : couper la parcelle choisie, ou la fusionner avec une voisine. */
+  actionCoupe: 'couper' | 'fusionner';
+  /** Fusion : la voisine touchée, qui sera retirée (la parcelle choisie garde son nom). */
+  fusion: number | null;
   /** Mode Bord : dernière action choisie (Simplifier ou Coller), reprise au retour dans le mode. */
   /** Mode Limite : décaler la limite touchée, ou coller un bord sur la voisine. */
   actionLimite: 'limite' | 'coller';
@@ -213,6 +217,8 @@ export const ui: EtatInterface = {
   coupe: null,
   coupeMesure: 'distance',
   coupeGarder: null,
+  actionCoupe: 'couper',
+  fusion: null,
   actionLimite: 'limite',
   typeGuidage: 'ab',
   guidageInterieur: true,

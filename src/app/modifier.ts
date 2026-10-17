@@ -22,6 +22,8 @@ import { planLocal } from '../geometrie/plan';
 import { ecartMaximal } from '../geometrie/simplification';
 import { el } from '../ui/dom';
 import { apercuCoupe, couperParcelle, type Coupe } from '../edition/coupe';
+import { apercuFusion, fusionnerParcelles } from '../edition/fusion';
+import { type LatLon } from '../geometrie/plan';
 import { ajouterZoneExclue } from '../edition/zones-exclues';
 import { surfaceZone, texteSurface } from '../suivi/zones';
 import { commencerTrace } from './trace-zone';
@@ -186,6 +188,23 @@ export function appliquer(): void {
       if (!r || 'erreur' in r) throw new ErreurEdition(r?.erreur ?? 'Rien à coller.');
       quoi = `Bord de ${nomParcelle(s, ui.bord.anneau)} collé sur ${nomParcelle(s, ui.modele)} (écart max ${ecartLisible(r.bilan.ecartMax)}, ${r.bilan.avant} → ${r.bilan.apres} points)`;
       nouveau = r.etat;
+    } else if (ui.mode === 'couper' && ui.actionCoupe === 'fusionner') {
+      const a = ui.parcelleCourante;
+      const b = ui.fusion;
+      if (a === null || b === null)
+        throw new ErreurEdition('Touche la parcelle voisine à reprendre.');
+      const [na, nb] = [s.td.parcelles[a]!.nom, s.td.parcelles[b]!.nom];
+      const taches = s.td.parcelles[b]!.ajoutee
+        ? 0
+        : blocsDeParcelle(s.td.texte, s.td.parcelles[b]!.id).taches.length;
+      if (
+        !confirm(
+          `Fusionner ${nb} dans ${na} ?\n\n${na} garde son nom et ses tâches ; ${nb} est retirée du fichier${taches > 0 ? ` avec ses ${taches} tâche(s)` : ''} et ses lignes de guidage. « Annuler » la fait revenir.`,
+        )
+      )
+        return;
+      nouveau = fusionnerParcelles(s.td, s.etat, a, b);
+      quoi = `${nb} fusionnée dans ${na}`;
     } else if (ui.mode === 'couper' && ui.coupe) {
       const r = apercuCoupeCourante(s);
       if (!r || 'erreur' in r) throw new ErreurEdition(r?.erreur ?? 'Tape d’abord une distance.');
@@ -697,6 +716,103 @@ export function apercuCoupeCourante(
   } catch (e) {
     return { erreur: (e as Error).message };
   }
+}
+
+/** Mode Couper : couper la parcelle, ou la fusionner avec une voisine. */
+export function choixActionCoupe(): HTMLElement {
+  return el(
+    'div',
+    { class: 'rangee' },
+    ...(
+      [
+        ['couper', 'Couper'],
+        ['fusionner', 'Fusionner'],
+      ] as const
+    ).map(([v, t]) =>
+      el(
+        'button',
+        {
+          class: ui.actionCoupe === v ? 'actif' : '',
+          onclick: () => {
+            if (ui.actionCoupe === v) return;
+            ui.actionCoupe = v;
+            ui.coupe = null;
+            ui.fusion = null;
+            afficher();
+          },
+        },
+        t,
+      ),
+    ),
+  );
+}
+
+/** Aperçu de la fusion en cours : contour de la parcelle fusionnée, ou l'erreur. */
+export function apercuFusionCourante(
+  s: Session,
+): { contour: LatLon[] } | { erreur: string } | null {
+  const a = ui.parcelleCourante;
+  const b = ui.fusion;
+  if (ui.mode !== 'couper' || ui.actionCoupe !== 'fusionner' || a === null || b === null || a === b)
+    return null;
+  try {
+    return { contour: apercuFusion(s.etat, a, b) };
+  } catch (e) {
+    return { erreur: (e as Error).message };
+  }
+}
+
+export function panneauFusion(s: Session): HTMLElement {
+  const a = ui.parcelleCourante;
+  if (a === null) {
+    return el(
+      'div',
+      { class: 'info' },
+      el('strong', {}, 'Fusionner deux parcelles'),
+      el('div', { class: 'sens' }, 'Touche la parcelle qui garde son nom.'),
+    );
+  }
+  const na = s.td.parcelles[a]!.nom;
+  const b = ui.fusion !== a ? ui.fusion : null;
+  if (b === null) {
+    return el(
+      'div',
+      { class: 'info' },
+      el('strong', {}, `Fusionner avec ${na}`),
+      el('div', { class: 'sens' }, `Touche l’intérieur de la voisine à reprendre dans ${na}.`),
+    );
+  }
+  const nb = s.td.parcelles[b]!.nom;
+  const r = apercuFusionCourante(s);
+  const surface = (p: number) => nouvelleSurface(s.td, s.etat, p) ?? 0;
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, `Fusionner ${nb} dans ${na}`),
+    r && 'erreur' in r
+      ? el('div', { class: 'erreur' }, r.erreur)
+      : el(
+          'div',
+          { class: 'doux' },
+          `${na} (${haTexte(surface(a))}) reprend ${nb} (${haTexte(surface(b))}) : ${haTexte(surface(a) + surface(b))}. ${na} garde son nom et ses tâches ; ${nb} est retirée du fichier.`,
+        ),
+    el(
+      'div',
+      { class: 'rangee' },
+      el(
+        'button',
+        {
+          class: 'petit',
+          onclick: () => {
+            ui.parcelleCourante = b;
+            ui.fusion = a;
+            afficher();
+          },
+        },
+        `Inverser : ${nb} garde son nom`,
+      ),
+    ),
+  );
 }
 
 /** Mode Couper : le côté touché, la distance ou la surface, et le morceau qui garde la parcelle. */
