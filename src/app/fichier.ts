@@ -3,6 +3,7 @@
 import { encoder } from '../isoxml/octets';
 import { aujourdhui } from '../suivi/suivi';
 import { el } from '../ui/dom';
+import { cadrePhotoHorsReseau } from './photo-hors-reseau';
 import { panneauDrive } from './drive';
 import {
   CLE_DOSSIER_SAUVEGARDES,
@@ -271,6 +272,7 @@ export function contenuFichier(s: Session | null): Node[] {
     // Réglages : mise en page, version de l'application.
     section('Réglages'),
     ...[panneauDossierSauvegardes()].filter((x): x is HTMLElement => x !== null),
+    ...(s ? [cadrePhotoHorsReseau(s)] : []),
     el(
       'div',
       { class: 'info' },

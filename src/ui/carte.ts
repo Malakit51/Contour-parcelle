@@ -55,6 +55,13 @@ const wmts = (couche: string, format: string, style = 'normal') =>
   '&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}';
 const ATTRIBUTION = '© IGN – Géoplateforme';
 
+/** Adresse d'une tuile de la photo, exactement comme la carte la demande (pour l'enregistrer). */
+export const urlTuilePhoto = (z: number, x: number, y: number) =>
+  wmts('ORTHOIMAGERY.ORTHOPHOTOS', 'image/jpeg')
+    .replace('{z}', String(z))
+    .replace('{y}', String(y))
+    .replace('{x}', String(x));
+
 const ll = (p: LatLon) => L.latLng(p[0], p[1]);
 
 /**
