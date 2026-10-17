@@ -19,7 +19,7 @@ import { ErreurEdition } from './operations';
 /** Plus petite parcelle acceptée (m²). */
 export const SURFACE_MIN_PARCELLE_M2 = 100;
 
-function parcelleVirtuelle(a: ParcelleAjoutee): Parcelle {
+export function parcelleVirtuelle(a: ParcelleAjoutee): Parcelle {
   return {
     id: a.id,
     guid: a.guid,

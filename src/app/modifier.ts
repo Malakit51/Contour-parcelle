@@ -21,6 +21,7 @@ import { blocsDeParcelle } from '../isoxml/ecriture';
 import { planLocal } from '../geometrie/plan';
 import { ecartMaximal } from '../geometrie/simplification';
 import { el } from '../ui/dom';
+import { apercuCoupe, couperParcelle, type Coupe } from '../edition/coupe';
 import { ajouterZoneExclue } from '../edition/zones-exclues';
 import { surfaceZone, texteSurface } from '../suivi/zones';
 import { commencerTrace } from './trace-zone';
@@ -185,6 +186,28 @@ export function appliquer(): void {
       if (!r || 'erreur' in r) throw new ErreurEdition(r?.erreur ?? 'Rien à coller.');
       quoi = `Bord de ${nomParcelle(s, ui.bord.anneau)} collé sur ${nomParcelle(s, ui.modele)} (écart max ${ecartLisible(r.bilan.ecartMax)}, ${r.bilan.avant} → ${r.bilan.apres} points)`;
       nouveau = r.etat;
+    } else if (ui.mode === 'couper' && ui.coupe) {
+      const r = apercuCoupeCourante(s);
+      if (!r || 'erreur' in r) throw new ErreurEdition(r?.erreur ?? 'Tape d’abord une distance.');
+      const { coupe, garder } = r;
+      const p = ui.coupe.parcelle;
+      const ancien = s.td.parcelles[p]!.nom;
+      const nom = prompt(
+        `Nom de la nouvelle parcelle (le morceau ${garder === 'bord' ? 'de l’autre côté' : 'côté bord'}, ${haTexte(garder === 'bord' ? coupe.surfaceAutre : coupe.surfaceBord)})`,
+        `${ancien} B`,
+      );
+      if (nom === null) return;
+      const { etat: e, nouvelle } = couperParcelle(
+        s.td,
+        s.etat,
+        p,
+        ui.coupe.segment,
+        coupe.distance,
+        garder,
+        nom,
+      );
+      quoi = `${ancien} coupée à ${enMetres(coupe.distance)} m du côté choisi : ${s.td.parcelles[nouvelle]!.nom} créée`;
+      nouveau = e;
     } else if (ui.mode === 'guidage' && apercuGuidages(s).length > 0) {
       const gs = apercuGuidages(s);
       const cote = `${enMetres(Math.abs(d))} m ${ui.guidageInterieur ? 'à l’intérieur' : 'à l’extérieur'}`;
@@ -650,6 +673,116 @@ export function raccourcis(): HTMLElement {
         v > 0 ? `+${enMetres(v)}` : `−${enMetres(-v)}`,
       ),
     ),
+  );
+}
+
+const haTexte = (m2: number) => `${(m2 / 10000).toFixed(2).replace('.', ',')} ha`;
+
+/** Aperçu de la coupe en cours (côté touché, distance ou surface tapée), ou son erreur. */
+export function apercuCoupeCourante(
+  s: Session,
+): { coupe: Coupe; garder: 'bord' | 'autre' } | { erreur: string } | null {
+  const c = ui.coupe;
+  if (ui.mode !== 'couper' || !c || c.parcelle !== ui.parcelleCourante || metres() <= 0)
+    return null;
+  try {
+    const coupe = apercuCoupe(
+      s.etat,
+      c.parcelle,
+      c.segment,
+      ui.coupeMesure === 'distance' ? { distance: metres() } : { surface: metres() * 10000 },
+    );
+    const garder = ui.coupeGarder ?? (coupe.surfaceBord > coupe.surfaceAutre ? 'bord' : 'autre');
+    return { coupe, garder };
+  } catch (e) {
+    return { erreur: (e as Error).message };
+  }
+}
+
+/** Mode Couper : le côté touché, la distance ou la surface, et le morceau qui garde la parcelle. */
+export function panneauCoupe(s: Session): HTMLElement {
+  const c = ui.coupe;
+  if (!c || c.parcelle !== ui.parcelleCourante) {
+    return el(
+      'div',
+      { class: 'info' },
+      el('strong', {}, 'Couper une parcelle'),
+      el('div', { class: 'sens' }, 'Touche le côté de la parcelle parallèlement auquel couper.'),
+    );
+  }
+  const nom = s.td.parcelles[c.parcelle]!.nom;
+  const r = apercuCoupeCourante(s);
+  const cartes = <T extends string>(
+    valeurs: [T, string, string][],
+    actuel: T,
+    changer: (v: T) => void,
+  ) =>
+    el(
+      'div',
+      { class: 'cartes-sens' },
+      ...valeurs.map(([v, titre, effet]) =>
+        el(
+          'button',
+          {
+            class: `carte-sens${v === actuel ? ' choisie' : ''}`,
+            onclick: () => {
+              changer(v);
+              afficher();
+            },
+          },
+          el('span', { class: 'carte-sens-titre' }, titre),
+          el('span', { class: 'carte-sens-effet' }, effet),
+        ),
+      ),
+    );
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, `Couper ${nom} parallèlement au côté violet`),
+    cartes(
+      [
+        ['distance', 'À une distance', 'en m du côté'],
+        ['surface', 'Pour une surface', 'en ha, côté bord'],
+      ],
+      ui.coupeMesure,
+      (v) => {
+        ui.coupeMesure = v;
+        ui.saisie = '';
+      },
+    ),
+    !r &&
+      el(
+        'div',
+        { class: 'sens' },
+        ui.coupeMesure === 'distance'
+          ? 'Tape la distance (m) dans la case du bas.'
+          : 'Tape la surface côté bord (ha) dans la case du bas.',
+      ),
+    r && 'erreur' in r && el('div', { class: 'erreur' }, r.erreur),
+    r &&
+      'coupe' in r &&
+      el(
+        'div',
+        { class: 'doux' },
+        `Ligne de coupe à ${enMetres(r.coupe.distance)} m du côté · côté bord ${haTexte(r.coupe.surfaceBord)} · autre côté ${haTexte(r.coupe.surfaceAutre)}`,
+      ),
+    r &&
+      'coupe' in r &&
+      cartes(
+        [
+          ['bord', `${nom} garde le côté bord`, haTexte(r.coupe.surfaceBord)],
+          ['autre', `${nom} garde l’autre côté`, haTexte(r.coupe.surfaceAutre)],
+        ],
+        r.garder,
+        (v) => (ui.coupeGarder = v),
+      ),
+    r &&
+      'coupe' in r &&
+      el(
+        'div',
+        { class: 'doux' },
+        'L’autre morceau devient une nouvelle parcelle (son nom est demandé). La ligne de coupe devient une limite commune.',
+      ),
   );
 }
 

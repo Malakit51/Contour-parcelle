@@ -17,7 +17,9 @@ import {
 } from './etat';
 import { apercuGuidages, coinsGuidage, optimisationCourante } from './guidage';
 import { afficher } from './mise-en-page';
-import { apercuCollage, apercuSimplification } from './modifier';
+import { apercuCollage, apercuCoupeCourante, apercuSimplification } from './modifier';
+import { directionDuSegment } from '../geometrie/passages';
+import { planLocal } from '../geometrie/plan';
 import { anneauxLL } from './vue';
 
 export function dessin(s: Session): Dessin {
@@ -143,6 +145,29 @@ export function dessin(s: Session): Dessin {
     });
     d.points.push({ p: vue.points[0]!, couleur: SEL, rayon: 8 });
     d.points.push({ p: vue.points.at(-1)!, couleur: SEL, rayon: 8 });
+  }
+  // Couper : le côté touché en violet, la ligne de coupe en violet plus fin, l'ancien contour.
+  if (enEdition && ui.mode === 'couper' && ui.coupe && ui.coupe.parcelle === ui.parcelleCourante) {
+    const X = s.etat.anneaux.findIndex(
+      (a, i) => a.parcelle === ui.coupe!.parcelle && a.type === 1 && !anneauIgnore(s.etat, i),
+    );
+    if (X >= 0) {
+      const ext = s.etat.anneaux[X]!.sommets.map(latLon);
+      const plan = planLocal(ext[0]!);
+      const ids = directionDuSegment(
+        ext.map((p) => plan.versXY(p)),
+        ui.coupe.segment,
+      ).sommets;
+      ids.forEach((i, k) => {
+        if (k > 0) d.traits.push({ a: ext[ids[k - 1]!]!, b: ext[i]!, couleur: SEL, epaisseur: 7 });
+      });
+      const r = apercuCoupeCourante(s);
+      if (r && 'coupe' in r) {
+        d.traits.push({ a: r.coupe.ligne[0], b: r.coupe.ligne[1], couleur: SEL, epaisseur: 4 });
+        d.points.push({ p: r.coupe.ligne[0], couleur: SEL, rayon: 7 });
+        d.points.push({ p: r.coupe.ligne[1], couleur: SEL, rayon: 7 });
+      }
+    }
   }
   // Optimisation : passages de la proposition choisie, en traits fins sous la ligne AB.
   const optim = enEdition ? optimisationCourante(s) : null;

@@ -303,6 +303,8 @@ export function effacerSelection(): void {
   ui.selLimite = null;
   ui.selSommet = null;
   ui.limiteGlisse = null;
+  ui.coupe = null;
+  ui.coupeGarder = null;
   ui.exportPrepare = null;
 }
 

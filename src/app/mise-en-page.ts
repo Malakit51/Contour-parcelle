@@ -14,6 +14,7 @@ import { apercuGuidages, commandesLignes, panneauGuidage } from './guidage';
 import { boiteMesure, majMesure } from './mesure';
 import {
   apercuCollage,
+  apercuCoupeCourante,
   apercuSimplification,
   boutonSupprimerParcelle,
   cadreNouvelleParcelle,
@@ -23,6 +24,7 @@ import {
   commandesSommet,
   panneauSelection,
   panneauCollage,
+  panneauCoupe,
   panneauSimplification,
   raccourcis,
 } from './modifier';
@@ -63,6 +65,7 @@ function texteAppliquer(): string {
   }
   if (ui.mode === 'simplifier') return 'Simplifier';
   if (ui.mode === 'coller') return 'Coller';
+  if (ui.mode === 'couper') return 'Couper';
   return 'Appliquer';
 }
 
@@ -450,7 +453,8 @@ export function afficher(): void {
   const distanceUtile =
     (ui.mode === 'limite' && ui.selLimite !== null) ||
     (ui.mode === 'sommet' && ui.selSommet !== null) ||
-    ui.mode === 'guidage';
+    ui.mode === 'guidage' ||
+    (ui.mode === 'couper' && ui.coupe !== null && ui.coupeMesure === 'distance');
 
   let contenu: (Node | null | false)[];
   switch (ui.onglet) {
@@ -462,15 +466,18 @@ export function afficher(): void {
           modeBouton('limite', 'Limite'),
           modeBouton('sommet', 'Point'),
           modeBouton('simplifier', 'Simplifier'),
+          modeBouton('couper', 'Couper'),
         ),
         (ui.mode === 'limite' || ui.mode === 'coller') && choixActionLimite(),
-        ui.mode === 'simplifier'
-          ? panneauSimplification(s)
-          : ui.mode === 'guidage'
-            ? panneauGuidage(s)
-            : ui.mode === 'coller'
-              ? panneauCollage(s)
-              : panneauSelection(s),
+        ui.mode === 'couper'
+          ? panneauCoupe(s)
+          : ui.mode === 'simplifier'
+            ? panneauSimplification(s)
+            : ui.mode === 'guidage'
+              ? panneauGuidage(s)
+              : ui.mode === 'coller'
+                ? panneauCollage(s)
+                : panneauSelection(s),
         // Recoller sur l'ancien TASKDATA se fait point par point : le remplacement est à côté.
         ui.mode === 'sommet' && panneauRemplacement(s),
         distanceUtile && raccourcis(),
@@ -512,6 +519,7 @@ export function afficher(): void {
         ui.sensGlisse !== null) ||
       (ui.mode === 'guidage' && apercuGuidages(s).length > 0) ||
       (ui.mode === 'coller' && 'etat' in (apercuCollage(s) ?? {})) ||
+      (ui.mode === 'couper' && 'coupe' in (apercuCoupeCourante(s) ?? {})) ||
       (ui.mode === 'simplifier' &&
         (apercuSimplification(s)?.bilan.some((b) => b.apres !== b.avant || b.ecartMax > 0) ??
           false));
@@ -529,7 +537,13 @@ export function afficher(): void {
       icone('annuler', 24),
     ),
     // Pas de distance là où elle ne sert pas : le bouton prend la place.
-    !sansDistance && el('label', { class: 'case-distance' }, champDistance, el('span', {}, 'm')),
+    !sansDistance &&
+      el(
+        'label',
+        { class: 'case-distance' },
+        champDistance,
+        el('span', {}, ui.mode === 'couper' && ui.coupeMesure === 'surface' ? 'ha' : 'm'),
+      ),
     // Suivi et Fichier : rien à appliquer, seul « Annuler » reste.
     !sansBouton &&
       (boutonAppliquer = el(

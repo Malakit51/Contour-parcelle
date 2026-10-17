@@ -60,9 +60,15 @@ export interface EtatInterface {
   suiviNonEnregistre: boolean;
   /** Couleur des parcelles sur la carte : selon l'état du contour, ou pour distinguer les voisines. */
   couleursParEtat: boolean;
-  mode: 'limite' | 'sommet' | 'simplifier' | 'guidage' | 'coller';
+  mode: 'limite' | 'sommet' | 'simplifier' | 'guidage' | 'coller' | 'couper';
   /** Mode de l'onglet Modifier, repris en revenant de l'onglet Guidage. */
-  modeModifier: 'limite' | 'sommet' | 'simplifier' | 'coller';
+  modeModifier: 'limite' | 'sommet' | 'simplifier' | 'coller' | 'couper';
+  /** Mode Couper : côté touché (segment du contour extérieur de la parcelle). */
+  coupe: { parcelle: number; segment: number } | null;
+  /** La case du bas donne la distance au côté (m) ou la surface côté bord (ha). */
+  coupeMesure: 'distance' | 'surface';
+  /** Morceau qui garde la parcelle ; null : le plus grand. */
+  coupeGarder: 'bord' | 'autre' | null;
   /** Mode Bord : dernière action choisie (Simplifier ou Coller), reprise au retour dans le mode. */
   /** Mode Limite : décaler la limite touchée, ou coller un bord sur la voisine. */
   actionLimite: 'limite' | 'coller';
@@ -204,6 +210,9 @@ export const ui: EtatInterface = {
   mode: 'limite',
   modele: null,
   modeModifier: 'limite',
+  coupe: null,
+  coupeMesure: 'distance',
+  coupeGarder: null,
   actionLimite: 'limite',
   typeGuidage: 'ab',
   guidageInterieur: true,
