@@ -540,7 +540,8 @@ export function afficher(): void {
   // Raccourcis de distance : seulement quand une distance sert.
   const distanceUtile =
     (ui.mode === 'limite' && ui.selLimite !== null) ||
-    (ui.mode === 'sommet' && ui.selSommet !== null) ||
+    // Mode Point, croix dans le volet : les raccourcis sont à côté de la croix.
+    (ui.mode === 'sommet' && ui.selSommet !== null && !croixDansLeVolet()) ||
     ui.mode === 'guidage' ||
     (ui.mode === 'couper' &&
       ui.actionCoupe === 'couper' &&

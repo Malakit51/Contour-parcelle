@@ -221,7 +221,7 @@ body {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
   align-items: start;
-  margin: 0 0 10px;
+  margin: 0 0 4px;
 }
 .commandes-point .croix {
   display: grid;
@@ -242,12 +242,15 @@ body {
 }
 .glisse-point {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   font-size: 0.9rem;
 }
 .coordonnees {
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* Flèches du sens, posées sur la carte : blanches, violettes une fois choisies. */
 .fleche-limite {
@@ -1380,4 +1383,22 @@ button.nom-fiche svg {
   padding: 8px 6px;
   min-width: 0;
   white-space: nowrap;
+}
+
+/* Mode Point : supprimer et ajouter, à droite de la croix. */
+.actions-point {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.actions-point button {
+  padding: 6px 2px;
+  min-width: 0;
+}
+.glisse-point .raccourcis {
+  grid-template-columns: repeat(3, 1fr);
+}
+.glisse-point .raccourcis button {
+  min-height: 34px;
+  padding: 4px 0;
 }

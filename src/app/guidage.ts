@@ -2,7 +2,6 @@
 
 import { type Guidage } from '../edition/etat';
 import {
-  aControler,
   COTE_MIN_M,
   jeux,
   lignesDeParcelle,
@@ -17,7 +16,7 @@ import { CLE_JEUX_MASQUES, CLE_SEUIL_COINS, type Session, SEUILS_COINS, ui } fro
 import { afficher, ouvrirReglages } from './mise-en-page';
 import { ecrireStockage } from './stockage';
 import { metres, modifier } from './travail';
-import { cadrerParcelle, carte } from './vue';
+import { carte } from './vue';
 import {
   lignesOptimisees,
   lignesTourniere,
@@ -161,17 +160,6 @@ export function apercuGuidages(s: Session): Guidage[] {
   return s.td.parcelles.flatMap((_, p) => lignesParcelle(s, p)?.lignes ?? []);
 }
 
-/** Parcelles à contrôler après « Toutes les parcelles » : pas exactement 4 coins, ou un petit côté sans ligne. */
-export function parcellesAControler(s: Session): number[] {
-  return s.td.parcelles
-    .map((_, p) => ({ p, r: lignesParcelle(s, p) }))
-    .filter(({ r }) => r && aControler(r))
-    .map(({ p }) => p)
-    .sort((a, b) =>
-      s.td.parcelles[a]!.nom.localeCompare(s.td.parcelles[b]!.nom, 'fr', { numeric: true }),
-    );
-}
-
 /**
  * Toute la parcelle courante : coins du contour extérieur (seuil réglé) et une ligne par côté
  * d'au moins COTE_MIN_M mètres, droite AB si le côté est droit, sinon courbe.
@@ -197,7 +185,6 @@ export function apercuGuidage(s: Session): Guidage | null {
 export function panneauToutes(s: Session): HTMLElement {
   const lignes = apercuGuidages(s);
   const parcelles = new Set(lignes.map((g) => g.parcelle)).size;
-  const aControler = parcellesAControler(s);
   const toutes = s.etat.guidages ?? [];
   return el(
     'div',
@@ -219,27 +206,6 @@ export function panneauToutes(s: Session): HTMLElement {
             ),
         },
         `Supprimer toutes les lignes (${toutes.length})`,
-      ),
-    aControler.length > 0 &&
-      el(
-        'div',
-        { class: 'rangee' },
-        el('span', { class: 'sens' }, 'À contrôler :'),
-        ...aControler.map((p) =>
-          el(
-            'button',
-            {
-              class: 'petit',
-              onclick: () => {
-                ui.porteeGuidage = 'parcelle';
-                ui.parcelleCourante = p;
-                afficher();
-                cadrerParcelle(p);
-              },
-            },
-            s.td.parcelles[p]!.nom,
-          ),
-        ),
       ),
   );
 }

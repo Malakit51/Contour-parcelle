@@ -456,43 +456,63 @@ export function panneauExport(s: Session): HTMLElement[] {
           ),
   );
   // 3. Où ça part : emplacement retenu, autre façon d'exporter.
-  const ou = el(
-    'div',
-    { class: 'info' },
-    // Emplacement retenu (la clé), ou ce qu'il faut faire du fichier téléchargé.
-    ecritureDossierPossible()
-      ? ui.emplacementConnu && el('div', { class: 'doux' }, `Sur « ${ui.emplacementConnu} »`)
-      : el(
+  // Où part l'export : la clé retenue (Android la nomme souvent par un numéro, « 3A85-1F2C »),
+  // ou le téléchargement de TASKDATA.XML seul.
+  const dossier = nomDossierVersion(prochaineVersion());
+  const ou = ecritureDossierPossible()
+    ? el(
+        'div',
+        { class: 'info' },
+        el('strong', {}, 'Où enregistrer'),
+        el(
           'div',
           { class: 'doux' },
-          `Mets ${NOM_FICHIER} dans un dossier ${NOM_DOSSIER} sur la clé.`,
+          ui.emplacementConnu
+            ? `Le bouton du bas crée le dossier « ${dossier} » sur « ${ui.emplacementConnu} » : la clé USB (ou le dossier) choisie au dernier export. Android la nomme souvent par un numéro.`
+            : `Le bouton du bas te demandera où créer le dossier « ${dossier} » : choisis la clé USB elle-même (pas un dossier TASKDATA).`,
         ),
-    el(
-      'div',
-      { class: 'rangee' },
-      ecritureDossierPossible() &&
-        ui.emplacementConnu &&
         el(
-          'button',
-          {
-            class: 'petit',
-            onclick: () => {
-              void oublierEmplacement().then(() => {
-                ui.emplacementConnu = null;
-                afficher();
-              });
-            },
-          },
-          'Changer d’emplacement',
+          'div',
+          { class: 'rangee' },
+          ui.emplacementConnu &&
+            el(
+              'button',
+              {
+                class: 'petit',
+                onclick: () => {
+                  void oublierEmplacement().then(() => {
+                    ui.emplacementConnu = null;
+                    afficher();
+                  });
+                },
+              },
+              'Choisir une autre clé',
+            ),
         ),
-      ecritureDossierPossible() &&
         el(
-          'button',
-          { class: 'petit', onclick: () => void telecharger('xml') },
-          `Télécharger ${NOM_FICHIER} seul`,
+          'div',
+          { class: 'doux' },
+          `Ou seulement le fichier ${NOM_FICHIER}, dans Téléchargements : à mettre toi-même dans un dossier ${NOM_DOSSIER} sur la clé.`,
         ),
-    ),
-  );
+        el(
+          'div',
+          { class: 'rangee' },
+          el(
+            'button',
+            { class: 'petit', onclick: () => void telecharger('xml') },
+            `Télécharger ${NOM_FICHIER}`,
+          ),
+        ),
+      )
+    : el(
+        'div',
+        { class: 'info' },
+        el(
+          'div',
+          { class: 'doux' },
+          `Le bouton du bas télécharge ${NOM_FICHIER} : mets-le dans un dossier ${NOM_DOSSIER} sur la clé.`,
+        ),
+      );
   const section = (titre: string) => el('h2', { class: 'titre-section' }, titre);
   return [
     section('Vers la console'),

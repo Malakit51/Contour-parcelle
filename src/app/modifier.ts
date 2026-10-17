@@ -563,7 +563,7 @@ export function panneauSelection(s: Session): HTMLElement {
   const boutonAjout = el(
     'button',
     {
-      class: ui.ajoutEnCours ? 'actif' : '',
+      class: ui.ajoutEnCours ? 'petit actif' : 'petit',
       onclick: () => {
         const actif = !ui.ajoutEnCours;
         effacerSelection();
@@ -572,7 +572,7 @@ export function panneauSelection(s: Session): HTMLElement {
         afficher();
       },
     },
-    ui.ajoutEnCours ? 'Annuler l’ajout' : 'Ajouter un point',
+    ui.ajoutEnCours ? 'Annuler' : ui.selSommet ? 'Ajouter' : 'Ajouter un point',
   );
   if (!ui.selSommet) {
     return el(
@@ -611,6 +611,17 @@ export function panneauSelection(s: Session): HTMLElement {
         ),
       )
     : el('div', { class: 'glisse-point' }, coordonnees);
+  // Supprimer et ajouter un point : à côté de la croix, pour tout avoir sans faire défiler.
+  // Dans le volet, les distances pré-remplies aussi : tout tient sans faire défiler.
+  glisse.append(
+    el(
+      'div',
+      { class: 'actions-point' },
+      el('button', { class: 'petit', onclick: supprimer }, 'Supprimer'),
+      boutonAjout,
+    ),
+  );
+  if (croixDansLeVolet()) glisse.append(raccourcis());
   return el(
     'div',
     { class: 'selection-limite' },
@@ -630,7 +641,6 @@ export function panneauSelection(s: Session): HTMLElement {
     croixDansLeVolet()
       ? el('div', { class: 'commandes-point' }, commandesSommet(), glisse)
       : glisse,
-    el('div', { class: 'rangee' }, el('button', { onclick: supprimer }, 'Supprimer'), boutonAjout),
     s.etat.anneaux[ref.anneau]!.type === 2 && boutonRetirerZone(s, ref.anneau),
   );
 }
