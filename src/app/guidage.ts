@@ -13,9 +13,9 @@ import {
 import { sommetsDuBord } from '../edition/operations';
 import { type LatLon } from '../geometrie/plan';
 import { el } from '../ui/dom';
-import { CLE_JEUX_MASQUES, type Session, SEUILS_COINS, ui } from './etat';
-import { afficher } from './mise-en-page';
-import { ecrireStockage, lireStockage } from './stockage';
+import { CLE_JEUX_MASQUES, CLE_SEUIL_COINS, type Session, SEUILS_COINS, ui } from './etat';
+import { afficher, ouvrirReglages } from './mise-en-page';
+import { ecrireStockage } from './stockage';
 import { metres, modifier } from './travail';
 import { cadrerParcelle, carte } from './vue';
 import {
@@ -123,30 +123,14 @@ export function commandesLignes(s: Session): HTMLElement | null {
   return el('div', {}, bouton, menu);
 }
 
-// Nom des lignes (outil, largeur…) : « Semoir 4 m » donne « Semoir 4 m 1 », « Semoir 4 m 2 »…
-// Retenu sur l'appareil. Case créée une seule fois (la recréer fermerait le clavier).
-export const CLE_NOM_LIGNES = 'contour-parcelle/nom-guidage';
-export const champNomLignes = el('input', {
-  type: 'text',
-  class: 'champ-nom',
-  enterkeyhint: 'done',
-  autocomplete: 'off',
-  'aria-label': 'Nom des lignes',
-});
-champNomLignes.value = lireStockage(CLE_NOM_LIGNES) ?? 'Guidage';
-champNomLignes.addEventListener('change', () => {
-  ecrireStockage(CLE_NOM_LIGNES, champNomLignes.value.trim() || null);
-});
-champNomLignes.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') champNomLignes.blur();
-});
-export const baseNomLignes = () => champNomLignes.value.trim() || 'Guidage';
+// Nom des lignes : celui de l'outil choisi (« Semoir 4 m » donne « Semoir 4 m 1 », « … 2 »…).
+export const baseNomLignes = () => outilCourant()?.nom ?? 'Guidage';
 
 /** Vrai si la ligne fait partie du jeu « base » (« base 1 », « base 2 »…). */
 /** Réglages des lignes de guidage tels que choisis dans le panneau. */
 export const reglagesGuidage = (): ReglagesGuidage => ({
   distance: Math.abs(metres()),
-  interieur: ui.guidageInterieur,
+  interieur: true,
   seuil: ui.seuilCoins,
   base: baseNomLignes(),
 });
@@ -390,38 +374,7 @@ export function panneauGuidage(s: Session): HTMLElement {
         ui.typeGuidage,
         (v) => (ui.typeGuidage = v),
       ),
-    cartes(
-      [
-        ['int', 'Vers l’intérieur', ''],
-        ['ext', 'Vers l’extérieur', ''],
-      ],
-      ui.guidageInterieur ? 'int' : 'ext',
-      (v) => (ui.guidageInterieur = v === 'int'),
-    ),
-    el(
-      'div',
-      { class: 'info reglages-guidage' },
-      el('label', { class: 'rangee' }, el('span', { class: 'doux' }, 'Nom'), champNomLignes),
-      ui.porteeGuidage !== 'bord' &&
-        el(
-          'div',
-          { class: 'rangee' },
-          el('span', { class: 'doux' }, 'Coins dès'),
-          ...SEUILS_COINS.map((v) =>
-            el(
-              'button',
-              {
-                class: `petit${v === ui.seuilCoins ? ' actif' : ''}`,
-                onclick: () => {
-                  ui.seuilCoins = v;
-                  afficher();
-                },
-              },
-              `${v}°`,
-            ),
-          ),
-        ),
-    ),
+    choixOutil(),
     ui.porteeGuidage === 'toutes' && panneauToutes(s),
     cadreLignes(s),
   );
@@ -516,64 +469,65 @@ function texteObstacles(prop: Proposition): string {
     .join(', ');
 }
 
-function panneauOptimisation(s: Session): (HTMLElement | false)[] {
+/** Choix de l'outil (nom des lignes ; largeur et tournière pour l'optimisation). */
+function choixOutil(): HTMLElement {
   const outil = outilCourant();
-  // Outils : un bouton par outil, et de quoi en ajouter, modifier ou retirer.
-  const outils = el(
+  return el(
     'div',
     { class: 'info reglages-guidage' },
-    el(
-      'div',
-      { class: 'rangee' },
-      ...ui.outils.map((o, i) =>
-        el(
-          'button',
-          {
-            class: o === outil ? 'actif' : '',
-            onclick: () => {
-              ui.outilChoisi = i;
-              ui.propositionChoisie = 0;
-              garderOutils();
-              afficher();
-            },
-          },
-          o.nom,
+    ui.outils.length === 0
+      ? el(
+          'div',
+          { class: 'rangee' },
+          el('span', { class: 'sens', style: 'flex:1' }, 'Ajoute tes outils dans les réglages.'),
+          el('button', { class: 'petit', onclick: ouvrirReglages }, 'Réglages'),
+        )
+      : el(
+          'div',
+          { class: 'rangee' },
+          ...ui.outils.map((o, i) =>
+            el(
+              'button',
+              {
+                class: o === outil ? 'actif' : '',
+                onclick: () => {
+                  ui.outilChoisi = i;
+                  ui.propositionChoisie = 0;
+                  garderOutils();
+                  afficher();
+                },
+              },
+              o.nom,
+            ),
+          ),
         ),
-      ),
-      el(
-        'button',
-        {
-          class: 'petit',
-          onclick: () => {
-            const o = saisirOutil();
-            if (!o) return;
-            ui.outils = [...ui.outils, o];
-            ui.outilChoisi = ui.outils.length - 1;
-            ui.propositionChoisie = 0;
-            garderOutils();
-            afficher();
-          },
-        },
-        'Ajouter un outil',
-      ),
-    ),
-    outil &&
+  );
+}
+
+/** Réglages : la liste des outils (nom, largeur, tournière), à ajouter, modifier ou retirer. */
+export function cadreOutils(): HTMLElement {
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, 'Outils'),
+    ...ui.outils.map((o) =>
       el(
         'div',
         { class: 'rangee' },
         el(
           'span',
-          { class: 'doux', style: 'flex:1' },
-          `Largeur ${m(outil.largeur)} · tournière ${m(outil.tourniere)}`,
+          { style: 'flex:1' },
+          el('strong', {}, o.nom),
+          el('span', { class: 'doux' }, ` · ${m(o.largeur)} · tournière ${m(o.tourniere)}`),
         ),
         el(
           'button',
           {
             class: 'petit',
             onclick: () => {
-              const o = saisirOutil(outil);
-              if (!o) return;
-              ui.outils = ui.outils.map((x) => (x === outil ? o : x));
+              const n = saisirOutil(o);
+              if (!n) return;
+              ui.outils = ui.outils.map((x) => (x === o ? n : x));
               garderOutils();
               afficher();
             },
@@ -585,8 +539,8 @@ function panneauOptimisation(s: Session): (HTMLElement | false)[] {
           {
             class: 'petit',
             onclick: () => {
-              if (!confirm(`Retirer l’outil « ${outil.nom} » ?`)) return;
-              ui.outils = ui.outils.filter((x) => x !== outil);
+              if (!confirm(`Retirer l’outil « ${o.nom} » ?`)) return;
+              ui.outils = ui.outils.filter((x) => x !== o);
               ui.outilChoisi = 0;
               garderOutils();
               afficher();
@@ -595,9 +549,60 @@ function panneauOptimisation(s: Session): (HTMLElement | false)[] {
           'Retirer',
         ),
       ),
+    ),
+    el(
+      'div',
+      { class: 'rangee' },
+      el(
+        'button',
+        {
+          onclick: () => {
+            const o = saisirOutil();
+            if (!o) return;
+            ui.outils = [...ui.outils, o];
+            ui.outilChoisi = ui.outils.length - 1;
+            garderOutils();
+            afficher();
+          },
+        },
+        'Ajouter un outil',
+      ),
+    ),
   );
+}
+
+/** Réglages : à partir de quel virage un sommet compte comme un coin (guidage, coupe). */
+export function cadreSeuilCoins(): HTMLElement {
+  return el(
+    'div',
+    { class: 'info' },
+    el('strong', {}, 'Coins des parcelles dès'),
+    el(
+      'div',
+      { class: 'rangee' },
+      ...SEUILS_COINS.map((v) =>
+        el(
+          'button',
+          {
+            class: v === ui.seuilCoins ? 'actif' : '',
+            onclick: () => {
+              ui.seuilCoins = v;
+              ecrireStockage(CLE_SEUIL_COINS, String(v));
+              afficher();
+            },
+          },
+          `${v}°`,
+        ),
+      ),
+    ),
+  );
+}
+
+function panneauOptimisation(s: Session): (HTMLElement | false)[] {
+  const outil = outilCourant();
+  const outils = choixOutil();
   if (!outil) {
-    return [outils, el('div', { class: 'sens' }, 'Ajoute ton outil : nom, largeur, tournière.')];
+    return [outils];
   }
   if (ui.parcelleCourante === null)
     return [outils, el('div', { class: 'sens' }, 'Touche une parcelle.')];
@@ -706,7 +711,11 @@ function panneauOptimisation(s: Session): (HTMLElement | false)[] {
           ),
         );
       })(),
-    el('div', { class: 'doux' }, `Largeur sur la console : ${m(outil.largeur)} exactement.`),
+    el(
+      'div',
+      { class: 'doux' },
+      `Largeur ${m(outil.largeur)} (exactement celle de la console) · tournière ${m(outil.tourniere)}`,
+    ),
   ];
 }
 

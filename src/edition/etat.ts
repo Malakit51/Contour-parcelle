@@ -48,6 +48,11 @@ export interface Etat {
   /** Zones exclues retirées (indices dans `anneaux`, anneaux de type 2) : la parcelle les reprend. */
   readonly zonesRetirees?: readonly number[];
   /**
+   * Retraits déjà partis dans un export (parcelles, zones exclues) : l'onglet Exporter ne les
+   * rappelle plus avec « Remettre ». N'entre pas dans le fichier produit.
+   */
+  readonly exportes?: { readonly parcelles: readonly number[]; readonly zones: readonly number[] };
+  /**
    * Parcelles créées dans l'éditeur (indice dans `TaskData.parcelles`, où elles sont ajoutées à la
    * suite de celles du fichier). Leurs anneaux ont `anneau: -1`.
    */

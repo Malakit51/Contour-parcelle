@@ -142,6 +142,11 @@ function panneauSuiviParcelle(s: Session): HTMLElement | null {
         p.nom,
         icone('modifier', 18),
       ),
+      el(
+        'span',
+        { class: 'surface-fiche', style: 'flex:1' },
+        ha(nouvelleSurface(s.td, s.etat, ui.parcelleCourante)),
+      ),
       f.date ? el('span', { class: 'doux' }, `depuis le ${dateFr(f.date)}`) : '',
     ),
     el(

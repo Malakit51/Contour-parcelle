@@ -3,6 +3,8 @@
 import { encoder } from '../isoxml/octets';
 import { aujourdhui } from '../suivi/suivi';
 import { el } from '../ui/dom';
+import { estSupprimee, type Etat } from '../edition/etat';
+import { sommetsPresqueCommuns } from '../edition/controles';
 import { cadrePhotoHorsReseau } from './photo-hors-reseau';
 import { panneauDrive } from './drive';
 import {
@@ -24,6 +26,7 @@ import { panneauReference } from './reference';
 import { changerNomAppareil, ecrireStockage, nomAppareil } from './stockage';
 import { TEXTE_VERSION } from './version';
 import { choisirTheme, themeChoisi } from './theme';
+import { cadreOutils, cadreSeuilCoins } from './guidage';
 import {
   charger,
   fermerFichier,
@@ -188,6 +191,28 @@ export function boutonFichier(): HTMLElement {
   return choix;
 }
 
+// Remarques recalculées sur les contours actuels (une fois par état) : un sommet presque commun
+// corrigé depuis l'ouverture (« Coller au voisin »…) n'est plus signalé.
+const remarques = new WeakMap<Etat, string[]>();
+function remarquesFichier(s: Session): string[] {
+  let r = remarques.get(s.etat);
+  if (!r) {
+    const vus = new Set<string>();
+    r = [];
+    for (const p of sommetsPresqueCommuns(s.td, s.etat, 1)) {
+      if (p.parcelles.some((q) => estSupprimee(s.etat, q))) continue;
+      const cle = `${p.noms[0]}|${p.noms[1]}|${p.distance.toFixed(3)}`;
+      if (vus.has(cle)) continue;
+      vus.add(cle);
+      r.push(
+        `${p.noms[0]} / ${p.noms[1]} : deux sommets presque communs, à ${(p.distance * 100).toFixed(0)} cm.`,
+      );
+    }
+    remarques.set(s.etat, r);
+  }
+  return r;
+}
+
 const section = (titre: string) => el('h2', { class: 'titre-section' }, titre);
 
 /** Onglet Fichiers, côté Importer : fichier ouvert, référence (sans fichier : tout, réglages compris). */
@@ -216,13 +241,13 @@ export function contenuFichier(s: Session | null): Node[] {
         ui.sessionNonGardee &&
         el('div', { class: 'erreur' }, 'Travail non enregistré sur cet appareil.'),
     ),
-    ...(s && s.alertesChargement.length > 0
+    ...(s && remarquesFichier(s).length > 0
       ? [
           el(
             'div',
             { class: 'info' },
             el('strong', {}, 'Remarques sur le fichier'),
-            ...s.alertesChargement.map((a) => el('div', {}, a)),
+            ...remarquesFichier(s).map((a) => el('div', {}, a)),
           ),
         ]
       : []),
@@ -282,6 +307,8 @@ export function contenuReglages(s: Session | null): Node[] {
     ...[panneauDossierSauvegardes()].filter((x): x is HTMLElement => x !== null),
     section('Réglages'),
     ...(s ? [cadrePhotoHorsReseau(s)] : []),
+    cadreOutils(),
+    cadreSeuilCoins(),
     el(
       'div',
       { class: 'info' },

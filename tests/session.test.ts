@@ -49,6 +49,14 @@ describe('session enregistrée', () => {
     expect(exporterEtat(relu.td, relu.etat)).toBe(exporterEtat(td, e));
   });
 
+  it('garde les retraits déjà exportés, sans changer le fichier produit', () => {
+    const { td, etat } = preparer(parcelles);
+    const e = { ...etat, supprimees: [1], exportes: { parcelles: [1], zones: [] } };
+    const relu = relireSession(JSON.parse(JSON.stringify(enregistrerSession(td, 'T', e, 'x'))));
+    expect(relu.etat.exportes).toEqual({ parcelles: [1], zones: [] });
+    expect(exporterEtat(td, e)).toBe(exporterEtat(td, { ...etat, supprimees: [1] }));
+  });
+
   it('se garde dans le stockage du téléphone', () => {
     const { td, etat } = preparer(parcelles);
     const memoire = new Map<string, string>();

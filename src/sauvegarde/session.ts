@@ -38,6 +38,8 @@ export interface SessionEnregistree {
   supprimees?: number[];
   /** Zones exclues retirées (indices des anneaux). */
   zonesRetirees?: number[];
+  /** Retraits déjà exportés (plus rappelés dans l'onglet Exporter). */
+  exportes?: { parcelles: number[]; zones: number[] };
 }
 
 export class ErreurSession extends Error {
@@ -74,6 +76,9 @@ export function enregistrerSession(
     ...(etat.guidages?.length ? { guidages: [...etat.guidages] } : {}),
     ...(etat.supprimees?.length ? { supprimees: [...etat.supprimees] } : {}),
     ...(etat.zonesRetirees?.length ? { zonesRetirees: [...etat.zonesRetirees] } : {}),
+    ...(etat.exportes
+      ? { exportes: { parcelles: [...etat.exportes.parcelles], zones: [...etat.exportes.zones] } }
+      : {}),
     ...(etat.ajoutees?.length ? { ajoutees: [...etat.ajoutees] } : {}),
     ...(etat.taches ? { taches: etat.taches } : {}),
     ...(etat.noms?.length ? { noms: [...etat.noms] } : {}),
@@ -138,6 +143,14 @@ export function relireSession(sauvegarde: unknown): {
       ...(guidages.length ? { guidages } : {}),
       ...(supprimees.length ? { supprimees } : {}),
       ...(zonesRetirees.length ? { zonesRetirees } : {}),
+      ...(s.exportes
+        ? {
+            exportes: {
+              parcelles: (s.exportes.parcelles ?? []).filter((p) => Number.isInteger(p)),
+              zones: (s.exportes.zones ?? []).filter((i) => Number.isInteger(i)),
+            },
+          }
+        : {}),
       ...(ajoutees.length ? { ajoutees } : {}),
       ...(s.taches === 'prevues' || s.taches === 'toutes' ? { taches: s.taches } : {}),
       ...(noms.length ? { noms } : {}),

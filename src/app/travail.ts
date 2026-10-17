@@ -1,6 +1,5 @@
 // Le travail en cours : ouverture, modifications, annulation, session gardée sur l’appareil.
 
-import { sommetsPresqueCommuns } from '../edition/controles';
 import { type Etat, etatInitial, latLon } from '../edition/etat';
 import { nouvelleSurface, parcellesModifiees } from '../edition/export';
 import { nettoyer } from '../edition/nettoyage';
@@ -147,16 +146,6 @@ export function ouvrir(
     tous.reduce((s, p) => s + p[0], 0) / tous.length,
     tous.reduce((s, p) => s + p[1], 0) / tous.length,
   ];
-  const alertesChargement = [];
-  const vus = new Set<string>();
-  for (const p of sommetsPresqueCommuns(td, initial, 1)) {
-    const cle = `${p.noms[0]}|${p.noms[1]}|${p.distance.toFixed(3)}`;
-    if (vus.has(cle)) continue;
-    vus.add(cle);
-    alertesChargement.push(
-      `${p.noms[0]} / ${p.noms[1]} : deux sommets presque communs, à ${(p.distance * 100).toFixed(0)} cm.`,
-    );
-  }
   ui.session = {
     td,
     nomFichier,
@@ -164,7 +153,6 @@ export function ouvrir(
     initial,
     etat: etat ?? initial,
     historique: [],
-    alertesChargement,
     couleurs: colorier(initial, td.parcelles.length),
   };
   appliquerNoms(td, ui.session.etat);

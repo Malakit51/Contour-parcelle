@@ -33,7 +33,7 @@ import {
 import { CLE_DOSSIER_SAUVEGARDES, type Session, ui } from './etat';
 import { afficher } from './mise-en-page';
 import { ecrireStockage } from './stockage';
-import { majSuivi, modifier } from './travail';
+import { garderSession, majSuivi, modifier } from './travail';
 import { remettreParcelle, remettreZone } from '../edition/operations';
 
 /** Écart de surface en hectares, signé, à 4 décimales : « +0,0395 ». */
@@ -180,6 +180,14 @@ export async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
     destination = `${NOM_FICHIER} (Téléchargements)`;
   }
   const s = ui.session;
+  // Les retraits partis dans cet export ne sont plus rappelés avec « Remettre ».
+  s.etat = {
+    ...s.etat,
+    exportes: {
+      parcelles: [...(s.etat.supprimees ?? [])],
+      zones: [...(s.etat.zonesRetirees ?? [])],
+    },
+  };
   const quand = new Date().toISOString();
   const modifiees = parcellesModifiees(s.etat);
   const nbLignes = s.etat.guidages?.length ?? 0;
@@ -212,6 +220,7 @@ export async function telecharger(quoi: 'dossier' | 'xml'): Promise<void> {
         : `Version ${version} exportée (${destination}).`,
     erreur: false,
   };
+  garderSession();
   afficher();
 }
 
@@ -381,57 +390,61 @@ export function panneauExport(s: Session): HTMLElement[] {
       ),
     ),
     // Zones exclues retirées : idem.
-    ...(s.etat.zonesRetirees ?? []).map((z) => {
-      const p = s.etat.anneaux[z]!.parcelle;
-      return el(
-        'div',
-        { class: 'rangee' },
-        el(
-          'span',
-          { class: 'erreur', style: 'flex:1' },
-          `${s.td.parcelles[p]!.nom} : zone exclue retirée`,
-        ),
-        el(
-          'button',
-          {
-            class: 'petit',
-            onclick: () =>
-              modifier(
-                () => remettreZone(ui.session!.etat, z),
-                `Zone exclue de ${s.td.parcelles[p]!.nom} remise`,
-                false,
-              ),
-          },
-          'Remettre',
-        ),
-      );
-    }),
+    ...(s.etat.zonesRetirees ?? [])
+      .filter((z) => !s.etat.exportes?.zones.includes(z))
+      .map((z) => {
+        const p = s.etat.anneaux[z]!.parcelle;
+        return el(
+          'div',
+          { class: 'rangee' },
+          el(
+            'span',
+            { class: 'erreur', style: 'flex:1' },
+            `${s.td.parcelles[p]!.nom} : zone exclue retirée`,
+          ),
+          el(
+            'button',
+            {
+              class: 'petit',
+              onclick: () =>
+                modifier(
+                  () => remettreZone(ui.session!.etat, z),
+                  `Zone exclue de ${s.td.parcelles[p]!.nom} remise`,
+                  false,
+                ),
+            },
+            'Remettre',
+          ),
+        );
+      }),
     // Parcelles retirées : rappelées ici, avec de quoi les remettre.
-    ...(s.etat.supprimees ?? []).map((p) => {
-      const n = blocsDeParcelle(s.td.texte, s.td.parcelles[p]!.id).taches.length;
-      return el(
-        'div',
-        { class: 'rangee' },
-        el(
-          'span',
-          { class: 'erreur', style: 'flex:1' },
-          `${s.td.parcelles[p]!.nom} : retirée du fichier${n > 0 ? `, avec ${n} tâche(s)` : ''}`,
-        ),
-        el(
-          'button',
-          {
-            class: 'petit',
-            onclick: () =>
-              modifier(
-                () => remettreParcelle(ui.session!.etat, p),
-                `${s.td.parcelles[p]!.nom} remise dans le fichier`,
-                false,
-              ),
-          },
-          'Remettre',
-        ),
-      );
-    }),
+    ...(s.etat.supprimees ?? [])
+      .filter((p) => !s.etat.exportes?.parcelles.includes(p))
+      .map((p) => {
+        const n = blocsDeParcelle(s.td.texte, s.td.parcelles[p]!.id).taches.length;
+        return el(
+          'div',
+          { class: 'rangee' },
+          el(
+            'span',
+            { class: 'erreur', style: 'flex:1' },
+            `${s.td.parcelles[p]!.nom} : retirée du fichier${n > 0 ? `, avec ${n} tâche(s)` : ''}`,
+          ),
+          el(
+            'button',
+            {
+              class: 'petit',
+              onclick: () =>
+                modifier(
+                  () => remettreParcelle(ui.session!.etat, p),
+                  `${s.td.parcelles[p]!.nom} remise dans le fichier`,
+                  false,
+                ),
+            },
+            'Remettre',
+          ),
+        );
+      }),
     // Le détail par parcelle est dans Suivi, Toutes : ici, seulement le résumé.
     changements === 0 && !(s.etat.supprimees?.length ?? 0)
       ? el('div', { class: 'doux' }, `Aucun changement par rapport à ${s.nomFichier}.`)

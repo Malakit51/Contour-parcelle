@@ -229,7 +229,7 @@ export function appliquer(): void {
       nouveau = e;
     } else if (ui.mode === 'guidage' && apercuGuidages(s).length > 0) {
       const gs = apercuGuidages(s);
-      const cote = `${enMetres(Math.abs(d))} m ${ui.guidageInterieur ? 'à l’intérieur' : 'à l’extérieur'}`;
+      const cote = `${enMetres(Math.abs(d))} m à l’intérieur`;
       const optim = ui.porteeGuidage === 'optimiser';
       const base = optim ? outilCourant()!.nom : baseNomLignes();
       const touchees = new Set(gs.map((g) => g.parcelle));
@@ -544,24 +544,9 @@ export function panneauSelection(s: Session): HTMLElement {
         : type === 1
           ? `Limite ${coteLimite(s, ref)} de ${x}`
           : `Bord de la zone exclue de ${x}`;
-    // Les deux sens, en clair, sur deux cartes (les flèches de la carte font la même chose).
+    // Le sens se choisit avec les flèches de la carte ; ici, le sens choisi en clair.
     const effets = effetsLimite(s, ref);
-    const carteSens = (sens: 'exterieur' | 'interieur') => {
-      const m = /^(.*) \((.*)\)$/.exec(effets[sens]);
-      const titreSens = m ? m[1]! : effets[sens];
-      return el(
-        'button',
-        {
-          class: `carte-sens${ui.sensLimite === sens ? ' choisie' : ''}`,
-          onclick: () => {
-            ui.sensLimite = sens;
-            afficher();
-          },
-        },
-        el('span', { class: 'carte-sens-titre' }, titreSens[0]!.toUpperCase() + titreSens.slice(1)),
-        m && el('span', { class: 'carte-sens-effet' }, m[2]!),
-      );
-    };
+    const sens = ui.sensLimite ? effets[ui.sensLimite] : 'Touche une des deux flèches.';
     return el(
       'div',
       { class: 'selection-limite' },
@@ -571,7 +556,7 @@ export function panneauSelection(s: Session): HTMLElement {
         el('strong', {}, titre),
         el('span', { class: 'doux' }, `${longueur(s, ref).toFixed(1).replace('.', ',')} m`),
       ),
-      el('div', { class: 'cartes-sens' }, carteSens('exterieur'), carteSens('interieur')),
+      el('div', { class: 'sens' }, sens[0]!.toUpperCase() + sens.slice(1)),
       type === 2 && boutonRetirerZone(s, ref.anneau),
     );
   }
@@ -604,28 +589,6 @@ export function panneauSelection(s: Session): HTMLElement {
       .filter((n) => n !== nomParcelle(s, ref.anneau)),
   );
   const v = s.etat.anneaux[ref.anneau]!.sommets[ref.sommet]!;
-  // À droite de la croix : glisser le long d'un bord (deux cartes, comme les flèches de la carte).
-  const carteGlisse = (sens: 'vers' | 'oppose') =>
-    el(
-      'button',
-      {
-        class: `carte-sens${ui.sensGlisse === sens ? ' choisie' : ''}`,
-        onclick: () => {
-          ui.sensGlisse = sens;
-          afficher();
-        },
-      },
-      el(
-        'span',
-        { class: 'carte-sens-titre' },
-        sens === 'vers' ? 'Vers l’autre bout' : 'Dans le prolongement',
-      ),
-      el(
-        'span',
-        { class: 'carte-sens-effet' },
-        sens === 'vers' ? 'le bord raccourcit' : 'le bord s’allonge',
-      ),
-    );
   const coordonnees = el(
     'div',
     { class: 'doux coordonnees' },
@@ -636,9 +599,16 @@ export function panneauSelection(s: Session): HTMLElement {
         'div',
         { class: 'glisse-point' },
         coordonnees,
-        el('div', { class: 'doux' }, 'Le long du bord :'),
-        carteGlisse('vers'),
-        carteGlisse('oppose'),
+        // Le sens se choisit avec les deux flèches posées le long du bord.
+        el(
+          'div',
+          { class: 'sens' },
+          ui.sensGlisse === 'vers'
+            ? 'Vers l’autre bout : le bord raccourcit.'
+            : ui.sensGlisse === 'oppose'
+              ? 'Dans le prolongement : le bord s’allonge.'
+              : 'Touche une des deux flèches.',
+        ),
       )
     : el('div', { class: 'glisse-point' }, coordonnees);
   return el(

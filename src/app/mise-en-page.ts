@@ -312,7 +312,7 @@ const fenetreReglages = el(
   contenuFenetre,
 );
 
-function ouvrirReglages(): void {
+export function ouvrirReglages(): void {
   arreterOutilsCarte();
   ui.reglagesOuverts = true;
   contenuFenetre.scrollTop = 0;

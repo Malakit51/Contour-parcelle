@@ -27,7 +27,6 @@ export interface Session {
   etat: Etat;
   /** États précédents, avec les lignes de journal à retirer si on annule. */
   historique: { etat: Etat; journal: EntreeJournal[] }[];
-  alertesChargement: string[];
   /** Indice de couleur de chaque parcelle : deux voisines n'ont jamais la même. */
   couleurs: number[];
 }
@@ -51,6 +50,8 @@ export const CLE_COULEURS_CARTE = 'contour-parcelle/couleurs-carte';
 export const CLE_HAUTEUR_VOLET = 'contour-parcelle/hauteur-volet';
 export const CLE_OUTILS = 'contour-parcelle/outils';
 export const CLE_OUTIL_CHOISI = 'contour-parcelle/outil-choisi';
+export const CLE_SEUIL_COINS = 'contour-parcelle/seuil-coins';
+export const SEUILS_COINS = [20, 30, 45, 60];
 export const CLE_DOSSIER_SAUVEGARDES = 'contour-parcelle/dossier-sauvegardes';
 
 export interface EtatInterface {
@@ -78,9 +79,8 @@ export interface EtatInterface {
   actionLimite: 'limite' | 'coller';
   /** Mode Coller : anneau de la parcelle voisine qui sert de modèle. */
   modele: number | null;
-  /** Ligne de guidage en préparation : droite AB ou courbe, vers l'intérieur ou l'extérieur. */
+  /** Ligne de guidage en préparation : droite AB ou courbe (toujours vers l'intérieur). */
   typeGuidage: 'ab' | 'courbe';
-  guidageInterieur: boolean;
   /** Une ligne sur un bord choisi, une par côté de la parcelle, ou pour toutes les parcelles. */
   porteeGuidage: 'bord' | 'parcelle' | 'toutes' | 'optimiser';
   /** Outils retenus sur l'appareil (optimisation du guidage) et celui choisi. */
@@ -225,14 +225,15 @@ export const ui: EtatInterface = {
   fusion: null,
   actionLimite: 'limite',
   typeGuidage: 'ab',
-  guidageInterieur: true,
   porteeGuidage: 'bord',
   outils: outilsGardes(),
   outilChoisi: Number(lireStockage(CLE_OUTIL_CHOISI) ?? 0) || 0,
   propositionChoisie: 0,
   coteOptimise: null,
   lignesTourniere: true,
-  seuilCoins: 30,
+  seuilCoins: SEUILS_COINS.includes(Number(lireStockage(CLE_SEUIL_COINS)))
+    ? Number(lireStockage(CLE_SEUIL_COINS))
+    : 30,
   tolerance: 0.25,
   porteeSimplif: 'parcelle',
   bordDebut: null,
@@ -306,7 +307,6 @@ export function couleurNote(type: string): string {
   return COULEURS_NOTES[h % COULEURS_NOTES.length]!;
 }
 
-export const SEUILS_COINS = [20, 30, 45, 60];
 export const TOLERANCES = [0.1, 0.25, 0.5, 1];
 
 /** Onglet qui correspond au mode : Guidage pour les lignes, Modifier pour le reste. */
