@@ -448,7 +448,6 @@ export function panneauCollage(s: Session): HTMLElement {
     return el(
       'div',
       { class: 'info' },
-      el('strong', {}, 'Coller un bord sur la parcelle voisine'),
       el(
         'div',
         { class: 'sens' },
@@ -641,16 +640,7 @@ export function panneauSelection(s: Session): HTMLElement {
         carteGlisse('vers'),
         carteGlisse('oppose'),
       )
-    : el(
-        'div',
-        { class: 'glisse-point' },
-        coordonnees,
-        el(
-          'div',
-          { class: 'doux' },
-          'Pour le faire glisser le long d’un bord, touche ce bord sur la carte.',
-        ),
-      );
+    : el('div', { class: 'glisse-point' }, coordonnees);
   return el(
     'div',
     { class: 'selection-limite' },
@@ -718,15 +708,17 @@ export function apercuCoupeCourante(
   }
 }
 
-/** Mode Couper : couper la parcelle, ou la fusionner avec une voisine. */
+/** Mode Parcelle : couper, fusionner, créer une parcelle ou une zone exclue. */
 export function choixActionCoupe(): HTMLElement {
   return el(
     'div',
-    { class: 'rangee' },
+    { class: 'rangee actions-parcelle' },
     ...(
       [
         ['couper', 'Couper'],
         ['fusionner', 'Fusionner'],
+        ['nouvelle', 'Nouvelle'],
+        ['exclue', 'Zone exclue'],
       ] as const
     ).map(([v, t]) =>
       el(
@@ -738,6 +730,7 @@ export function choixActionCoupe(): HTMLElement {
             ui.actionCoupe = v;
             ui.coupe = null;
             ui.fusion = null;
+            arreterOutilsCarte();
             afficher();
           },
         },
@@ -768,7 +761,6 @@ export function panneauFusion(s: Session): HTMLElement {
     return el(
       'div',
       { class: 'info' },
-      el('strong', {}, 'Fusionner deux parcelles'),
       el('div', { class: 'sens' }, 'Touche la parcelle qui garde son nom.'),
     );
   }
@@ -791,11 +783,7 @@ export function panneauFusion(s: Session): HTMLElement {
     el('strong', {}, `Fusionner ${nb} dans ${na}`),
     r && 'erreur' in r
       ? el('div', { class: 'erreur' }, r.erreur)
-      : el(
-          'div',
-          { class: 'doux' },
-          `${na} (${haTexte(surface(a))}) reprend ${nb} (${haTexte(surface(b))}) : ${haTexte(surface(a) + surface(b))}. ${na} garde son nom et ses tâches ; ${nb} est retirée du fichier.`,
-        ),
+      : el('div', { class: 'doux' }, `Total : ${haTexte(surface(a) + surface(b))}`),
     el(
       'div',
       { class: 'rangee' },
@@ -822,8 +810,7 @@ export function panneauCoupe(s: Session): HTMLElement {
     return el(
       'div',
       { class: 'info' },
-      el('strong', {}, 'Couper une parcelle'),
-      el('div', { class: 'sens' }, 'Touche le côté de la parcelle parallèlement auquel couper.'),
+      el('div', { class: 'sens' }, 'Touche le côté parallèlement auquel couper.'),
     );
   }
   const nom = s.td.parcelles[c.parcelle]!.nom;
@@ -877,13 +864,6 @@ export function panneauCoupe(s: Session): HTMLElement {
     r && 'erreur' in r && el('div', { class: 'erreur' }, r.erreur),
     r &&
       'coupe' in r &&
-      el(
-        'div',
-        { class: 'doux' },
-        `Ligne de coupe à ${enMetres(r.coupe.distance)} m du côté · côté bord ${haTexte(r.coupe.surfaceBord)} · autre côté ${haTexte(r.coupe.surfaceAutre)}`,
-      ),
-    r &&
-      'coupe' in r &&
       cartes(
         [
           ['bord', `${nom} garde le côté bord`, haTexte(r.coupe.surfaceBord)],
@@ -891,13 +871,6 @@ export function panneauCoupe(s: Session): HTMLElement {
         ],
         r.garder,
         (v) => (ui.coupeGarder = v),
-      ),
-    r &&
-      'coupe' in r &&
-      el(
-        'div',
-        { class: 'doux' },
-        'L’autre morceau devient une nouvelle parcelle (son nom est demandé). La ligne de coupe devient une limite commune.',
       ),
   );
 }
@@ -909,12 +882,6 @@ export function cadreNouvelleParcelle(): HTMLElement | null {
   return el(
     'div',
     { class: 'info' },
-    el('strong', {}, 'Nouvelle parcelle'),
-    el(
-      'div',
-      { class: 'doux' },
-      'Trace son contour ; son nom est demandé à la fin. Ensuite, « Coller au voisin » pour la caler sur une voisine.',
-    ),
     el(
       'div',
       { class: 'rangee' },
@@ -953,12 +920,7 @@ export function cadreZoneExclue(s: Session): HTMLElement | null {
   return el(
     'div',
     { class: 'info' },
-    el('strong', {}, `Ajouter une zone exclue à ${p.nom}`),
-    el(
-      'div',
-      { class: 'doux' },
-      'Trou dans la parcelle (mare, bosquet, poteau) : retiré de la surface, passages coupés autour.',
-    ),
+    el('strong', {}, `Zone exclue dans ${p.nom}`),
     el(
       'div',
       { class: 'rangee' },

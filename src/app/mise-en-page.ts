@@ -557,14 +557,18 @@ export function afficher(): void {
           modeBouton('limite', 'Limite'),
           modeBouton('sommet', 'Point'),
           modeBouton('simplifier', 'Simplifier'),
-          modeBouton('couper', 'Couper'),
+          modeBouton('couper', 'Parcelle'),
         ),
         (ui.mode === 'limite' || ui.mode === 'coller') && choixActionLimite(),
         ui.mode === 'couper' && choixActionCoupe(),
         ui.mode === 'couper'
           ? ui.actionCoupe === 'fusionner'
             ? panneauFusion(s)
-            : panneauCoupe(s)
+            : ui.actionCoupe === 'nouvelle'
+              ? cadreNouvelleParcelle()
+              : ui.actionCoupe === 'exclue'
+                ? (cadreZoneExclue(s) ?? el('div', { class: 'info sens' }, 'Touche une parcelle.'))
+                : panneauCoupe(s)
           : ui.mode === 'simplifier'
             ? panneauSimplification(s)
             : ui.mode === 'guidage'
@@ -575,9 +579,7 @@ export function afficher(): void {
         // Recoller sur l'ancien TASKDATA se fait point par point : le remplacement est à côté.
         ui.mode === 'sommet' && panneauRemplacement(s),
         distanceUtile && raccourcis(),
-        (ui.mode === 'limite' || ui.mode === 'sommet') && cadreZoneExclue(s),
-        (ui.mode === 'limite' || ui.mode === 'sommet') && cadreNouvelleParcelle(),
-        boutonSupprimerParcelle(s),
+        ui.mode === 'couper' && boutonSupprimerParcelle(s),
       ];
       break;
     case 'guidage':
@@ -597,8 +599,24 @@ export function afficher(): void {
 
   // Fichiers, Exporter : le bouton principal écrit l'export (sur la clé, ou en téléchargement).
   const exportEnCours = enExport();
+  // Rien de choisi (ou rien à appliquer dans ce mode) : seul « Annuler » reste en bas.
+  const rienAFaire =
+    (ui.onglet === 'guidage' &&
+      ui.porteeGuidage === 'optimiser' &&
+      apercuGuidages(s).length === 0) ||
+    (ui.onglet === 'modifier' &&
+      ((ui.mode === 'limite' && !ui.selLimite) ||
+        (ui.mode === 'sommet' && !ui.selSommet) ||
+        (ui.mode === 'simplifier' && ui.parcelleCourante === null) ||
+        (ui.mode === 'coller' && !ui.bord) ||
+        (ui.mode === 'couper' &&
+          (ui.actionCoupe === 'nouvelle' ||
+            ui.actionCoupe === 'exclue' ||
+            (ui.actionCoupe === 'couper' && !ui.coupe) ||
+            (ui.actionCoupe === 'fusionner' && ui.fusion === null)))));
+  const sansBouton =
+    ui.onglet === 'suivi' || (ui.onglet === 'fichiers' && !exportEnCours) || rienAFaire;
   // Pas de distance à saisir pour l'optimisation du guidage (la largeur vient de l'outil).
-  const sansBouton = ui.onglet === 'suivi' || (ui.onglet === 'fichiers' && !exportEnCours);
   const sansDistance =
     exportEnCours ||
     sansBouton ||

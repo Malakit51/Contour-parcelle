@@ -148,11 +148,6 @@ export function ouvrir(
     tous.reduce((s, p) => s + p[1], 0) / tous.length,
   ];
   const alertesChargement = [];
-  if (td.segmentsIgnores.length > 0) {
-    alertesChargement.push(
-      `${td.segmentsIgnores.length} segment(s) à deux points (LSG A="5") ignoré(s) : ils seront retirés à l'export.`,
-    );
-  }
   const vus = new Set<string>();
   for (const p of sommetsPresqueCommuns(td, initial, 1)) {
     const cle = `${p.noms[0]}|${p.noms[1]}|${p.distance.toFixed(3)}`;

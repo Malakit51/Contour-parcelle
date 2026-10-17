@@ -21,8 +21,6 @@ import { cadrerParcelle, carte } from './vue';
 import {
   lignesOptimisees,
   lignesTourniere,
-  nomFourriere,
-  nomLigneAB,
   optimiserParcelle,
   type Outil,
 } from '../edition/optimisation';
@@ -223,7 +221,7 @@ export function panneauToutes(s: Session): HTMLElement {
     el(
       'div',
       { class: 'doux' },
-      `${lignes.length} lignes « ${baseNomLignes()} » sur ${parcelles} parcelles (celles de même nom sont remplacées).`,
+      `${lignes.length} lignes « ${baseNomLignes()} » sur ${parcelles} parcelles.`,
     ),
     toutes.length > 0 &&
       el(
@@ -310,7 +308,7 @@ export function panneauGuidage(s: Session): HTMLElement {
             },
           },
           el('span', { class: 'carte-sens-titre' }, titre),
-          el('span', { class: 'carte-sens-effet' }, effet),
+          effet && el('span', { class: 'carte-sens-effet' }, effet),
         ),
       ),
     );
@@ -386,16 +384,16 @@ export function panneauGuidage(s: Session): HTMLElement {
     ui.porteeGuidage === 'bord' &&
       cartes(
         [
-          ['ab', 'Droite AB', 'droite moyenne du bord'],
-          ['courbe', 'Courbe', 'suit le bord'],
+          ['ab', 'Droite AB', ''],
+          ['courbe', 'Courbe', ''],
         ],
         ui.typeGuidage,
         (v) => (ui.typeGuidage = v),
       ),
     cartes(
       [
-        ['int', 'Vers l’intérieur', 'ligne dans la parcelle'],
-        ['ext', 'Vers l’extérieur', 'ligne hors de la parcelle'],
+        ['int', 'Vers l’intérieur', ''],
+        ['ext', 'Vers l’extérieur', ''],
       ],
       ui.guidageInterieur ? 'int' : 'ext',
       (v) => (ui.guidageInterieur = v === 'int'),
@@ -708,11 +706,7 @@ function panneauOptimisation(s: Session): (HTMLElement | false)[] {
           ),
         );
       })(),
-    el(
-      'div',
-      { class: 'doux' },
-      `Règle la console sur ${m(outil.largeur)} exactement : un écart se cumule à chaque passage. Lignes « ${nomLigneAB(outil)} »${ui.lignesTourniere && outil.tourniere > 0 ? `, « ${nomFourriere(outil, 1)} », « ${nomFourriere(outil, 2)} »…` : ''} ; elles remplacent celles déjà créées pour cet outil sur la parcelle.`,
-    ),
+    el('div', { class: 'doux' }, `Largeur sur la console : ${m(outil.largeur)} exactement.`),
   ];
 }
 

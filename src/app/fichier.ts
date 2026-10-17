@@ -6,6 +6,7 @@ import { el } from '../ui/dom';
 import { cadrePhotoHorsReseau } from './photo-hors-reseau';
 import { panneauDrive } from './drive';
 import {
+  CLE_COULEURS_CARTE,
   CLE_DOSSIER_SAUVEGARDES,
   CLE_MISE_EN_PAGE,
   CLE_SESSION_ILLISIBLE,
@@ -54,9 +55,7 @@ function panneauDossierSauvegardes(): HTMLElement | null {
     el(
       'div',
       { class: 'doux' },
-      ui.dossierSauvegardes
-        ? `CSV et sauvegardes vont dans « ${ui.dossierSauvegardes} ».`
-        : 'Pas choisi : CSV et sauvegardes vont dans Téléchargements.',
+      ui.dossierSauvegardes ? `« ${ui.dossierSauvegardes} »` : 'Téléchargements',
     ),
     el(
       'div',
@@ -283,6 +282,34 @@ export function contenuReglages(s: Session | null): Node[] {
     ...[panneauDossierSauvegardes()].filter((x): x is HTMLElement => x !== null),
     section('Réglages'),
     ...(s ? [cadrePhotoHorsReseau(s)] : []),
+    el(
+      'div',
+      { class: 'info' },
+      el('strong', {}, 'Couleurs des parcelles'),
+      el(
+        'div',
+        { class: 'rangee' },
+        ...(
+          [
+            [true, 'État du contour'],
+            [false, 'Voisines'],
+          ] as const
+        ).map(([v, t]) =>
+          el(
+            'button',
+            {
+              class: ui.couleursParEtat === v ? 'actif' : '',
+              onclick: () => {
+                ui.couleursParEtat = v;
+                ecrireStockage(CLE_COULEURS_CARTE, v ? null : 'voisines');
+                afficher();
+              },
+            },
+            t,
+          ),
+        ),
+      ),
+    ),
     el(
       'div',
       { class: 'info' },

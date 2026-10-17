@@ -245,11 +245,6 @@ function cadreTaches(s: Session): HTMLElement | null {
     el('strong', {}, 'Travaux de la console'),
     el(
       'div',
-      { class: 'doux' },
-      `${prevues} prévu(s) (pulvérisations préparées…), ${taches.length - prevues} enregistré(s) par la console. Les retirer ne touche pas aux parcelles.`,
-    ),
-    el(
-      'div',
       { class: 'cartes-sens' },
       ...options.map(([v, titre, effet]) =>
         el(
@@ -286,12 +281,6 @@ function cadreShapefile(s: Session): HTMLElement {
   return el(
     'div',
     { class: 'info' },
-    el('strong', {}, 'Shapefile'),
-    el(
-      'div',
-      { class: 'doux' },
-      'Contours des parcelles en shapefile (Lambert 93, dans un .zip) : nom, surface, état du contour. Ce fichier n’est pas pour la console.',
-    ),
     el(
       'div',
       { class: 'rangee' },
@@ -354,12 +343,14 @@ export function panneauExport(s: Session): HTMLElement[] {
         ...prepare.alertes.map((a) =>
           el('div', { class: a.grave ? 'erreur' : '' }, (a.grave ? '✗ ' : '⚠ ') + a.message),
         ),
-        el(
-          'details',
-          {},
-          el('summary', { class: 'doux' }, `Fichier : ${prepare.resume}`),
-          el('pre', {}, prepare.details || 'Identique au fichier ouvert.'),
-        ),
+        // Détail ligne à ligne du fichier : seulement s'il y a quelque chose à regarder.
+        prepare.alertes.length > 0 &&
+          el(
+            'details',
+            {},
+            el('summary', { class: 'doux' }, `Fichier : ${prepare.resume}`),
+            el('pre', {}, prepare.details || 'Identique au fichier ouvert.'),
+          ),
       );
   // 2. Version et ce qui change.
   const modifiees = new Set(parcellesModifiees(s.etat));
@@ -455,15 +446,14 @@ export function panneauExport(s: Session): HTMLElement[] {
   const ou = el(
     'div',
     { class: 'info' },
-    el(
-      'div',
-      { class: 'doux' },
-      ecritureDossierPossible()
-        ? ui.emplacementConnu
-          ? `Le bouton du bas écrit le dossier « ${nomDossierVersion(prochaineVersion())} » dans « ${ui.emplacementConnu} ».`
-          : `Le bouton du bas demande où écrire le dossier « ${nomDossierVersion(prochaineVersion())} » (la clé USB).`
-        : `Le bouton du bas télécharge ${NOM_FICHIER} : mets-le dans un dossier ${NOM_DOSSIER} sur la clé.`,
-    ),
+    // Emplacement retenu (la clé), ou ce qu'il faut faire du fichier téléchargé.
+    ecritureDossierPossible()
+      ? ui.emplacementConnu && el('div', { class: 'doux' }, `Sur « ${ui.emplacementConnu} »`)
+      : el(
+          'div',
+          { class: 'doux' },
+          `Mets ${NOM_FICHIER} dans un dossier ${NOM_DOSSIER} sur la clé.`,
+        ),
     el(
       'div',
       { class: 'rangee' },

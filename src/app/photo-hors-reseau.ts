@@ -112,8 +112,8 @@ export function cadrePhotoHorsReseau(s: Session): HTMLElement {
       'div',
       { class: 'doux' },
       deja
-        ? `${deja.tuiles} tuiles gardées sur le téléphone (le ${new Date(deja.date).toLocaleDateString('fr-FR')}). La carte les affiche même sans réseau.`
-        : `Garde sur le téléphone la photo IGN autour de tes parcelles (environ ${n} tuiles, ${mo(n * TAILLE_TUILE)}), de préférence en Wi-Fi. La carte l’affichera même sans réseau.`,
+        ? `${deja.tuiles} tuiles gardées le ${new Date(deja.date).toLocaleDateString('fr-FR')}.`
+        : `Environ ${n} tuiles, ${mo(n * TAILLE_TUILE)}, de préférence en Wi-Fi.`,
     ),
     travail
       ? el(

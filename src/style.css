@@ -1369,3 +1369,15 @@ button.nom-fiche svg {
   margin: 0 auto;
   padding: 0 8px 16px;
 }
+
+/* Mode Parcelle : quatre actions sur une ligne. */
+.actions-parcelle {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.actions-parcelle button {
+  flex: 1 1 auto;
+  padding: 8px 6px;
+  min-width: 0;
+  white-space: nowrap;
+}

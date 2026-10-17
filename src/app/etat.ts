@@ -47,6 +47,7 @@ export type Cran = 'replie' | 'moitie' | 'plein';
 export const CLE_SESSION_ILLISIBLE = 'contour-parcelle/session-illisible';
 export const CLE_JEUX_MASQUES = 'contour-parcelle/jeux-masques';
 export const CLE_MISE_EN_PAGE = 'contour-parcelle/mise-en-page';
+export const CLE_COULEURS_CARTE = 'contour-parcelle/couleurs-carte';
 export const CLE_HAUTEUR_VOLET = 'contour-parcelle/hauteur-volet';
 export const CLE_OUTILS = 'contour-parcelle/outils';
 export const CLE_OUTIL_CHOISI = 'contour-parcelle/outil-choisi';
@@ -69,7 +70,7 @@ export interface EtatInterface {
   /** Morceau qui garde la parcelle ; null : le plus grand. */
   coupeGarder: 'bord' | 'autre' | null;
   /** Mode Couper : couper la parcelle choisie, ou la fusionner avec une voisine. */
-  actionCoupe: 'couper' | 'fusionner';
+  actionCoupe: 'couper' | 'fusionner' | 'nouvelle' | 'exclue';
   /** Fusion : la voisine touchée, qui sera retirée (la parcelle choisie garde son nom). */
   fusion: number | null;
   /** Mode Bord : dernière action choisie (Simplifier ou Coller), reprise au retour dans le mode. */
@@ -213,7 +214,7 @@ export const ui: EtatInterface = {
   session: null,
   suivi: chargerSuivi(stockage),
   suiviNonEnregistre: false,
-  couleursParEtat: true,
+  couleursParEtat: lireStockage(CLE_COULEURS_CARTE) !== 'voisines',
   mode: 'limite',
   modele: null,
   modeModifier: 'limite',

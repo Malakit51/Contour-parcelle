@@ -573,49 +573,10 @@ function panneauToutes(s: Session): HTMLElement[] {
       ui.suiviNonEnregistre &&
         el('div', { class: 'erreur' }, 'Suivi non enregistré sur cet appareil.'),
       compteurs,
-      ui.filtreSuivi !== null &&
-        el(
-          'div',
-          { class: 'doux' },
-          `Seulement « ${LIBELLES[ui.filtreSuivi].toLowerCase()} » : touche encore le compteur pour tout revoir.`,
-        ),
       visibles.length > 0 && entete,
       visibles.length > 0 ? liste : el('div', { class: 'doux' }, 'Aucune parcelle.'),
       visibles.length > 0 &&
-        el(
-          'div',
-          { class: 'doux total-suivi' },
-          `${visibles.length} parcelle(s) · ${ha(total)}`,
-          el('br'),
-          'Note : une note sans épingle sur la carte (toute la parcelle).',
-        ),
-    ),
-    el(
-      'div',
-      { class: 'info' },
-      el('strong', {}, 'Couleurs de la carte'),
-      el(
-        'div',
-        { class: 'modes' },
-        ...(
-          [
-            [true, 'État du contour'],
-            [false, 'Voisines'],
-          ] as const
-        ).map(([v, t]) =>
-          el(
-            'button',
-            {
-              class: ui.couleursParEtat === v ? 'principal' : '',
-              onclick: () => {
-                ui.couleursParEtat = v;
-                afficher();
-              },
-            },
-            t,
-          ),
-        ),
-      ),
+        el('div', { class: 'doux total-suivi' }, `${visibles.length} parcelle(s) · ${ha(total)}`),
     ),
   ];
 }
@@ -654,11 +615,6 @@ function panneauJournal(s: Session): HTMLElement[] {
       'div',
       { class: 'info' },
       el('strong', {}, 'Fichiers CSV'),
-      el(
-        'div',
-        { class: 'doux' },
-        'Suivi, journal et notes, pour un tableur ou un autre appareil.',
-      ),
       el(
         'div',
         { class: 'rangee' },

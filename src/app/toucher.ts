@@ -278,7 +278,11 @@ export function toucher(
     if (ui.mode === 'limite') ui.selLimite = { anneau: choix.anneau, debut: choix.indice };
     else if (ui.mode === 'sommet') ui.selSommet = { anneau: choix.anneau, sommet: choix.indice };
     // Couper : le côté touché (contour extérieur) donne la direction de la coupe.
-    if (ui.mode === 'couper' && s.etat.anneaux[choix.anneau]!.type === 1) {
+    if (
+      ui.mode === 'couper' &&
+      ui.actionCoupe === 'couper' &&
+      s.etat.anneaux[choix.anneau]!.type === 1
+    ) {
       ui.coupe = { parcelle: ui.parcelleCourante, segment: choix.indice };
     }
     // Optimisation : un bord touché du contour extérieur donne des passages parallèles à son côté.
