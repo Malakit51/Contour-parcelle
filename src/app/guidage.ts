@@ -15,7 +15,7 @@ import { el } from '../ui/dom';
 import { CLE_JEUX_MASQUES, CLE_SEUIL_COINS, type Session, SEUILS_COINS, ui } from './etat';
 import { afficher, ouvrirReglages } from './mise-en-page';
 import { ecrireStockage } from './stockage';
-import { metres, modifier } from './travail';
+import { enMetres, metres, modifier } from './travail';
 import { carte } from './vue';
 import {
   lignesOptimisees,
@@ -126,9 +126,16 @@ export function commandesLignes(s: Session): HTMLElement | null {
 export const baseNomLignes = () => outilCourant()?.nom ?? 'Guidage';
 
 /** Vrai si la ligne fait partie du jeu « base » (« base 1 », « base 2 »…). */
+/**
+ * Distance des lignes au bord : celle de la case du bas, sinon la moitié de la largeur de l'outil
+ * choisi (le centre du tracteur au premier passage).
+ */
+export const distanceGuidage = () =>
+  metres() > 0 ? Math.abs(metres()) : (outilCourant()?.largeur ?? 0) / 2;
+
 /** Réglages des lignes de guidage tels que choisis dans le panneau. */
 export const reglagesGuidage = (): ReglagesGuidage => ({
-  distance: Math.abs(metres()),
+  distance: distanceGuidage(),
   interieur: true,
   seuil: ui.seuilCoins,
   base: baseNomLignes(),
@@ -211,6 +218,9 @@ export function panneauToutes(s: Session): HTMLElement {
 }
 
 export function panneauGuidage(s: Session): HTMLElement {
+  const outil = outilCourant();
+  if (ui.saisie === '' && outil && ui.porteeGuidage !== 'optimiser')
+    ui.saisie = enMetres(outil.largeur / 2);
   // Portée : barre groupée, comme les modes de l'onglet Modifier.
   const portee = el(
     'div',
@@ -459,6 +469,8 @@ function choixOutil(): HTMLElement {
                 onclick: () => {
                   ui.outilChoisi = i;
                   ui.propositionChoisie = 0;
+                  // Les lignes suivent la largeur de l'outil : à une demi-largeur du bord.
+                  ui.saisie = enMetres(o.largeur / 2);
                   garderOutils();
                   afficher();
                 },
@@ -467,6 +479,14 @@ function choixOutil(): HTMLElement {
             ),
           ),
         ),
+    outil &&
+      ui.porteeGuidage !== 'optimiser' &&
+      el(
+        'div',
+        { class: 'doux' },
+        `Largeur ${enMetres(outil.largeur)} m : lignes à ${enMetres(distanceGuidage())} m du bord` +
+          (Math.abs(distanceGuidage() - outil.largeur / 2) < 0.001 ? ' (demi-largeur).' : '.'),
+      ),
   );
 }
 
