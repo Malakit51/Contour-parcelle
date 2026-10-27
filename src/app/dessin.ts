@@ -26,6 +26,7 @@ import {
 import { directionDuSegment } from '../geometrie/passages';
 import { planLocal } from '../geometrie/plan';
 import { anneauxLL } from './vue';
+import { apercuReprise, cheminReprise } from './reference';
 
 export function dessin(s: Session): Dessin {
   const anneaux = anneauxLL(s);
@@ -35,8 +36,11 @@ export function dessin(s: Session): Dessin {
   // Modifier et Guidage : ailleurs, la carte montre seulement les parcelles (et les notes).
   const enEdition = ui.onglet === 'modifier' || ui.onglet === 'guidage';
   const collage = enEdition ? apercuCollage(s) : null;
+  const reprise = enEdition && ui.repriseBord ? apercuReprise(s) : null;
   const apercu = enEdition
-    ? (apercuSimplification(s) ?? (collage && 'etat' in collage ? collage : null))
+    ? (apercuSimplification(s) ??
+      (collage && 'etat' in collage ? collage : null) ??
+      (reprise && 'etat' in reprise ? reprise : null))
     : null;
   const affiches = apercu ? apercu.etat.anneaux.map((a) => a.sommets.map(latLon)) : anneaux;
   const d: Dessin = {
@@ -59,6 +63,19 @@ export function dessin(s: Session): Dessin {
     traits: [],
     points: [],
   };
+  // Reprise d'un bord de l'ancien fichier : point touché et chemin choisi en violet.
+  if (enEdition && ui.repriseBord && ui.reference && ui.repriseBord.anneauRef !== null) {
+    const pts = ui.reference.anneaux[ui.repriseBord.anneauRef]!;
+    const chemin = cheminReprise();
+    if (chemin)
+      chemin
+        .slice(1)
+        .forEach((b, k) =>
+          d.traits.push({ a: chemin[k]!, b, couleur: SEL, epaisseur: 4, dessus: true }),
+        );
+    if (ui.repriseBord.debut !== null)
+      d.points.push({ p: pts[ui.repriseBord.debut]!, couleur: SEL, rayon: 8 });
+  }
   // Parcelle modèle du collage : son contour en violet fin.
   if (enEdition && ui.mode === 'coller' && ui.modele !== null) {
     const pts = anneaux[ui.modele]!;

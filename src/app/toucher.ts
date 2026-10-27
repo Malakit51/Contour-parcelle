@@ -13,6 +13,7 @@ import {
 import { type VersEcran } from '../ui/carte';
 import { choixDeBord, RAYON_TOUCHER_PX, ui, ongletDuMode } from './etat';
 import { afficher } from './mise-en-page';
+import { toucherReprise } from './reference';
 import { effacerSelection, enregistrerModification, modifier } from './travail';
 import { anneauxLL, nomParcelle, pointSousLeDoigt } from './vue';
 
@@ -49,6 +50,11 @@ export function toucher(
     );
     ui.mesure = [...ui.mesure, aimant ?? position];
     afficher();
+    return;
+  }
+  // Reprise d'un bord de l'ancien fichier : on touche ses points gris.
+  if (ui.repriseBord && ui.onglet === 'modifier') {
+    toucherReprise(ecran, versEcran);
     return;
   }
   // Onglets Suivi, Export, Fichier : un toucher choisit seulement la parcelle (sur sa limite ou à

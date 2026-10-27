@@ -115,6 +115,16 @@ export interface EtatInterface {
     /** Contour extérieur de chaque parcelle de la référence, pour « Remplacer le contour ». */
     parcelles: { nom: string; guid: string; contour: LatLon[] }[];
   } | null;
+  /**
+   * Reprise d'un bord de la référence (mode Point) : anneau de la référence et ses deux points
+   * touchés (`fin` null tant que le second n'est pas touché), `autreCote` pour l'autre partie.
+   */
+  repriseBord: {
+    anneauRef: number | null;
+    debut: number | null;
+    fin: number | null;
+    autreCote: boolean;
+  } | null;
   /** Mode Point : le prochain toucher sur une limite y ajoute un point. */
   ajoutEnCours: boolean;
   /** Sens choisi pour décaler la limite sélectionnée, avec les flèches posées sur la carte. */
@@ -245,6 +255,7 @@ export const ui: EtatInterface = {
   limiteGlisse: null,
   placerAuDoigt: false,
   reference: null,
+  repriseBord: null,
   ajoutEnCours: false,
   sensLimite: null,
   sensGlisse: null,
