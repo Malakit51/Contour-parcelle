@@ -151,7 +151,13 @@ export function panneauRemplacement(s: Session): HTMLElement | null {
   const r = parcelleDeReference(s, p);
   const nom = s.td.parcelles[p]!.nom;
   if (!r) {
-    return el('div', { class: 'info doux' }, `${nom} absente de la référence.`);
+    // Pas de contour correspondant pour « Remplacer », mais on peut reprendre un bord.
+    return el(
+      'div',
+      { class: 'info' },
+      el('div', { class: 'doux' }, `${nom} absente de la référence.`),
+      el('div', { class: 'rangee' }, boutonReprise()),
+    );
   }
   const ext = s.etat.anneaux.findIndex((a) => a.parcelle === p && a.type === 1);
   return el(
@@ -184,19 +190,7 @@ export function panneauRemplacement(s: Session): HTMLElement | null {
         },
         `Remplacer ${nom}`,
       ),
-      el(
-        'button',
-        {
-          onclick: () => {
-            arreterOutilsCarte();
-            // Plus de point choisi : la croix de flèches ne gêne pas les touchers sur la carte.
-            effacerSelection();
-            ui.repriseBord = { anneauRef: null, debut: null, fin: null, autreCote: false };
-            afficher();
-          },
-        },
-        'Reprendre un bord',
-      ),
+      boutonReprise(),
     ),
   );
 }
@@ -368,4 +362,20 @@ function panneauReprise(s: Session): HTMLElement {
     ),
   );
   return el('div', { class: 'info' }, ...lignes);
+}
+
+function boutonReprise(): HTMLElement {
+  return el(
+    'button',
+    {
+      onclick: () => {
+        arreterOutilsCarte();
+        // Plus de point choisi : la croix de flèches ne gêne pas les touchers sur la carte.
+        effacerSelection();
+        ui.repriseBord = { anneauRef: null, debut: null, fin: null, autreCote: false };
+        afficher();
+      },
+    },
+    'Reprendre un bord',
+  );
 }
