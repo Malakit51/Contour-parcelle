@@ -19,6 +19,7 @@ import { apercuGuidages, coinsGuidage, optimisationCourante } from './guidage';
 import { afficher } from './mise-en-page';
 import {
   apercuCollage,
+  COULEUR_ALIGNEMENT,
   apercuCoupeCourante,
   apercuFusionCourante,
   apercuSimplification,
@@ -26,6 +27,7 @@ import {
 import { directionDuSegment } from '../geometrie/passages';
 import { planLocal } from '../geometrie/plan';
 import { anneauxLL } from './vue';
+import { alignements, niveauAlignement } from '../edition/alignement';
 import { apercuReprise, cheminReprise } from './reference';
 
 export function dessin(s: Session): Dessin {
@@ -152,6 +154,14 @@ export function dessin(s: Session): Dessin {
       couleur: SEL,
       rayon: 9,
     });
+    // Indicateur d'alignement : les points voisins sur les bords, en vert s'ils sont dans l'axe.
+    for (const x of alignements(s.etat, ui.selSommet)) {
+      d.points.push({
+        p: anneaux[ui.selSommet.anneau]![x.point]!,
+        couleur: COULEUR_ALIGNEMENT[niveauAlignement(x.ecart)],
+        rayon: 8,
+      });
+    }
   }
   // Ligne de guidage touchée dans la liste : en violet épais, ses deux bouts marqués.
   const vue =

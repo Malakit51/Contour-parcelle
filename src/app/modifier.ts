@@ -3,6 +3,7 @@
 import { type BilanCollage, collerBord, modeleLePlusProche } from '../edition/collage';
 import { remplacerLignesOutil } from '../edition/optimisation';
 import { type Etat, latLon, limitesJumelles, parcelleContenant, sommetsEn } from '../edition/etat';
+import { type RefSommet } from '../edition/etat';
 import { nouvelleSurface } from '../edition/export';
 import { ajouterGuidages } from '../edition/guidages';
 import {
@@ -21,6 +22,7 @@ import { blocsDeParcelle } from '../isoxml/ecriture';
 import { planLocal } from '../geometrie/plan';
 import { ecartMaximal } from '../geometrie/simplification';
 import { el } from '../ui/dom';
+import { alignements, niveauAlignement } from '../edition/alignement';
 import { apercuCoupe, couperParcelle, type Coupe } from '../edition/coupe';
 import { apercuFusion, fusionnerParcelles } from '../edition/fusion';
 import { type LatLon } from '../geometrie/plan';
@@ -621,6 +623,8 @@ export function panneauSelection(s: Session): HTMLElement {
       boutonAjout,
     ),
   );
+  const alignes = indicateurAlignement(s, ref);
+  if (alignes) glisse.append(alignes);
   if (croixDansLeVolet()) glisse.append(raccourcis());
   return el(
     'div',
@@ -976,5 +980,31 @@ export function boutonSupprimerParcelle(s: Session): HTMLElement | null {
       },
       `Supprimer la parcelle ${p.nom}`,
     ),
+  );
+}
+
+/** Couleur de l'indicateur d'alignement (mêmes couleurs que les états des contours). */
+export const COULEUR_ALIGNEMENT = { aligne: '#22b04f', presque: '#f5a524', decale: '#e0362c' };
+
+/**
+ * Indicateur d'alignement : pour chaque point voisin du sommet sur un bord, son écart à la droite
+ * sommet → point d'après (vert : aligné à 5 cm près, orange : 30 cm, rouge au-delà).
+ */
+function indicateurAlignement(s: Session, ref: RefSommet): HTMLElement | null {
+  const a = alignements(s.etat, ref);
+  if (a.length === 0) return null;
+  return el(
+    'div',
+    { class: 'alignements' },
+    ...a.map((x) => {
+      const niveau = niveauAlignement(x.ecart);
+      const cm = Math.round(x.ecart * 100);
+      return el(
+        'div',
+        { class: 'alignement' },
+        el('span', { class: 'pastille', style: `background:${COULEUR_ALIGNEMENT[niveau]}` }),
+        `${x.apres ? 'Point suivant' : 'Point précédent'} : ${niveau === 'aligne' ? 'aligné' : 'décalé'} (${cm} cm)`,
+      );
+    }),
   );
 }

@@ -1417,3 +1417,16 @@ button.nom-fiche svg {
 .accueil h1 {
   margin: 0;
 }
+
+/* Indicateur d'alignement des points voisins d'un sommet (mode Point). */
+.alignements {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.9rem;
+}
+.alignement {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
